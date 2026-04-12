@@ -1,25 +1,25 @@
 {
     "system_requirements": {
-        "world_name": "Mixi",
+        "world_name": "Erebos",
         "world_type": [
             "post-apocalyptic",
-            "zombie-infested"
+            "dark fantasy"
         ],
-        "world_mission": "Contain the Blight Virus and restore humanity's last strongholds"
+        "world_mission": "Uncover the source of the Great Decay and restore life to a world consumed by death",
+        "theme_and_tone": "Grim, desolate, and haunting, with themes of existential despair and fragile hope",
+        "core_conflict": "A struggle between survivors clinging to the last fertile enclaves and the spreading Necrotic Blight that reanimates the dead as husks"
     },
     "dynamic_lore": {
-        "theme_and_tone": "Desperate survival in a decaying world where trust is deadlier than rot",
-        "core_conflict": "Factions of survivors battle both the spreading zombie hordes and each other for dwindling resources",
-        "infection_spread_mechanics": "The Blight Virus spreads through bodily fluids and aerosolized spores in collapsing cities, with three stages of infection before full reanimation",
-        "survival_factions": "Quartermaster Guilds (resource traders), Warden Clans (militant protectors), and Free Wanderers (nomadic loners) vie for dominance",
-        "zombie_types": "Staggerers (early-stage infected), Rotwalkers (decaying fast zombies), and Hive Minds (collective intelligence hordes)"
+        "necromantic_energy_system": "A corrupted magic system where practitioners channel the residual life-force of the dead, but overuse causes their bodies to crystallize into 'soul-sculptures'",
+        "dead_zones": "Areas where all organic matter has been reduced to blackened ash, patrolled by sentient shadows called Wraithspires that feed on memories",
+        "factions": "1. The Verdant Circle (botanists preserving life), 2. Hollow Covenant (necromancers seeking godhood), 3. Ashborn Nomads (scavengers immune to the Blight)",
+        "key_artifact": "The Heart of Erebos - a pulsating obsidian orb said to contain the consciousness of the world itself, hidden in the Caverns of Echoing Sighs"
     },
     "dynamic_vocabulary": {
-        "currency": "Scraps",
-        "zombie_hordes": "The Crawling Mass",
-        "safe_zones": "Quarantine Bastions",
-        "infection_term": "Blighting",
-        "survival_tools": "Rusttech Gear",
-        "elite_zombies": "Hollowed Kings"
+        "currency": "Ash Shards (crystallized remains of burned souls)",
+        "magic_users": "Soulweavers",
+        "dangerous_areas": "The Rotting Veil",
+        "apocalyptic_event": "The Sundering",
+        "legendary_location": "The Garden of Thorns"
     }
 }

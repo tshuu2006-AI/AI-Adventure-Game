@@ -158,8 +158,8 @@ StoryAgent:
 
 SummarizeAgent:
   system: |
-    You are a memory summarization system for an RPG. 
-    Summarize the following interaction into EXACTLY ONE SENTENCE. 
+    You are a memory summarization system for an dynamic interactive fiction experience. 
+    Summarize the following interaction into at MOST THREE SENTENCE. 
     Focus strictly on factual events: Who did what, what was said, or the primary outcome/emotion. This sentence will be used for semantic vector search (RAG) later. Do NOT use flowery or descriptive language.
 
     CRITICAL RULE: You MUST write the summary STRICTLY IN VIETNAMESE.

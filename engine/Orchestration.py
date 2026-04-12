@@ -36,11 +36,16 @@ class GameOrchestrator:
         self.router = IntentRouter(model_name="qwen2.5:3b")
         self.extractor = StateExtractor(model_name="qwen2.5:3b")
 
-        # Quản lý ngữ cảnh và thông tin thế giới
+        # Long-term-memory
+        self.context_to_summarize = []
+        self.context_to_summarize_length = 5
+
+        #Short-term-memory
         self.contextWindow = []
-        self.window_size = 5
+        self.window_size = 3
 
         print("Hệ thống sẵn sàng!")
+
 
     def _save_memory_pipeline(self, npc: NPC = None, location: Location = None, story=None):
         """
@@ -199,6 +204,50 @@ class GameOrchestrator:
         #     self._save_memory_pipeline(npc=None, location=start_location_obj, story=compressed_memory)
         #
         # return prologue_text
+
+    async def _summarize_context(self):
+        """
+        Quản lý Trí nhớ Ngắn hạn (N-Window Context).
+        Nếu mảng contextWindow vượt quá giới hạn (window_size), tự động lấy các lượt thoại
+        cũ nhất đem nén thành 'scene_summary' để tiết kiệm Token mà không làm đứt gãy cốt truyện.
+        """
+        # Nếu số lượng câu thoại vẫn an toàn trong giới hạn thì bỏ qua
+        if len(self.contextWindow) <= self.window_size:
+            return
+
+        print("[System] Trí nhớ ngắn hạn đạt đỉnh, đang tiến hành nén ngữ cảnh (Context Compression)...")
+
+        # Tính số lượng tin nhắn bị dôi dư (VD: có 7 tin, giới hạn 5 -> cần nén 2 tin cũ nhất)
+        overflow_count = len(self.contextWindow) - self.window_size
+
+        # Trích xuất các đoạn thoại cũ nhất ra để nén
+        old_messages = self.contextWindow[:overflow_count]
+        text_to_compress = "\n".join(old_messages)
+
+        # Khởi tạo biến lưu tóm tắt cảnh nếu chưa có
+        if not hasattr(self, 'scene_summary'):
+            self.scene_summary = ""
+
+        # Tạo Prompt hệ thống để nén (Do đây là tác vụ nội bộ, không cần đưa vào file YAML cho phức tạp)
+        sys_compress = "Bạn là hệ thống nén ngữ cảnh của Game Engine. Hãy đọc đoạn hội thoại sau và tóm tắt thành đúng 1-2 câu súc tích nhất, tập trung vào sự kiện cốt lõi đã xảy ra. TRẢ LỜI BẰNG TIẾNG VIỆT."
+        user_compress = f"Hội thoại cần nén:\n{text_to_compress}"
+
+        try:
+            # Gọi LLM để tóm tắt
+            compressed_text = await self.summarizeAgent.summarize_chat(sys_compress, user_compress)
+
+            # Cập nhật và nối tiếp vào bản tóm tắt cảnh hiện tại
+            if self.scene_summary:
+                self.scene_summary += " " + compressed_text
+            else:
+                self.scene_summary = compressed_text
+
+        except Exception as e:
+            print(f"[System Lỗi nén] Không thể nén ngữ cảnh: {e}")
+
+        # CUỐI CÙNG: Cắt bỏ các tin nhắn cũ đã được nén khỏi mảng, giữ mảng ở đúng kích thước window_size
+        self.contextWindow = self.contextWindow[overflow_count:]
+
 
     async def _process_game_turn(self, player_input: str):
         """
