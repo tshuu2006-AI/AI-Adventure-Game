@@ -2,12 +2,22 @@ import json
 from groq import AsyncGroq
 from typing import List, Dict, Any, AsyncGenerator
 
+
 class BaseCloudAgent:
+    """
+    Lớp cơ sở (Base Class) cho tất cả các Agent chạy trên nền tảng Cloud (Groq).
+    Quản lý việc kết nối API và cung cấp hàm gọi LLM dùng chung.
+    """
+
     def __init__(self, api_key: str, model_name: str = "qwen/qwen3-32b"):
         self.client = AsyncGroq(api_key=api_key)
         self.model = model_name
 
-    async def _chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, stream: bool = False, response_format: Dict = None, n: int = 1):
+    async def _chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, stream: bool = False,
+                    response_format: Dict = None, n: int = 1):
+        """
+        Hàm bao bọc (wrapper) để gọi API Groq một cách bất đồng bộ.
+        """
         return await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
@@ -17,23 +27,31 @@ class BaseCloudAgent:
             n=n
         )
 
+
 # ==================
 # CÁC CLOUD AGENTS
 # ==================
 
 class WorldGenerateAgent(BaseCloudAgent):
+    """Agent chịu trách nhiệm khởi tạo 'Kinh thánh Thế giới' (World Bible) ở dạng JSON."""
+
     async def generate_bible(self, system_prompt: str, user_prompt: str) -> dict:
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
-        response = await self._chat(messages=messages, temperature=0.4, stream=False, response_format={"type": "json_object"})
+        # Sử dụng JSON mode (response_format) và nhiệt độ thấp (0.4) để đảm bảo cấu trúc chặt chẽ
+        response = await self._chat(messages=messages, temperature=0.4, stream=False,
+                                    response_format={"type": "json_object"})
         return json.loads(response.choices[0].message.content)
 
 
 class NPCAgent(BaseCloudAgent):
+    """Agent chịu trách nhiệm thiết kế và sinh ra thông tin NPC ở dạng JSON."""
+
     async def generate_npc(self, system_prompt: str, user_prompt: str):
         try:
+            # Nhiệt độ cao (0.8) giúp NPC có tính cách đa dạng và sáng tạo hơn
             response = await self._chat(messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -46,6 +64,8 @@ class NPCAgent(BaseCloudAgent):
 
 
 class LocationAgent(BaseCloudAgent):
+    """Agent chịu trách nhiệm tạo ra các địa điểm và bối cảnh xung quanh ở dạng JSON."""
+
     async def generate_location(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
         try:
             response = await self._chat(messages=[
@@ -60,11 +80,14 @@ class LocationAgent(BaseCloudAgent):
 
 
 class StoryAgent(BaseCloudAgent):
+    """Agent Game Master đóng vai trò kể chuyện và phản hồi hành động của người chơi theo thời gian thực."""
+
     async def generate_stream(self, system_prompt: str, user_prompt: str) -> AsyncGenerator[str, None]:
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
+        # Kích hoạt chế độ stream để trả về từng đoạn chữ (chunk) tạo cảm giác AI đang "gõ"
         stream = await self._chat(messages=messages, temperature=0.9, stream=True)
         async for chunk in stream:
             content = chunk.choices[0].delta.content
