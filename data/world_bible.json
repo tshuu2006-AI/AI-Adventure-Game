@@ -1,25 +1,25 @@
 {
     "system_requirements": {
-        "world_name": "Erebos",
+        "world_name": "Era of the Solitary Flame",
         "world_type": [
-            "post-apocalyptic",
-            "dark fantasy"
+            "fantasy",
+            "non-tech"
         ],
-        "world_mission": "Uncover the source of the Great Decay and restore life to a world consumed by death",
-        "theme_and_tone": "Grim, desolate, and haunting, with themes of existential despair and fragile hope",
-        "core_conflict": "A struggle between survivors clinging to the last fertile enclaves and the spreading Necrotic Blight that reanimates the dead as husks"
+        "world_mission": "Survive and find purpose in a society where males are extinct and the player is the last human male",
+        "theme_and_tone": "Isolationist fantasy with psychological tension and existential themes",
+        "core_conflict": "The player's struggle to navigate a matriarchal civilization that views his existence as both sacred relic and existential threat"
     },
     "dynamic_lore": {
-        "necromantic_energy_system": "A corrupted magic system where practitioners channel the residual life-force of the dead, but overuse causes their bodies to crystallize into 'soul-sculptures'",
-        "dead_zones": "Areas where all organic matter has been reduced to blackened ash, patrolled by sentient shadows called Wraithspires that feed on memories",
-        "factions": "1. The Verdant Circle (botanists preserving life), 2. Hollow Covenant (necromancers seeking godhood), 3. Ashborn Nomads (scavengers immune to the Blight)",
-        "key_artifact": "The Heart of Erebos - a pulsating obsidian orb said to contain the consciousness of the world itself, hidden in the Caverns of Echoing Sighs"
+        "gender_cataclysm": "A primordial magic event called 'The Sundering' wiped out all males except the player, leaving a world where females reproduce asexually through 'Echo Blooms' that manifest the DNA of the last male bloodline",
+        "social_caste_system": "Society is divided into three tiers: 1) The Virgin Council (ruling matriarchs), 2) Hearthkeepers (domestic caretakers), and 3) Outcasts (male survivors hidden in underground vaults)",
+        "resonance_magic": "A magic system where emotional bonds create physical effects - stronger connections produce more powerful spells but risk existential destabilization for both participants",
+        "mythic_artifacts": "The 'First Flame' - a sentient relic containing the consciousness of the first male, who guides/haunts the player through visions"
     },
     "dynamic_vocabulary": {
-        "currency": "Ash Shards (crystallized remains of burned souls)",
-        "magic_users": "Soulweavers",
-        "dangerous_areas": "The Rotting Veil",
-        "apocalyptic_event": "The Sundering",
-        "legendary_location": "The Garden of Thorns"
+        "currency": "Echo Shards (glowing fragments of crystallized memory)",
+        "magic_users": "Resonants (those who can channel emotional bonds into power)",
+        "malevolent_creatures": "Quỷ Dữ Cô Độc (Soulless Wraiths that feed on loneliness)",
+        "feminine_collective_term": "The Hive (referring to society's interconnected consciousness)",
+        "male_sanctuary": "Silent Citadel (hidden network of cryogenic vaults preserving male DNA)"
     }
 }

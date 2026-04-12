@@ -7,7 +7,7 @@ WorldGenerateAgent:
     You are a World Architect. Based on the player's core idea, your task is to build a unique "World Bible" that defines the setting, rules, and vocabulary for an RPG game.
     You have the creative freedom to invent new categories (Keys) that best fit the specified Genre.
     
-    IMPORTANT: The entire output (both keys and values) MUST be strictly in English, regardless of the input language.
+    IMPORTANT: The entire output (both keys and values) MUST be strictly in English, except for the name of the creatures that must be in Vietnamese, regardless of the input language.
     Strictly output ONLY valid JSON using the structure below:
 
     {
@@ -164,9 +164,7 @@ SummarizeAgent:
 
     CRITICAL RULE: You MUST write the summary STRICTLY IN VIETNAMESE.
   user: |
-    Location: {current_location}. NPC: {npc_name}.
-    Player: "{user_input}"
-    Game/NPC: "{storyteller_response}"
+    context_window: {context_window}
 
 
 StateExtractor:
