@@ -8,6 +8,7 @@ from engine.LocalAgents import IntentRouter, StateExtractor
 import os
 
 
+
 class GameOrchestrator:
     def __init__(self, db_path, vector_model_path, groq_api_key):
         # 1. Khởi tạo các component
@@ -29,19 +30,28 @@ class GameOrchestrator:
         self.router = IntentRouter(model_name="qwen2.5:3b")  # Gọi Ollama
         self.extractor = StateExtractor(model_name="qwen2.5:3b")  # Gọi Ollama
 
+        self.contextWindow = []
+        self.window_size = 5
+
 
         print("Hệ thống sẵn sàng!")
 
-    def _save_memory_pipeline(self, npc: NPC = None, location: LocationAgent = None, story = None):
+    def _save_memory_pipeline(self, npc: NPC = None, location: Location= None, story = None):
         """
         Pipeline đồng bộ lưu ký ức vào cả SQL và Vector DB
         """
+
+
+        self.db.add_npc_to_db(NPC, location)
+        self.db.add_location_to_db(location)
+
         # Bước 1: Lưu vào SQLite để lấy ID chuẩn
-        memory_id, timestamp = self.db.add_memory_to_db(npc, location)
+        memory_id, timestamp = self.db.add_memory_to_db(npc, location, story)
 
         # Bước 2: Dùng chính ID đó lưu vào FAISS để map 1-1
         self.memory.add_memory_to_vector(memory_id, story)
         print(f"[System] Đã ghi nhớ vào ID {memory_id}: {story}")
+
 
     async def init_scene(self, location_name: str, atmosphere: str):
         """Khởi tạo một cảnh chơi mới với 1 NPC"""
@@ -112,14 +122,14 @@ class GameOrchestrator:
 
         # BƯỚC 1: Lấy prompt từ file YAML
         # (Giả sử self.pm là instance của PromptManager đã load file yaml)
-        system_prompt = self.pm.get_prompt('world_initiator', 'system')
-        user_prompt = self.pm.get_prompt('world_initiator', 'user', user_input=player_idea)
+        system_prompt = self.pm.get_prompt('WorldGenerateAgent', 'system')
+        user_prompt = self.pm.get_prompt('WorldGenerateAgent', 'user', user_input=player_idea)
 
         # BƯỚC 2: Gọi Agent chuyên biệt để đúc ra "Kinh thánh thế giới"
         # Truyền đúng 2 chuỗi prompt vào hàm generate_bible (đã thiết lập JSON mode)
-        world_bible = await self.world_generator.generate_bible(
+        world_bible = await self.worldGenerator.generate_bible(
             system_prompt=system_prompt,
-            player_idea=user_prompt
+            user_prompt=user_prompt
         )
 
         # BƯỚC 3: Lưu World Bible ra file vật lý (Backup/Debug)
@@ -151,3 +161,5 @@ class GameOrchestrator:
 
         # Trả về toàn bộ dữ liệu để app.py có thể in ra thông báo cho người chơi
         return world_bible
+
+

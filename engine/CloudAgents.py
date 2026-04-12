@@ -3,7 +3,7 @@ from groq import AsyncGroq
 from typing import List, Dict, Any, AsyncGenerator
 
 class BaseCloudAgent:
-    def __init__(self, api_key: str, model_name: str = "llama3-8b-8192"):
+    def __init__(self, api_key: str, model_name: str = "qwen/qwen3-32b"):
         self.client = AsyncGroq(api_key=api_key)
         self.model = model_name
 

@@ -34,24 +34,21 @@ class StateManager:
             self.created_at = time.time()
             cursor = conn.cursor()
             print("Successfully connected to database!")
-
-            # ... code xử lý của bạn ở đây ...
-
             # Tạo bảng locations
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXIST Locations
+                CREATE TABLE IF NOT EXISTS Locations
                 (   
-                    location_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    location_id INTEGER CONSTRAINT PK_Locations PRIMARY KEY AUTOINCREMENT,
                     name        TEXT,
                     description TEXT NOT NULL,
-                    CONSTRAINT PK_Locations PRIMARY KEY (location_id)
+                    currentState TEXT
                 )
                 """)
 
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXIST Location_states
+                CREATE TABLE IF NOT EXISTS Location_states
                 (
                     state         TEXT,
                     location_name TEXT,
@@ -63,7 +60,7 @@ class StateManager:
 
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXIST NPCs
+                CREATE TABLE IF NOT EXISTS NPCs
                 (   
                     npc_id TEXT CONSTRAINT PK_NPCs PRIMARY KEY,
                     name           TEXT,
@@ -71,6 +68,7 @@ class StateManager:
                     description     TEXT,
                     affectionLevel INTEGER,
                     location       TEXT NOT NULL,
+                    currentStatus TEXT,
                     image_path     TEXT,
                     CONSTRAINT fk_npc_location FOREIGN KEY (location) REFERENCES Locations (name)
                 )
@@ -79,7 +77,7 @@ class StateManager:
 
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXIST NPC_status
+                CREATE TABLE IF NOT EXISTS NPC_status
                 (   
                     npc_id INTEGER,
                     status     TEXT,
@@ -92,7 +90,7 @@ class StateManager:
 
             cursor.execute(
                 f"""
-                CREATE TABLE Memory (
+                CREATE TABLE IF NOT EXISTS Memory (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     made_at INT DEFAULT (unixepoch() - {self.created_at}),
                     npc TEXT,
@@ -110,7 +108,10 @@ class StateManager:
                 conn.close()
 
 
-    def add_npc_to_db(self, npc : NPC):
+    def add_npc_to_db(self, npc : NPC, location: Location):
+        if not npc or not location:
+            return False
+
         conn = self._get_connection()
         cursor = conn.cursor()
 
@@ -121,8 +122,8 @@ class StateManager:
         image_path = os.path.join(self.npc_image_path, f'{self.num_npc}')
         if existing_npc is None:
             cursor.execute(
-                "INSERT INTO NPCs (name, personality, description, affectionlevel, location, image_path) VALUES (?, ?, ?, ?, ?, ?)",
-                (npc.name, npc.personality, npc.description, npc.affectionlevel, npc.location, image_path)
+                "INSERT INTO NPCs (name, personality, description, affectionate, location, currentStatus, image_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (npc.name, npc.personality, npc.description, npc.affectionate, location.id, npc.status, image_path)
             )
 
             self.num_npc += 1
@@ -134,7 +135,11 @@ class StateManager:
             print(f"NPC có tên '{npc.name}' đã tồn tại trong Database!")
             return False  # Trả về False báo hiệu trùng lặp
 
+
     def add_location_to_db(self, location):
+        if not location:
+            return False
+
         conn = self._get_connection()
         cursor = conn.cursor()
 
@@ -145,11 +150,12 @@ class StateManager:
         if existing_location is None:
             # Nếu chưa tồn tại thì tiến hành thêm mới
             cursor.execute(
-                "INSERT INTO Locations (name, description) VALUES (?, ?)",
-                (location.name, location.description)
+                "INSERT INTO Locations (name, description, currentState) VALUES (?, ?, ?)",
+                (location.name, location.description, location.state)
             )
 
             # LƯU Ý: Đừng quên commit để lưu thay đổi vào Database
+            self.num_locations += 1
             conn.commit()
             return True
 
