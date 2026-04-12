@@ -1,25 +1,25 @@
 {
     "system_requirements": {
-        "world_name": "Linh's High",
-        "starting_location": "Trường Trung học Phổ thông Linh",
-        "starting_atmosphere": [
-            "ấm áp",
-            "hy vọng",
-            "tò mò"
-        ]
+        "world_name": "Mixi",
+        "world_type": [
+            "post-apocalyptic",
+            "zombie-infested"
+        ],
+        "world_mission": "Contain the Blight Virus and restore humanity's last strongholds"
     },
     "dynamic_lore": {
-        "theme_and_tone": "Trường học cấp 3 hiện đại với giai điệu nhẹ nhàng, tập trung vào mối quan hệ học sinh và kỷ niệm tuổi học trò",
-        "core_conflict": "Cân bằng giữa áp lực học tập, kỳ vọng gia đình và khát khao khám phá tình cảm đầu đời",
-        "he_thong_giao_duc": "Chế độ học tập linh hoạt với các câu lạc bộ học thuật và nghệ thuật, nơi tình bạn và tình yêu nảy nở tự nhiên",
-        "noi_quy_truong_hoc": "Quy định nghiêm ngặt về trang phục và giờ giấc, nhưng có những khoảng xanh cho sáng tạo cá nhân",
-        "kho_bau_nho": "Công viên ký ức phía sau trường - nơi học sinh để lại những lá thư chưa gửi và tìm thấy những điều kỳ diệu nhỏ"
+        "theme_and_tone": "Desperate survival in a decaying world where trust is deadlier than rot",
+        "core_conflict": "Factions of survivors battle both the spreading zombie hordes and each other for dwindling resources",
+        "infection_spread_mechanics": "The Blight Virus spreads through bodily fluids and aerosolized spores in collapsing cities, with three stages of infection before full reanimation",
+        "survival_factions": "Quartermaster Guilds (resource traders), Warden Clans (militant protectors), and Free Wanderers (nomadic loners) vie for dominance",
+        "zombie_types": "Staggerers (early-stage infected), Rotwalkers (decaying fast zombies), and Hive Minds (collective intelligence hordes)"
     },
     "dynamic_vocabulary": {
-        "currency": "Điểm sticker",
-        "magic_users": "Câu lạc bộ nghệ thuật",
-        "relationships": "Dây tơ hồng",
-        "technology": "Máy quét điểm danh sinh trắc học",
-        "quests": "Bài tập tình cảm"
+        "currency": "Scraps",
+        "zombie_hordes": "The Crawling Mass",
+        "safe_zones": "Quarantine Bastions",
+        "infection_term": "Blighting",
+        "survival_tools": "Rusttech Gear",
+        "elite_zombies": "Hollowed Kings"
     }
 }

@@ -1,4 +1,6 @@
 import asyncio
+
+from UX_AIRPG.main import process_turn
 from engine.StateManager import  StateManager, PlayerState, WorldState
 from world.Entity import *
 from engine.Memory import VectorMemory
@@ -32,6 +34,7 @@ class GameOrchestrator:
 
         self.contextWindow = []
         self.window_size = 5
+        self.world_bible = None
 
 
         print("Hệ thống sẵn sàng!")
@@ -53,73 +56,73 @@ class GameOrchestrator:
         print(f"[System] Đã ghi nhớ vào ID {memory_id}: {story}")
 
 
-    async def init_scene(self, location_name: str, atmosphere: str):
-        """Khởi tạo một cảnh chơi mới với 1 NPC"""
-        print(f"\n--- BƯỚC VÀO: {location_name} ---")
-        # Sinh NPC bằng Groq
-        npc_data = await self.storyAgent.generate_npc(location_context=location_name, atmosphere=atmosphere)
-
-        if npc_data:
-            npc_name = npc_data.get('name', 'Kẻ vô danh')
-            print(f"[{npc_name}] xuất hiện! Nghề nghiệp: {npc_data.get('occupation')}")
-            print(f"Mô tả: {npc_data.get('description')}")
-            print(f"{npc_name}: {npc_data.get('initial_dialogue')}")
-
-            # Lưu câu thoại đầu tiên vào ký ức
-            self._save_memory_pipeline(
-                npc_name=npc_name,
-                location_name=location_name,
-                text=f"{npc_name} xuất hiện và nói: {npc_data.get('initial_dialogue')}"
-            )
-            return npc_name
-        return None
-
-    async def player_interact(self, player_input: str, npc_name: str, location_name: str):
+    async def _initialize_location(self, world_bible: dict):
         """
-        Luồng RAG hoàn chỉnh khi người chơi tương tác với NPC
+        Phân tích World Bible để thiết kế địa điểm bắt đầu game.
+        Trả về object Location.
         """
-        print(f"\n[Bạn]: {player_input}")
+        print("[Engine] Đang kiến tạo khu vực khởi đầu...")
 
-        # Bước 1: RETRIEVAL - Tìm kiếm ký ức liên quan
-        relevant_mem_ids = self.memory.search(player_input, top_k=3)
-        past_context = ""
-        if relevant_mem_ids:
-            # Lấy text từ metadata của Vector DB (hoặc query ngược lại SQL bằng ID)
-            memories = [self.memory.metadata[mid] for mid in relevant_mem_ids]
-            past_context = "\n".join(memories)
-            print(f"[System] Tìm thấy {len(memories)} ký ức liên quan.")
+        # 1. Trích xuất dữ liệu từ World Bible một cách an toàn
+        sys_req = world_bible.get("system_requirements", {})
+        dyn_lore = world_bible.get("dynamic_lore", {})
 
-        # Bước 2: Xây dựng Prompt cho LLM
-        prompt = f"""
-        Bạn đang đóng vai NPC tên là {npc_name} tại {location_name}.
+        world_name = sys_req.get("world_name", "Vùng đất Vô danh")
+        world_mission = sys_req.get("world_mission", "Sống sót")
+        theme_and_tone = dyn_lore.get("theme_and_tone", "Bí ẩn")
 
-        KÝ ỨC CŨ LIÊN QUAN (Hãy dùng nếu cần thiết để giữ tính nhất quán):
-        {past_context if past_context else "Không có ký ức nào liên quan."}
+        # world_type là mảng (list), cần nối thành chuỗi để nạp vào prompt
+        world_type_list = sys_req.get("world_type", ["Unknown"])
+        world_type = ", ".join(world_type_list) if isinstance(world_type_list, list) else str(world_type_list)
 
-        Người chơi vừa nói: "{player_input}"
-        Hãy trả lời người chơi một cách tự nhiên, đúng vai trò của bạn.
-        """
+        # 2. Lấy prompt Init từ YAML
+        sys_init = self.pm.get_prompt('LocationAgent', 'systemInit')
+        user_init = self.pm.get_prompt(
+            'LocationAgent', 'userInit',
+            world_name=world_name,
+            world_type=world_type,
+            theme_and_tone=theme_and_tone,
+            world_mission=world_mission
+        )
 
-        # Bước 3: GENERATION - Gọi LLM để sinh câu trả lời
-        print(f"[{npc_name}]: ", end="", flush=True)
-        npc_response = ""
-        async for chunk in self.storyAgent.generate_stream(prompt):
-            print(chunk, end="", flush=True)
-            npc_response += chunk
-        print()  # Xuống dòng khi sinh xong
+        # 3. Gọi Agent sinh địa điểm (Sử dụng hàm của CloudAgents)
+        location_data = await self.locationAgent.generate_location(
+            system_prompt=sys_init,
+            user_prompt=user_init
+        )
 
-        # Bước 4: UPDATE MEMORY - Lưu lại toàn bộ đoạn hội thoại vừa diễn ra
-        interaction_text = f"Người chơi nói: '{player_input}'. {npc_name} trả lời: '{npc_response}'"
-        self._save_memory_pipeline(npc_name, location_name, interaction_text)
+        if not location_data:
+            raise ValueError("[Lỗi] LocationAgent không thể sinh ra địa điểm đầu tiên!")
+
+        # 4. Trích xuất thông tin
+        loc_name = location_data.get('location_name', 'Điểm khởi đầu')
+        desc = location_data.get('description', 'Một nơi hoang vắng.')
+        atmosphere = location_data.get('atmosphere', 'Yên tĩnh')
+        paths = location_data.get('connected_paths', [])
+
+        # 5. Cập nhật Game State & Tạo Object
+        # Giả định bạn đã có class Location trong world.Entity
+        start_location = Location(
+            id = f"location_{self.db.num_locations}",
+            name=loc_name,
+            description=desc,
+            state=atmosphere,
+        )
+
+        # 6. Lưu vào Database (để sau này RAG hoặc Router tìm kiếm)
+        self.db.add_location_to_db(start_location)
+
+        self.player_state.currentLocation = start_location
+
+        return
 
 
-    async def create_new_world(self, player_idea: str) -> dict:
+    async def _create_new_world(self, player_idea: str):
         """
         Khởi tạo thế giới mới từ ý tưởng người chơi.
         Trả về dictionary chứa World Bible để app.py hiển thị.
         """
         print("[Engine] Đang kích hoạt World Architect...")
-
         # BƯỚC 1: Lấy prompt từ file YAML
         # (Giả sử self.pm là instance của PromptManager đã load file yaml)
         system_prompt = self.pm.get_prompt('WorldGenerateAgent', 'system')
@@ -136,30 +139,89 @@ class GameOrchestrator:
         # Đảm bảo thư mục data/ tồn tại
         os.makedirs('./data', exist_ok=True)
         bible_path = './data/world_bible.json'
-
         with open(bible_path, 'w', encoding='utf-8') as f:
             json.dump(world_bible, f, ensure_ascii=False, indent=4)
-        print(f"[Engine] Đã lưu Kinh Thánh Thế Giới tại: {bible_path}")
+            print(f"[Engine] Đã lưu Thông tin Thế Giới tại: {bible_path}")
 
         # BƯỚC 4: Cập nhật vào WorldState của Game Engine
         # (Để các Agent khác như Storyteller, NPC Creator lấy ra dùng sau này)
-        self.world_state.name = world_bible.get('world_name', 'Vùng đất Vô danh')
-        self.world_state.theme = world_bible.get('theme', 'Fantasy')
-        self.world_state.tone = world_bible.get('tone_and_style', 'Trang trọng')
-        self.world_state.core_conflict = world_bible.get('core_conflict', 'Sinh tồn')
+        self.world_state.name = world_bible["system_requirements"].get('world_name', 'Vùng đất Vô danh')
+        self.world_state.type = world_bible["system_requirements"].get('world_type', 'Normal')
+        self.world_state.theme_and_tone = world_bible["system_requirements"].get('theme_and_tone', 'Normal')
+        self.world_state.core_conflict = world_bible["system_requirements"].get('core_conflict', 'None')
+        self.world_state.mission = world_bible["system_requirements"].get('world_mission', 'Sinh tồn')
+        self.world_state.dynamic_lore = world_bible['dynamic_lore']
+        self.world_state.dynamic_vocabulary = world_bible['dynamic_vocabulary']
+        return
 
-        vocab = world_bible.get('vocabulary_mapping', {})
-        self.world_state.currency = vocab.get('currency', 'Vàng')
-        self.world_state.tech_magic = vocab.get('magic_or_tech', 'Phép thuật')
 
-        # BƯỚC 5: Khởi tạo cảnh đầu tiên (Bắt buộc phải có để bắt đầu game)
-        start_loc = world_bible.get('starting_location', 'Nơi hoang dã')
-        start_atmos = world_bible.get('starting_atmosphere', 'Bí ẩn')
+    async def _process_game_turn(self, player_input: str):
+        """
+        Hàm xử lý 1 lượt chơi hoàn chỉnh.
+        Trả về: (Cốt truyện sinh ra, Danh sách lựa chọn dạng JSON)
+        """
+        print(f"\n[Bạn]: {player_input}")
 
-        # Đẩy người chơi vào map đầu tiên và sinh NPC khởi đầu
-        await self.init_scene(start_loc, start_atmos)
+        past_context = None
+        # BƯỚC 2: GENERATE STORY - Kể diễn biến tiếp theo
+        print("\n[đang suy nghĩ...]")
 
-        # Trả về toàn bộ dữ liệu để app.py có thể in ra thông báo cho người chơi
-        return world_bible
+        sys_story = self.pm.get_prompt(
+            'StoryAgent', 'system',
+            world_theme = self.world_state.theme_and_tone,
+            world_conflict = self.world_state.core_conflict,
+            world_vocabulary = self.world_state.dynamic_vocabulary,
 
+            current_location = self.player_state.currentLocation.name,
+            npc_name = None,
+            npc_personality = None,
+            rag_context = None,
+            system_directive = "The player just acted. Describe the consequences and the reaction of the NPC/environment."
+        )
+
+        user_story = self.pm.get_prompt('StoryAgent', 'user', user_input=player_input)
+
+        story_response = ""
+        # Chạy stream để in chữ ra màn hình từ từ cho mượt
+        async for chunk in self.storyAgent.generate_stream(sys_story, user_story):
+            print(chunk, end="", flush=True)
+            story_response += chunk
+        print("\n")  # Xuống dòng khi kể xong
+        #
+        # # BƯỚC 3: SUMMARIZE & SAVE - Nén và lưu ký ức
+        # sum_sys = self.pm.get_prompt('SummarizeAgent', 'system')
+        # sum_user = self.pm.get_prompt(
+        #     'SummarizeAgent', 'user',
+        #     current_location=current_location,
+        #     npc_name=current_npc,
+        #     user_input=player_input,
+        #     storyteller_response=story_response
+        # )
+        # compressed_memory = await self.summarizeAgent.summarize_chat(sum_sys, sum_user)
+        #
+        # if compressed_memory:
+        #     # Lưu ý: Cần đảm bảo hàm _save_memory_pipeline nhận đúng kiểu dữ liệu
+        #     self._save_memory_pipeline(npc=current_npc, location=current_location, story=compressed_memory)
+        #
+        # # BƯỚC 4: GENERATE CHOICES - Đề xuất 3-4 hành động tiếp theo
+        # sys_choice = self.pm.get_prompt('ChoiceAgent', 'system')
+        # user_choice = self.pm.get_prompt(
+        #     'ChoiceAgent', 'user',
+        #     current_location=current_location,
+        #     npc_name=current_npc,
+        #     # Tận dụng luôn câu tóm tắt ở Bước 3 làm bối cảnh cho ChoiceAgent để tiết kiệm Token!
+        #     recent_story_summary=compressed_memory if compressed_memory else story_response
+        # )
+        #
+        # choices_data = await self.choiceAgent.generate_choices(sys_choice, user_choice)
+        #
+        # return story_response, choices_data
+
+
+
+    async def run(self):
+        player_idea = input()
+        await self._create_new_world(player_idea = player_idea)
+        player_input = input()
+        await self._process_game_turn(player_input)
 

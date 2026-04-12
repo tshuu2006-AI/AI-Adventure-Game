@@ -195,9 +195,16 @@ class StateManager:
 
 class PlayerState:
     def __init__(self):
-        pass
+        self.currentLocation = None
 
 
 class WorldState:
     def __init__(self):
-        pass
+        self.name = None
+        self.type = None
+        self.theme_and_tone = None
+        self.core_conflict = None
+        self.mission = None
+
+        self.dynamic_lore = None
+        self.dynamic_vocabulary = None
