@@ -2,3 +2,6 @@
 __pycache__/
 *.index
 *.pkl
+
+data/
+*.db

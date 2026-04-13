@@ -288,6 +288,7 @@ class PlayerState:
 
     def __init__(self):
         self.currentLocation = None
+        self.inventory = []
 
 
 class WorldState:

@@ -123,3 +123,22 @@ class SummarizeAgent(BaseCloudAgent):
         except Exception as e:
             print(f"[SUMMARIZE ERROR] Lỗi khi gọi API tóm tắt: {e}")
             return ""
+        
+
+class ChoiceAgent(BaseCloudAgent):
+    """Agent chịu trách nhiệm phân tích tình huống và gợi ý các hành động tiếp theo."""
+
+    async def generate_choices(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+        try:
+            response = await self._chat(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7, 
+                response_format={"type": "json_object"}
+            )
+            return json.loads(response.choices[0].message.content)
+        except Exception as e:
+            print(f"[CHOICE ERROR] {e}")
+            return {"choices": []}

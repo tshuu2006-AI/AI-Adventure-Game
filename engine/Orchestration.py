@@ -34,6 +34,7 @@ class GameOrchestrator:
         self.storyAgent = StoryAgent(api_key=groq_api_key)
         self.NPCAgent = NPCAgent(api_key=groq_api_key)
         self.locationAgent = LocationAgent(api_key=groq_api_key)
+        self.choiceAgent = ChoiceAgent(api_key=groq_api_key) # Khởi tạo ChoiceAgent
 
         # 3. Khởi tạo các Local Agent (xử lý tác vụ phân tích, trích xuất dữ liệu nhanh)
         self.router = IntentRouter(model_name="qwen2.5:3b")
@@ -144,7 +145,7 @@ class GameOrchestrator:
             json.dump(world_bible, f, ensure_ascii=False, indent=4)
             print(f"[Engine] Đã lưu Thông tin Thế Giới tại: {bible_path}")
 
-        # 4. Cập nhật các thông số cốt lõ i vào WorldState
+        # 4. Cập nhật các thông số cốt lõi vào WorldState
         self.world_state.name = world_bible["system_requirements"].get('world_name', 'Vùng đất Vô danh')
         self.world_state.type = world_bible["system_requirements"].get('world_type', 'Normal')
         self.world_state.theme_and_tone = world_bible["system_requirements"].get('theme_and_tone', 'Normal')
@@ -187,6 +188,8 @@ class GameOrchestrator:
             prologue_text += chunk
 
         self.short_term_memory.add_memory('Wake up', prologue_text)
+
+        return prologue_text
 
 
     async def _summarize_memory(self):
@@ -233,6 +236,14 @@ class GameOrchestrator:
             story_response += chunk
         print("\n")
 
+        # Cập nhật inventory
+        await self._update_inventory(player_input, story_response)
+
+        # Tạo lựa chọn
+        choices = await self._generate_choices(story_response)
+    
+        self._display_choices(choices)
+
         return story_response
 
 
@@ -245,13 +256,86 @@ class GameOrchestrator:
         player_idea = input()
         await self._create_new_world(player_idea=player_idea)
         await self._initialize_location()
-        await self._initialize_story()
+
+        prologue_text = await self._initialize_story()
+        print("\n")
+        choices = await self._generate_choices(prologue_text)
+        self._display_choices(choices)
 
         player_input = ""
-        while player_input.lower() != "exit":
-            player_input = input()
+        # while player_input.lower() != "exit":
+        while True:
+            player_input = input("\n[Lựa chọn của bạn]: ")
+
+            if player_input.lower() == 'exit':
+                break
             story_response = await self._process_game_turn(player_input)
             print()
 
 
+    async def _generate_choices(self, story_context: str):
+        """
+        Sinh ra danh sách các lựa chọn hành động cho người chơi.
+        story_context: Có thể là story_response vừa tạo hoặc tóm tắt gần nhất.
+        """
+        print("[Engine] Đang tính toán các lựa chọn tiếp theo...")
 
+        # 1. Lấy thông tin NPC hiện tại (nếu có) từ PlayerState hoặc Memory
+        # Tạm thời để None nếu hệ thống chưa lưu NPC active trong scene
+        current_npc_name = "Không có"
+        
+        # 2. Nạp dữ liệu vào Prompt từ prompts.yaml
+        sys_prompt = self.pm.get_prompt('ChoiceAgent', 'system')
+        user_prompt = self.pm.get_prompt(
+            'ChoiceAgent', 'user',
+            current_location=self.player_state.currentLocation.name,
+            npc_name=current_npc_name,
+            recent_story_summary=story_context
+        )
+
+        # 3. Gọi Agent để lấy JSON lựa chọn
+        choices_data = await self.choiceAgent.generate_choices(sys_prompt, user_prompt)
+        
+        return choices_data.get('choices', [])
+
+    async def _update_inventory(self, player_input: str, story_response: str):
+        """
+        Hàm con (Helper) chuyên chịu trách nhiệm đọc hội thoại và cập nhật túi đồ.
+        """
+        recent_interaction = f"Hành động của người chơi: {player_input}\nPhản hồi của thế giới: {story_response}"
+        
+        sys_extractor = self.pm.get_prompt('StateExtractor', 'system')
+        user_extractor = self.pm.get_prompt('StateExtractor', 'user', conversation_history=recent_interaction)
+
+        # Chạy LocalAgent
+        state_changes = await self.extractor.extract_state(sys_extractor, user_extractor)
+
+        items_added = state_changes.get("items_added", [])
+        items_removed = state_changes.get("items_removed", [])
+
+        if items_added or items_removed:
+            print("\n[Hệ Thống] ---> THAY ĐỔI TÚI ĐỒ <---")
+            
+            if isinstance(items_added, list):
+                for item in items_added:
+                    if item and item not in self.player_state.inventory:
+                        self.player_state.inventory.append(item)
+                        print(f" [+] Nhận được: {item}")
+            
+            if isinstance(items_removed, list):
+                for item in items_removed:
+                    if item and item in self.player_state.inventory:
+                        self.player_state.inventory.remove(item)
+                        print(f" [-] Bị mất: {item}")
+            
+            inventory_status = ", ".join(self.player_state.inventory) if self.player_state.inventory else "Trống rỗng"
+            print(f" [Balo hiện tại]: {inventory_status}")
+
+    def _display_choices(self, choices):
+        """Hàm con phụ trách in menu lựa chọn ra màn hình."""
+        if choices:
+            print("-" * 30)
+            print("BẠN SẼ LÀM GÌ TIẾP THEO?")
+            for choice in choices:
+                print(f" {choice['id']}. {choice['action_text']} ({choice['style']})")
+            print("-" * 30)
