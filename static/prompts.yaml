@@ -14,7 +14,7 @@ WorldGenerateAgent:
       "system_requirements": {
         "world_name": "Name of the world",
         "world_type": [e.g fantasy, non-tech, high-tech,...],
-        "world_mission": "A mission that must be long-term"
+        "world_mission": "A mission that must be long-term",
         "theme_and_tone": "Overall genre and narrative tone",
         "core_conflict": "The main conflict currently happening in this world"
       },

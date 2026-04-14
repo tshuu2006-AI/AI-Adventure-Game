@@ -1,4 +1,5 @@
 from sympy.codegen.ast import continue_
+import json
 
 from engine.DataManager.StateManager import StateManager, PlayerState, WorldState
 from world.Entity import *
@@ -56,15 +57,44 @@ class GameOrchestrator:
         Pipeline đồng bộ lưu ký ức vào cả SQL (để truy vấn cấu trúc)
         và Vector DB (để tìm kiếm ngữ nghĩa/RAG).
         """
-        self.db.add_npc_to_db(NPC, location)
+        self.db.add_npc_to_db(npc, location)
         self.db.add_location_to_db(location)
 
         # Lưu vào SQLite để tạo ID định danh duy nhất
         memory_id, timestamp = self.db.add_memory_to_db(npc, location, story)
 
         # Ánh xạ ID chuẩn vào FAISS VectorDB
-        self.long_term_memory.add_memory_to_vector(story)
+        self.long_term_memory.add_memory_to_vector(story, memory_id=memory_id)
         print("[System] Đã ghi nhớ thông tin mới")
+
+    def _retrieve_relevant_memories(self, query: str, top_k: int = 3):
+        """
+        Nhận truy vấn -> tìm top_k Memory ID từ VectorDB -> truy xuất ngược SQL,
+        đồng thời mở rộng context từ các bảng NPCs/Locations.
+        """
+        memory_ids = self.long_term_memory.search(query=query, top_k=top_k)
+        memories = self.db.get_memories_by_ids(memory_ids)
+
+        # Dùng thực thể xuất hiện trong memory để truy ngược thêm dữ liệu quan hệ.
+        memory_npc_names = [item.get('npc') for item in memories if item.get('npc')]
+        memory_location_names = [item.get('location') for item in memories if item.get('location')]
+
+        npcs_from_memory = self.db.get_npcs_by_names(memory_npc_names, limit=3)
+        locations_from_memory = self.db.get_locations_by_names(memory_location_names, limit=3)
+
+        # Mở rộng theo truy vấn hiện tại để bắt thêm thực thể chưa xuất hiện trong top memory.
+        entity_hits = self.db.search_entities_by_query(query=query, limit_per_table=2)
+
+        # Gộp kết quả và khử trùng lặp theo ID để giữ context gọn, ổn định.
+        npc_map = {str(item['id']): item for item in npcs_from_memory}
+        for item in entity_hits.get('npcs', []):
+            npc_map.setdefault(str(item['id']), item)
+
+        location_map = {str(item['id']): item for item in locations_from_memory}
+        for item in entity_hits.get('locations', []):
+            location_map.setdefault(str(item['id']), item)
+
+        return memory_ids, memories, list(npc_map.values()), list(location_map.values())
 
 
     async def _initialize_location(self):
@@ -213,6 +243,36 @@ class GameOrchestrator:
         # Kể diễn biến tiếp theo
         print("\n[đang suy nghĩ...]")
 
+        memory_ids, memories, npc_rows, location_rows = self._retrieve_relevant_memories(player_input, top_k=3)
+
+        # Chuẩn hóa RAG context thành 3 khối để prompt dễ đọc và dễ kiểm tra log.
+        memory_block = "\n".join(
+            [f"- [memory:{item['id']}] ({item['location']}) {item['text']}" for item in memories]
+        ) if memories else "- Không có ký ức liên quan."
+
+        npc_block = "\n".join(
+            [f"- [npc:{item['id']}] {item['name']} | personality: {item['personality']} | status: {item['status']} | location: {item['location']}"
+             for item in npc_rows]
+        ) if npc_rows else "- Không có NPC liên quan."
+
+        location_block = "\n".join(
+            [f"- [location:{item['id']}] {item['name']} | state: {item['state']} | desc: {item['description']}"
+             for item in location_rows]
+        ) if location_rows else "- Không có Location liên quan."
+
+        rag_context = (
+            "[MEMORY RETRIEVAL]\n" + memory_block +
+            "\n\n[NPC RETRIEVAL]\n" + npc_block +
+            "\n\n[LOCATION RETRIEVAL]\n" + location_block
+        )
+
+        if memory_ids:
+            print(f"[RAG] Top memory IDs: {memory_ids}")
+        if npc_rows:
+            print(f"[RAG] NPC IDs: {[item['id'] for item in npc_rows]}")
+        if location_rows:
+            print(f"[RAG] Location IDs: {[item['id'] for item in location_rows]}")
+
         sys_story = self.pm.get_prompt(
             'StoryAgent', 'system',
             world_theme=self.world_state.theme_and_tone,
@@ -221,7 +281,7 @@ class GameOrchestrator:
             current_location=self.player_state.currentLocation.name,
             npc_name=None,
             npc_personality=None,
-            rag_context=None,
+            rag_context=rag_context,
             valid_paths_from_sql = None,
             system_directive="The player just acted. Describe the consequences and the reaction of the NPC/environment."
         )
@@ -239,6 +299,13 @@ class GameOrchestrator:
         # Cập nhật inventory
         await self._update_inventory(player_input, story_response)
 
+        # Lưu lại sự kiện vừa xảy ra vào SQL + VectorDB để dùng cho các lượt sau
+        self._save_memory_pipeline(
+            npc=None,
+            location=self.player_state.currentLocation,
+            story=f"Player: {player_input}\nStory: {story_response}"
+        )
+
         # Tạo lựa chọn
         choices = await self._generate_choices(story_response)
     
@@ -250,8 +317,8 @@ class GameOrchestrator:
 
     async def run(self):
         """Khởi động luồng điều khiển CLI để kiểm thử trò chơi."""
-        self.db.reset_database()
         self.db.create_tables()
+        self.db.reset_database()
         print("Hãy nhập ý tưởng thế giới mà bạn muốn xây dựng: ")
         player_idea = input()
         await self._create_new_world(player_idea=player_idea)

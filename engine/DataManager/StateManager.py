@@ -1,6 +1,7 @@
 import sqlite3
 import time
 import os
+from typing import Any, Dict, List
 from world.Entity import *
 
 
@@ -184,9 +185,28 @@ class StateManager:
                 """
             )
 
+            self._ensure_memory_type_column(cursor)
+
         finally:
             if 'conn' in locals():
+                conn.commit()
                 conn.close()
+
+    def _ensure_memory_type_column(self, cursor):
+        """Bổ sung cột id_type cho bảng Memory và backfill dữ liệu cũ."""
+        cursor.execute("PRAGMA table_info(Memory)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        if 'id_type' not in columns:
+            cursor.execute("ALTER TABLE Memory ADD COLUMN id_type TEXT DEFAULT 'memory'")
+
+        cursor.execute(
+            """
+            UPDATE Memory
+            SET
+                id_type = COALESCE(id_type, 'memory')
+            """
+        )
 
     def reset_database(self):
         """Xóa sạch dữ liệu trong các bảng và reset bộ đếm ID. Dùng khi tạo Game mới."""
@@ -221,11 +241,12 @@ class StateManager:
         existing_npc = cursor.fetchone()
 
         image_path = os.path.join(self.npc_image_path, f'{self.num_npc}')
+        npc_id = npc.id if getattr(npc, 'id', None) else f"npc_{self.num_npc}"
 
         if existing_npc is None:
             cursor.execute(
-                "INSERT INTO NPCs (name, personality, description, affectionate, location, currentStatus, image_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (npc.name, npc.personality, npc.description, npc.affectionate, location.id, npc.status, image_path)
+                "INSERT INTO NPCs (npc_id, name, personality, description, affectionLevel, location, currentStatus, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (npc_id, npc.name, npc.personality, npc.description, npc.affectionate, location.name, npc.status, image_path)
             )
 
             self.num_npc += 1
@@ -271,16 +292,212 @@ class StateManager:
 
         now = int(time.time())
 
+        # Chấp nhận cả object (NPC/Location) hoặc string đầu vào.
+        npc_value = getattr(npc_name, 'name', npc_name)
+        location_value = getattr(location_name, 'name', location_name)
+
+        text_column = self._get_memory_text_column(cursor)
+
         cursor.execute(
-            "INSERT INTO Memory (made_at, npc, location, story) VALUES (?, ?, ?, ?)",
-            (now, npc_name, location_name, text)
+            f"INSERT INTO Memory (made_at, npc, location, {text_column}) VALUES (?, ?, ?, ?)",
+            (now, npc_value, location_value, text)
         )
 
         new_id = cursor.lastrowid
 
+        cursor.execute(
+            "UPDATE Memory SET id_type = ? WHERE id = ?",
+            ('memory', new_id)
+        )
+
         conn.commit()
+        conn.close()
 
         return new_id, now
+
+    def _get_memory_text_column(self, cursor) -> str:
+        """Xác định tên cột lưu text trong bảng Memory để tương thích schema cũ/mới."""
+        cursor.execute("PRAGMA table_info(Memory)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        if 'story' in columns:
+            return 'story'
+        if 'description' in columns:
+            return 'description'
+
+        raise ValueError("[Lỗi DB] Bảng Memory không có cột văn bản hợp lệ (story/description).")
+
+    def get_memories_by_ids(self, memory_ids: List[int]) -> List[Dict[str, Any]]:
+        """Truy xuất bản ghi Memory theo danh sách ID và giữ đúng thứ tự đầu vào."""
+        if not memory_ids:
+            return []
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        text_column = self._get_memory_text_column(cursor)
+        placeholders = ", ".join(["?"] * len(memory_ids))
+
+        cursor.execute(
+            f"""
+            SELECT id, id_type, made_at, npc, location, {text_column} AS text
+            FROM Memory
+            WHERE id IN ({placeholders})
+            """,
+            tuple(memory_ids)
+        )
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        # Ánh xạ theo ID để có thể trả lại đúng thứ tự top-k từ vector search.
+        rows_by_id = {
+            int(row[0]): {
+                'id': int(row[0]),
+                'id_type': row[1] if row[1] else 'memory',
+                'made_at': row[2],
+                'npc': row[3],
+                'location': row[4],
+                'text': row[5],
+            }
+            for row in rows
+        }
+
+        return [rows_by_id[memory_id] for memory_id in memory_ids if memory_id in rows_by_id]
+
+    def get_npcs_by_names(self, npc_names: List[str], limit: int = 3) -> List[Dict[str, Any]]:
+        """Truy xuất thông tin NPC theo tên (không phân biệt hoa thường)."""
+        # Loại bỏ tên rỗng trước khi query để tránh tạo WHERE IN không cần thiết.
+        normalized_names = [name.strip() for name in npc_names if name and str(name).strip()]
+        if not normalized_names:
+            return []
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        placeholders = ", ".join(["?"] * len(normalized_names))
+        cursor.execute(
+            f"""
+            SELECT npc_id, name, personality, description, affectionLevel, location, currentStatus
+            FROM NPCs
+            WHERE LOWER(name) IN ({placeholders})
+            LIMIT ?
+            """,
+            tuple([name.lower() for name in normalized_names] + [limit])
+        )
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [
+            {
+                'id': row[0],
+                'id_type': 'npc',
+                'name': row[1],
+                'personality': row[2],
+                'description': row[3],
+                'affection_level': row[4],
+                'location': row[5],
+                'status': row[6],
+            }
+            for row in rows
+        ]
+
+    def get_locations_by_names(self, location_names: List[str], limit: int = 3) -> List[Dict[str, Any]]:
+        """Truy xuất thông tin Location theo tên (không phân biệt hoa thường)."""
+        # Loại bỏ giá trị rỗng để query gọn và tránh trả về nhiễu.
+        normalized_names = [name.strip() for name in location_names if name and str(name).strip()]
+        if not normalized_names:
+            return []
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        placeholders = ", ".join(["?"] * len(normalized_names))
+        cursor.execute(
+            f"""
+            SELECT location_id, name, description, currentState
+            FROM Locations
+            WHERE LOWER(name) IN ({placeholders})
+            LIMIT ?
+            """,
+            tuple([name.lower() for name in normalized_names] + [limit])
+        )
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [
+            {
+                'id': row[0],
+                'id_type': 'location',
+                'name': row[1],
+                'description': row[2],
+                'state': row[3],
+            }
+            for row in rows
+        ]
+
+    def search_entities_by_query(self, query: str, limit_per_table: int = 2) -> Dict[str, List[Dict[str, Any]]]:
+        """Tìm thực thể liên quan trực tiếp từ query trong bảng NPCs và Locations."""
+        query = (query or '').strip()
+        if not query:
+            return {'npcs': [], 'locations': []}
+
+        # LIKE search này là lớp fallback để bổ sung context ngoài top memory.
+        like_query = f"%{query.lower()}%"
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT npc_id, name, personality, description, affectionLevel, location, currentStatus
+            FROM NPCs
+            WHERE LOWER(name) LIKE ? OR LOWER(personality) LIKE ? OR LOWER(description) LIKE ?
+            LIMIT ?
+            """,
+            (like_query, like_query, like_query, limit_per_table)
+        )
+        npc_rows = cursor.fetchall()
+
+        cursor.execute(
+            """
+            SELECT location_id, name, description, currentState
+            FROM Locations
+            WHERE LOWER(name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(currentState) LIKE ?
+            LIMIT ?
+            """,
+            (like_query, like_query, like_query, limit_per_table)
+        )
+        location_rows = cursor.fetchall()
+        conn.close()
+
+        npcs = [
+            {
+                'id': row[0],
+                'id_type': 'npc',
+                'name': row[1],
+                'personality': row[2],
+                'description': row[3],
+                'affection_level': row[4],
+                'location': row[5],
+                'status': row[6],
+            }
+            for row in npc_rows
+        ]
+
+        locations = [
+            {
+                'id': row[0],
+                'id_type': 'location',
+                'name': row[1],
+                'description': row[2],
+                'state': row[3],
+            }
+            for row in location_rows
+        ]
+
+        return {'npcs': npcs, 'locations': locations}
 
 
 class PlayerState:

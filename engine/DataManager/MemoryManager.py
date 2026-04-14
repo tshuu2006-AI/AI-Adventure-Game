@@ -1,6 +1,7 @@
 import faiss
 import numpy as np
 import os
+from typing import List, Optional
 from sentence_transformers import SentenceTransformer
 from engine.Agents.CloudAgents import SummarizeAgent
 from engine.PromptManager import PromptManager
@@ -22,23 +23,31 @@ class VectorMemory:
         self.metadata = {}
 
 
-    def add_memory_to_vector(self, text: str):
-        """Mã hóa văn bản thành vector và lưu trữ vào FAISS kèm theo ID từ SQL."""
+    def add_memory_to_vector(self, text: str, memory_id: Optional[int] = None):
+        """Mã hóa văn bản thành vector và lưu trữ vào FAISS với ID ổn định."""
         # Chuyển đổi văn bản thành vector NumPy chuẩn float32
         vector = self.encoder.encode([text]).astype('float32')
 
+        # Nếu caller truyền ID từ SQL, dùng trực tiếp để đồng bộ hai hệ.
+        # Nếu không, fallback sang bộ đếm nội bộ để tương thích mã cũ.
+        vector_id = int(memory_id) if memory_id is not None else int(self.num_memory)
+
+        # Đảm bảo ID đã tồn tại sẽ được cập nhật bằng vector mới.
+        self.index.remove_ids(np.array([vector_id]).astype('int64'))
+
         # Lưu vector vào FAISS và ánh xạ với memory_id
-        self.index.add_with_ids(vector, np.array([self.num_memory]).astype('int64'))
-        self.metadata[self.num_memory] = text
+        self.index.add_with_ids(vector, np.array([vector_id]).astype('int64'))
+        self.metadata[vector_id] = text
 
-        self.num_memory += 1
+        if memory_id is None:
+            self.num_memory += 1
 
 
-    def search(self, query: str, top_k: int = 2):
+    def search(self, query: str, top_k: int = 3) -> List[int]:
         """Tìm kiếm top_k ký ức có ngữ nghĩa tương đồng nhất với câu truy vấn."""
         # Bỏ qua nếu database chưa có ký ức nào
         if self.index.ntotal == 0:
-            return ""
+            return []
 
         # Mã hóa câu hỏi của người chơi thành vector
         query_vector = self.encoder.encode([query]).astype('float32')
