@@ -9,7 +9,7 @@ class BaseCloudAgent:
     Quản lý việc kết nối API và cung cấp hàm gọi LLM dùng chung.
     """
 
-    def __init__(self, api_key: str, model_name: str = "qwen/qwen3-32b"):
+    def __init__(self, api_key: str, model_name: str = "openai/gpt-oss-20b"):
         self.client = AsyncGroq(api_key=api_key)
         self.model = model_name
 

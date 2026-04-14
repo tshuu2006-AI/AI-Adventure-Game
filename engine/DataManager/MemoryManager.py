@@ -90,7 +90,7 @@ class ShortTermMemory:
     def summarize(self):
         if len(self.context_window) > self.window_size:
             sys_prompt = self.pm.get_prompt('SummarizeAgent', 'system')
-            user_prompt = self.pm.get_prompt('SummarizeAgent', 'system',
+            user_prompt = self.pm.get_prompt('SummarizeAgent', 'user',
                                             context_window = self.context_window)
 
             summarized_context = self.summarizeAgent.summarize_chat(sys_prompt, user_prompt)
