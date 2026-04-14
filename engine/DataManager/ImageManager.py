@@ -29,8 +29,7 @@ class ImageManager:
         """
         Lấy đường dẫn ảnh địa điểm. Nếu chưa có thì tạo mới.
         """
-        # Gắn thêm atmosphere vào tên để nếu bối cảnh đổi (VD: từ Sáng -> Tối) thì tạo ảnh mới
-        filename = self._get_safe_filename(f"loc_{location_name}_{atmosphere}")
+        filename = self._get_safe_filename(f"loc_{location_name}")
         filepath = os.path.join(self.loc_folder, filename)
 
         # 1. Kiểm tra ảnh có sẵn

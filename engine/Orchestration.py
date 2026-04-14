@@ -339,7 +339,7 @@ class GameOrchestrator:
     
         self._display_choices(choices)
 
-        return story_response
+        return story_response, choices
 
 
 
@@ -364,7 +364,7 @@ class GameOrchestrator:
 
             if player_input.lower() == 'exit':
                 break
-            story_response = await self._process_game_turn(player_input)
+            story_response, choices = await self._process_game_turn(player_input)
             print()
 
 
@@ -394,33 +394,42 @@ class GameOrchestrator:
         return choices_data.get('choices', [])
 
     async def _update_inventory(self, items_added: list, items_removed: list):
-        """
-        Hàm con (Helper) chuyên chịu trách nhiệm đọc hội thoại và cập nhật túi đồ.
-        """
-        # Chuyển logic lấy state từ AI sang hàm process
-
+        """Hàm chuyên xử lý logic túi đồ và tạo/xóa ảnh vật phẩm."""
         if items_added or items_removed:
             print("\n[Hệ Thống] ---> THAY ĐỔI TÚI ĐỒ <---")
-            
+
+            # 1. Thêm Item mới -> Vẽ ảnh
             if isinstance(items_added, list):
                 for item in items_added:
+                    # Kiểm tra item chưa có trong keys của Dictionary
                     if item and item not in self.player_state.inventory:
-                        self.player_state.inventory.append(item)
+                        # Gọi Kaggle vẽ ảnh
+                        img_path = await self.image_manager.get_or_create_item_image(item)
+                        
+                        # Lưu vào Dict
+                        self.player_state.inventory[item] = img_path
                         print(f" [+] Nhận được: {item}")
-            
+
+            # 2. Mất Item cũ -> Xóa ảnh và gỡ khỏi Dict
             if isinstance(items_removed, list):
                 for item in items_removed:
                     if item and item in self.player_state.inventory:
-                        self.player_state.inventory.remove(item)
+                        # Lấy đường dẫn ảnh bằng pop() (vừa lấy vừa xóa khỏi Dict)
+                        img_path = self.player_state.inventory.pop(item)
+                        
+                        # Xóa file vật lý
+                        if img_path:
+                            self.image_manager.delete_image(img_path)
                         print(f" [-] Bị mất: {item}")
-            
-            inventory_status = ", ".join(self.player_state.inventory) if self.player_state.inventory else "Trống rỗng"
+
+            # Lấy danh sách chìa khóa (Tên items) để in ra console
+            inventory_status = ", ".join(self.player_state.inventory.keys()) if self.player_state.inventory else "Trống rỗng"
             print(f" [Balo hiện tại]: {inventory_status}")
     
     async def _update_location(self, loc_data: dict):
         """Hàm chuyên xử lý logic và hình ảnh khi sang Địa điểm mới."""
         if loc_data:
-            print(f">> Phát hiện khu vực mới: {loc_data.get('name')}. Đang vẽ ảnh nền...")
+            print(f">> Phát hiện khu vực: {loc_data.get('name')}. State: {loc_data.get('atmosphere')}. Đang vẽ ảnh nền...")
             img_path = await self.image_manager.get_or_create_location_image(
                 location_name=loc_data.get("name", "Unknown"),
                 description=loc_data.get("description", ""),
