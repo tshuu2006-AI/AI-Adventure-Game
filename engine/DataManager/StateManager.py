@@ -64,6 +64,8 @@ class StateManager:
                     NOT
                     NULL,
                     currentState
+                    TEXT,
+                    image_path
                     TEXT
                 )
                 """)
@@ -229,6 +231,9 @@ class StateManager:
         conn.commit()
         print("[Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQL!")
 
+        self._clear_image_folders()
+        print("[Database] Đã dọn dẹp sạch sẽ kho lưu trữ hình ảnh!")
+
     def add_npc_to_db(self, npc: NPC, location: Location):
         """Lưu trữ thông tin NPC mới vào CSDL nếu tên chưa tồn tại."""
         if not npc or not location:
@@ -240,13 +245,14 @@ class StateManager:
         cursor.execute("SELECT 1 FROM NPCs WHERE name = ?", (npc.name,))
         existing_npc = cursor.fetchone()
 
-        image_path = os.path.join(self.npc_image_path, f'{self.num_npc}')
-        npc_id = npc.id if getattr(npc, 'id', None) else f"npc_{self.num_npc}"
+
+        # Sử dụng đúng image_path được tạo bởi ImageManager
+        # image_path = os.path.join(self.npc_image_path, f'{self.num_npc}')
 
         if existing_npc is None:
             cursor.execute(
-                "INSERT INTO NPCs (npc_id, name, personality, description, affectionLevel, location, currentStatus, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (npc_id, npc.name, npc.personality, npc.description, npc.affectionate, location.name, npc.status, image_path)
+                "INSERT INTO NPCs (name, personality, description, affectionate, location, currentStatus, image_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (npc.name, npc.personality, npc.description, npc.affectionate, location.id, npc.status, npc.image_path)
             )
 
             self.num_npc += 1
@@ -257,7 +263,7 @@ class StateManager:
             print(f"NPC có tên '{npc.name}' đã tồn tại trong Database!")
             return False
 
-    def add_location_to_db(self, location):
+    def add_location_to_db(self, location: Location):
         """Lưu trữ thông tin Địa điểm mới vào CSDL nếu tên chưa tồn tại."""
         if not location:
             return False
@@ -270,8 +276,8 @@ class StateManager:
 
         if existing_location is None:
             cursor.execute(
-                "INSERT INTO Locations (name, description, currentState) VALUES (?, ?, ?)",
-                (location.name, location.description, location.state)
+                "INSERT INTO Locations (name, description, currentState, image_path) VALUES (?, ?, ?, ?)",
+                (location.name, location.description, location.state, location.image_path)
             )
 
             self.num_locations += 1
@@ -314,6 +320,19 @@ class StateManager:
         conn.close()
 
         return new_id, now
+    
+    def _clear_image_folders(self):
+        """Xóa toàn bộ file ảnh cũ trong thư mục để dọn chỗ cho Game mới."""
+        for folder in [self.npc_image_path, self.location_image_path]:
+            if os.path.exists(folder):
+                for filename in os.listdir(folder):
+                    file_path = os.path.join(folder, filename)
+                    try:
+                        # Chỉ xóa file, bỏ qua nếu nó là thư mục con (mặc dù ở đây không có)
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                    except Exception as e:
+                        print(f"[Database Lỗi] Không thể xóa ảnh cũ {file_path}: {e}")
 
     def _get_memory_text_column(self, cursor) -> str:
         """Xác định tên cột lưu text trong bảng Memory để tương thích schema cũ/mới."""
@@ -505,7 +524,7 @@ class PlayerState:
 
     def __init__(self):
         self.currentLocation = None
-        self.inventory = []
+        self.inventory = {}
 
 
 class WorldState:

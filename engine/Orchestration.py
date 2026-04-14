@@ -7,6 +7,8 @@ from engine.DataManager.MemoryManager import VectorMemory, ShortTermMemory
 from engine.Agents.CloudAgents import *
 from engine.PromptManager import PromptManager
 from engine.Agents.LocalAgents import IntentRouter, StateExtractor
+from engine.ImageAPI import ImageAPI
+from engine.DataManager.ImageManager import ImageManager
 
 import os
 
@@ -37,9 +39,12 @@ class GameOrchestrator:
         self.locationAgent = LocationAgent(api_key=groq_api_key)
         self.choiceAgent = ChoiceAgent(api_key=groq_api_key) # Khởi tạo ChoiceAgent
 
+        self.image_api = ImageAPI(base_url="https://unspelt-nonbrutally-eleanore.ngrok-free.dev") # Cập nhật link ngrok
+        self.image_manager = ImageManager(api=self.image_api)
+
         # 3. Khởi tạo các Local Agent (xử lý tác vụ phân tích, trích xuất dữ liệu nhanh)
-        self.router = IntentRouter(model_name="qwen2.5:3b")
-        self.extractor = StateExtractor(model_name="qwen2.5:3b")
+        self.router = IntentRouter(model_name="qwen2.5:1.5b")
+        self.extractor = StateExtractor(model_name="qwen2.5:1.5b")
 
         # Long-term-memory
         self.context_to_summarize = []
@@ -142,6 +147,13 @@ class GameOrchestrator:
             description=desc,
             state=atmosphere,
         )
+        # Tạo ảnh và thêm đường dẫn ảnh vào
+        img_path = await self.image_manager.get_or_create_location_image(
+            location_name=loc_name,
+            description=desc,
+            atmosphere=atmosphere
+        )
+        start_location.image_path = img_path
 
         # 6. Ghi nhận địa điểm vào CSDL và cập nhật vị trí người chơi
         self.db.add_location_to_db(start_location)
@@ -295,9 +307,25 @@ class GameOrchestrator:
             print(chunk, end="", flush=True)
             story_response += chunk
         print("\n")
+        # Thực hiện trích xuất thông tin 1 lần
+        recent_interaction = f"Hành động của người chơi: {player_input}\nPhản hồi của thế giới: {story_response}"
+        
+        sys_extractor = self.pm.get_prompt('StateExtractor', 'system')
+        user_extractor = self.pm.get_prompt('StateExtractor', 'user', conversation_history=recent_interaction)
 
-        # Cập nhật inventory
-        await self._update_inventory(player_input, story_response)
+        # Chạy LocalAgent
+        state_changes = await self.extractor.extract_state(sys_extractor, user_extractor)
+
+        await self._update_inventory(
+            items_added=state_changes.get("items_added", []), 
+            items_removed=state_changes.get("items_removed", [])
+        )
+        
+        # Update Địa điểm
+        await self._update_location(loc_data=state_changes.get("new_location_entered"))
+        
+        # Update NPC
+        await self._update_npc(npc_data=state_changes.get("new_npc_encountered"))
 
         # Lưu lại sự kiện vừa xảy ra vào SQL + VectorDB để dùng cho các lượt sau
         self._save_memory_pipeline(
@@ -365,20 +393,11 @@ class GameOrchestrator:
         
         return choices_data.get('choices', [])
 
-    async def _update_inventory(self, player_input: str, story_response: str):
+    async def _update_inventory(self, items_added: list, items_removed: list):
         """
         Hàm con (Helper) chuyên chịu trách nhiệm đọc hội thoại và cập nhật túi đồ.
         """
-        recent_interaction = f"Hành động của người chơi: {player_input}\nPhản hồi của thế giới: {story_response}"
-        
-        sys_extractor = self.pm.get_prompt('StateExtractor', 'system')
-        user_extractor = self.pm.get_prompt('StateExtractor', 'user', conversation_history=recent_interaction)
-
-        # Chạy LocalAgent
-        state_changes = await self.extractor.extract_state(sys_extractor, user_extractor)
-
-        items_added = state_changes.get("items_added", [])
-        items_removed = state_changes.get("items_removed", [])
+        # Chuyển logic lấy state từ AI sang hàm process
 
         if items_added or items_removed:
             print("\n[Hệ Thống] ---> THAY ĐỔI TÚI ĐỒ <---")
@@ -397,6 +416,33 @@ class GameOrchestrator:
             
             inventory_status = ", ".join(self.player_state.inventory) if self.player_state.inventory else "Trống rỗng"
             print(f" [Balo hiện tại]: {inventory_status}")
+    
+    async def _update_location(self, loc_data: dict):
+        """Hàm chuyên xử lý logic và hình ảnh khi sang Địa điểm mới."""
+        if loc_data:
+            print(f">> Phát hiện khu vực mới: {loc_data.get('name')}. Đang vẽ ảnh nền...")
+            img_path = await self.image_manager.get_or_create_location_image(
+                location_name=loc_data.get("name", "Unknown"),
+                description=loc_data.get("description", ""),
+                atmosphere=loc_data.get("atmosphere", "Normal")
+            )
+            if img_path:
+                # Gắn ảnh vào thuộc tính của vị trí hiện tại
+                self.player_state.currentLocation.image_path = img_path
+                print(f"[UI] Đã tải xong ảnh nền: {img_path}")
+
+    async def _update_npc(self, npc_data: dict):
+        """Hàm chuyên xử lý logic và hình ảnh khi gặp NPC mới."""
+        if npc_data:
+            print(f">> Phát hiện nhân vật: {npc_data.get('name')}. Đang vẽ ảnh nhân vật...")
+            img_path = await self.image_manager.get_or_create_npc_image(
+                npc_name=npc_data.get("name", "Unknown"),
+                description=npc_data.get("description", "")
+            )
+            if img_path:
+                # Lưu đường dẫn ảnh NPC vào PlayerState để truyền qua Unity
+                self.player_state.current_npc_image = img_path
+                print(f"[UI] Đã tải xong ảnh nhân vật: {img_path}")
 
     def _display_choices(self, choices):
         """Hàm con phụ trách in menu lựa chọn ra màn hình."""

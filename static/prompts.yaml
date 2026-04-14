@@ -183,7 +183,16 @@ StateExtractor:
     {
       "npc_affection_change": <integer from -5 to 5>,
       "items_added": ["item name in Vietnamese" or empty],
-      "items_removed": ["item name in Vietnamese" or empty]
+      "items_removed": ["item name in Vietnamese" or empty],
+      "new_npc_encountered": {
+         "name": "NPC name (if any)",
+         "description": "Physical appearance description (if any)"
+      } | null,
+      "new_location_entered": {
+         "name": "Location name (if any)",
+         "description": "Scene description (if any)",
+         "atmosphere": "Atmosphere or mood"
+      } | null
     }
   user: |
     Recent interaction:
