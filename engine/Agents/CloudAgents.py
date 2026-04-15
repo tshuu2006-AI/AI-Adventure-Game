@@ -142,3 +142,32 @@ class ChoiceAgent(BaseCloudAgent):
         except Exception as e:
             print(f"[CHOICE ERROR] {e}")
             return {"choices": []}
+
+
+class QueryAgent(BaseCloudAgent):
+    """
+    Agent chịu trách nhiệm tổng hợp ngữ cảnh (context, location, NPC)
+    thành một câu truy vấn ngắn gọn để search trong Vector Memory (FAISS).
+    """
+
+    async def generate_query(self, system_prompt: str, user_prompt: str) -> str:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        try:
+            # Nhiệt độ thấp (0.2) để trích xuất keyword chính xác, khách quan
+            response = await self._chat(
+                messages=messages,
+                temperature=0.2,
+                stream=False
+            )
+
+            # Lấy chuỗi truy vấn và loại bỏ khoảng trắng/dấu nháy thừa
+            search_query = response.choices[0].message.content.strip().strip('"\'')
+            return search_query
+
+        except Exception as e:
+            print(f"[QUERY ERROR] Lỗi khi tạo câu truy vấn VectorDB: {e}")
+            return ""

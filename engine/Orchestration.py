@@ -37,6 +37,8 @@ class GameOrchestrator:
         self.locationAgent = LocationAgent(api_key=groq_api_key)
         self.choiceAgent = ChoiceAgent(api_key=groq_api_key) # Khởi tạo ChoiceAgent
 
+        self.queryAgent = QueryAgent(api_key=groq_api_key) # Mới thêm
+
         # 3. Khởi tạo các Local Agent (xử lý tác vụ phân tích, trích xuất dữ liệu nhanh)
         self.router = IntentRouter(model_name="qwen2.5:3b")
         self.extractor = StateExtractor(model_name="qwen2.5:3b")
@@ -57,14 +59,13 @@ class GameOrchestrator:
         Pipeline đồng bộ lưu ký ức vào cả SQL (để truy vấn cấu trúc)
         và Vector DB (để tìm kiếm ngữ nghĩa/RAG).
         """
-        self.db.add_npc_to_db(npc, location)
+        self.db.add_npc_to_db(NPC, location)
         self.db.add_location_to_db(location)
 
         # Lưu vào SQLite để tạo ID định danh duy nhất
         memory_id, timestamp = self.db.add_memory_to_db(npc, location, story)
 
         # Ánh xạ ID chuẩn vào FAISS VectorDB
-        self.long_term_memory.add_memory_to_vector(story, memory_id=memory_id)
         print("[System] Đã ghi nhớ thông tin mới")
 
     def _retrieve_relevant_memories(self, query: str, top_k: int = 3):
@@ -223,7 +224,7 @@ class GameOrchestrator:
 
 
     async def _summarize_memory(self):
-        short_term_memory = self.short_term_memory.summarize()
+        short_term_memory = await self.short_term_memory.summarize()
 
         if short_term_memory is None:
             return
@@ -239,6 +240,13 @@ class GameOrchestrator:
         print(f"\n[Bạn]: {player_input}")
 
         past_context = self.short_term_memory.get_memory()
+
+
+        # Tạm thời hardcode, sau này sẽ lấy từ state
+        current_npc_name = "Không rõ"
+
+        # 1. Thu thập trí nhớ dài hạn (RAG) thông qua hàm Helper
+        rag_context_str = await self._get_rag_context(player_input, current_npc_name)
 
         # Kể diễn biến tiếp theo
         print("\n[đang suy nghĩ...]")
@@ -296,6 +304,12 @@ class GameOrchestrator:
             story_response += chunk
         print("\n")
 
+        # Lưu vào short-term memory câu vừa tương tác xong
+        self.short_term_memory.add_memory(player_input, story_response)
+
+        # Bơm dữ liệu từ trí nhớ ngắn hạn sang trí nhớ dài hạn (FAISS)
+        await self._summarize_memory()
+
         # Cập nhật inventory
         await self._update_inventory(player_input, story_response)
 
@@ -319,6 +333,7 @@ class GameOrchestrator:
         """Khởi động luồng điều khiển CLI để kiểm thử trò chơi."""
         self.db.create_tables()
         self.db.reset_database()
+        self.db.create_tables()
         print("Hãy nhập ý tưởng thế giới mà bạn muốn xây dựng: ")
         player_idea = input()
         await self._create_new_world(player_idea=player_idea)
@@ -406,3 +421,45 @@ class GameOrchestrator:
             for choice in choices:
                 print(f" {choice['id']}. {choice['action_text']} ({choice['style']})")
             print("-" * 30)
+
+
+
+    async def _get_rag_context(self, player_input: str, current_npc_name: str) -> str:
+        """
+        Hàm con chịu trách nhiệm tổng hợp ngữ cảnh và truy vấn FAISS VectorDB.
+        Trả về chuỗi văn bản chứa các sự kiện trong quá khứ.
+        """
+        past_context = self.short_term_memory.get_memory()
+        context_str = "\n".join(past_context) + f"\nplayer: {player_input}"
+
+        print("\n[Hệ thống đang rà soát ký ức...]")
+
+        # 1. Gọi QueryAgent đẻ ra từ khóa tìm kiếm
+        sys_query = self.pm.get_prompt('QueryAgent', 'system')
+        user_query = self.pm.get_prompt('QueryAgent', 'user',
+                                        current_location=self.player_state.currentLocation.name,
+                                        npc_name=current_npc_name,
+                                        context_window=context_str)
+
+        search_query = await self.queryAgent.generate_query(sys_query, user_query)
+        print(f"   [Debug Query]: '{search_query}'")
+
+        # 2. Chọc vào FAISS VectorDB
+        rag_context_str = "Không có sự kiện quá khứ nào đáng chú ý."
+
+        if search_query:
+            memory_ids = self.long_term_memory.search(search_query, top_k=2)
+
+            if isinstance(memory_ids, list) and len(memory_ids) > 0:
+                retrieved_memories = [
+                    self.long_term_memory.metadata[idx]
+                    for idx in memory_ids
+                    if idx in self.long_term_memory.metadata
+                ]
+                if retrieved_memories:
+                    rag_context_str = "\n".join(retrieved_memories)
+
+                    # BẬT X-RAY ĐỂ DEBUG DỮ LIỆU TÌM ĐƯỢC:
+                    print(f"   [Debug VectorDB]: {rag_context_str}")
+
+        return rag_context_str

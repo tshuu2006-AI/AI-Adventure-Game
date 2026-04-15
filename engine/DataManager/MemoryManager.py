@@ -87,13 +87,13 @@ class ShortTermMemory:
         self.context_window.append(f"player: {player_input}\nGameMaster: {ai_response}")
 
 
-    def summarize(self):
+    async def summarize(self):
         if len(self.context_window) > self.window_size:
             sys_prompt = self.pm.get_prompt('SummarizeAgent', 'system')
             user_prompt = self.pm.get_prompt('SummarizeAgent', 'user',
                                             context_window = self.context_window)
 
-            summarized_context = self.summarizeAgent.summarize_chat(sys_prompt, user_prompt)
+            summarized_context = await self.summarizeAgent.summarize_chat(sys_prompt, user_prompt)
             return summarized_context
 
         else:

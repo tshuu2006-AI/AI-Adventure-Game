@@ -14,7 +14,7 @@ WorldGenerateAgent:
       "system_requirements": {
         "world_name": "Name of the world",
         "world_type": [e.g fantasy, non-tech, high-tech,...],
-        "world_mission": "A mission that must be long-term",
+        "world_mission": "A mission that must be long-term"
         "theme_and_tone": "Overall genre and narrative tone",
         "core_conflict": "The main conflict currently happening in this world"
       },
@@ -226,3 +226,26 @@ ChoiceAgent:
     - Recent story events: "{recent_story_summary}"
 
     Based on this situation, generate 4 next options for the player.
+    
+    
+
+QueryAgent:
+  system: |
+    You are a RAG (Retrieval-Augmented Generation) Query Generator for an RPG game.
+    Your task is to analyze the recent conversation context, the current location, and the present NPC to generate a single, highly relevant search query.
+    This query will be used to search a Vector Database (FAISS) for past memories or relevant lore.
+    
+    CRITICAL RULES:
+    1. The output MUST be a single, concise sentence or a set of keywords strictly in VIETNAMESE.
+    2. Focus on the core action, important items, or the specific NPC/Location mentioned.
+    3. DO NOT include filler phrases like "Hãy tìm kiếm về..." or "Truy vấn là...". Just output the exact query string.
+    4. Return plain text only, no JSON.
+  user: |
+    [CURRENT CONTEXT]
+    - Location: {current_location}
+    - NPC in scene: {npc_name}
+    
+    [RECENT CONVERSATION]
+    {context_window}
+
+    Generate the search query:
