@@ -8,14 +8,15 @@ class BaseLocalAgent:
     Class Cha (Base Class) xử lý việc giao tiếp với Ollama chạy ở Local.
     Tất cả các Agent chạy Local sẽ kế thừa từ class này.
     """
+    DEFAULT_MODEL = "qwen2.5:1.5b"
 
-    def __init__(self, model_name: str = "qwen2.5:3b"):
+    def __init__(self, model_name: str = None):
         # Kết nối tới Ollama API (tương thích chuẩn OpenAI)
         self.client = AsyncOpenAI(
             base_url="http://localhost:11434/v1",
             api_key="ollama"  # Khóa giả lập cho Ollama
         )
-        self.model = model_name
+        self.model = model_name or self.DEFAULT_MODEL
 
     async def _generate_json(self, system_prompt: str, user_prompt: str, max_tokens: int = 200) -> Dict[str, Any]:
         """
@@ -60,7 +61,7 @@ class IntentRouter(BaseLocalAgent):
     Agent làm nhiệm vụ gác cổng: Phân tích hành động của người chơi.
     """
 
-    def __init__(self, model_name: str = "qwen2.5:3b"):
+    def __init__(self, model_name: str = None):
         super().__init__(model_name)
 
     async def parse_intent(self, system_prompt: str, user_input: str) -> Dict[str, Any]:
@@ -90,7 +91,7 @@ class StateExtractor(BaseLocalAgent):
     Agent Kế toán viên: Trích xuất vật phẩm/chỉ số từ lịch sử trò chuyện.
     """
 
-    def __init__(self, model_name: str = "qwen2.5:3b"):
+    def __init__(self, model_name: str = None):
         super().__init__(model_name)
 
     async def extract_state(self, system_prompt: str, chat_history: str) -> Dict[str, Any]:

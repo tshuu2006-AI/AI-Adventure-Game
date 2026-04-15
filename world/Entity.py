@@ -12,16 +12,18 @@ class Item(BaseEntity):
 
 
 class Location(BaseEntity):
-    def __init__(self, id, name, description, state):
+    def __init__(self, id, name, description, state, image_path = None):
         super().__init__(id, name, "location", description)
         self.state = state
+        self.image_path = image_path
 
 
 class NPC(BaseEntity):
-    def __init__(self, id, name, personality, description, affectionate, location, status):
+    def __init__(self, id, name, personality, description, affectionate, location, status, image_path = None):
         super().__init__(id, name, 'npc', description)
         self.status = status
         self.personality = personality
         self.affectionate = affectionate
         self.location = location
+        self.image_path = image_path
 
