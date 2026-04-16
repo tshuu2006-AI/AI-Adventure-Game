@@ -378,13 +378,13 @@ class DatabaseManager:
         """Xóa sạch dữ liệu trong các bảng và reset bộ đếm ID. Dùng khi tạo Game mới."""
         cursor = self.conn.cursor()
 
+        cursor.execute("DELETE FROM Memory")
         cursor.execute("DELETE FROM NPCs")
         cursor.execute("DELETE FROM Locations")
-        cursor.execute("DELETE FROM Memory")
 
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name='Memory'")
         cursor.execute("DELETE FROM sqlite_sequence WHERE name='NPCs'")
         cursor.execute("DELETE FROM sqlite_sequence WHERE name='Locations'")
-        cursor.execute("DELETE FROM sqlite_sequence WHERE name='Memory'")
 
         self.location_manager.reset()
         self.npc_manager.reset()

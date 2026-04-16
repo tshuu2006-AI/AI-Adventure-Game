@@ -209,7 +209,9 @@ class GameOrchestrator:
             valid_paths_from_sql = None,
             system_directive="The player just acted. Describe the consequences and the reaction of the NPC/environment."
         )
-        user_story = self.pm.get_prompt('StoryAgent', 'user', user_input=player_input)
+        recent_history = "\n".join(self.short_term_memory.get_memory())
+        full_user_input = f"[Lịch sử hội thoại gần đây]:\n{recent_history}\n\n[Hành động mới của người chơi]: {player_input}"
+        user_story = self.pm.get_prompt('StoryAgent', 'user', user_input=full_user_input)
 
         story_response = ""
 
@@ -282,6 +284,7 @@ class GameOrchestrator:
 
     async def run(self):
         """Khởi động luồng điều khiển CLI để kiểm thử trò chơi."""
+        self.db.reset_database()
         self.db.create_tables()
         print("Hãy nhập ý tưởng thế giới mà bạn muốn xây dựng: ")
         player_idea = input()
