@@ -1,8 +1,4 @@
-from sympy.codegen.ast import continue_
-import json
-
-from engine.DataManager.StateManager import StateManager, PlayerState, WorldState
-from world.Entity import *
+from engine.DataManager.StateManager import DatabaseManager, PlayerState, WorldState
 from engine.DataManager.MemoryManager import VectorMemory, ShortTermMemory
 from engine.Agents.CloudAgents import *
 from engine.PromptManager import PromptManager
@@ -11,8 +7,6 @@ from engine.ImageAPI import ImageAPI
 from engine.DataManager.ImageManager import ImageManager
 
 import os
-
-
 class GameOrchestrator:
     """
     Trái tim của Game Engine.
@@ -26,20 +20,20 @@ class GameOrchestrator:
         # 1. Khởi tạo các component quản lý cơ sở hạ tầng
         self.pm = PromptManager('static/prompts.yaml')
 
-        self.db = StateManager(db_path=db_path)
+        self.db = DatabaseManager(db_path=db_path)
         self.long_term_memory = VectorMemory(model_path=vector_model_path)
         self.short_term_memory = ShortTermMemory(groq_api_key, self.pm)
         self.player_state = PlayerState()
         self.world_state = WorldState()
 
         # 2. Khởi tạo các Cloud Agent (xử lý logic phức tạp, sáng tạo nội dung)
-        self.worldGenerator = WorldGenerateAgent(api_key=groq_api_key)
-        self.storyAgent = StoryAgent(api_key=groq_api_key)
-        self.NPCAgent = NPCAgent(api_key=groq_api_key)
-        self.locationAgent = LocationAgent(api_key=groq_api_key)
-        self.choiceAgent = ChoiceAgent(api_key=groq_api_key) # Khởi tạo ChoiceAgent
+        self.worldGenerator = WorldGenerateAgent(api_key=groq_api_key, pm=self.pm)
+        self.storyAgent = StoryAgent(api_key=groq_api_key, pm=self.pm)
+        self.NPCAgent = NPCAgent(api_key=groq_api_key, pm=self.pm)
+        self.locationAgent = LocationAgent(api_key=groq_api_key, pm=self.pm)
+        self.choiceAgent = ChoiceAgent(api_key=groq_api_key, pm=self.pm) # Khởi tạo ChoiceAgent
 
-        self.queryAgent = QueryAgent(api_key=groq_api_key) # Mới thêm
+        self.queryAgent = QueryAgent(api_key=groq_api_key, pm=self.pm) # Mới thêm
 
         self.image_api = ImageAPI(base_url="https://unspelt-nonbrutally-eleanore.ngrok-free.dev") # Cập nhật link ngrok
         self.image_manager = ImageManager(api=self.image_api)
@@ -48,31 +42,8 @@ class GameOrchestrator:
         self.router = IntentRouter(model_name="qwen2.5:1.5b")
         self.extractor = StateExtractor(model_name="qwen2.5:1.5b")
 
-        # Long-term-memory
-        self.context_to_summarize = []
-        self.context_to_summarize_length = 5
-
-        #Short-term-memory
-        self.contextWindow = []
-        self.window_size = 3
-
         print("Hệ thống sẵn sàng!")
 
-
-    def _save_memory_pipeline(self, npc: NPC = None, location: Location = None, story=None):
-        """
-        Pipeline đồng bộ lưu ký ức vào cả SQL (để truy vấn cấu trúc)
-        và Vector DB (để tìm kiếm ngữ nghĩa/RAG).
-        """
-        self.db.add_npc_to_db(npc, location)
-        self.db.add_location_to_db(location)
-
-        # Lưu vào SQLite để tạo ID định danh duy nhất
-        memory_id, timestamp = self.db.add_memory_to_db(npc, location, story)
-
-        # Ánh xạ ID chuẩn vào FAISS VectorDB
-        self.long_term_memory.add_memory_to_vector(story, memory_id=memory_id)
-        print("[System] Đã ghi nhớ thông tin mới")
 
     def _retrieve_relevant_memories(self, query: str, top_k: int = 3):
         """
@@ -83,25 +54,27 @@ class GameOrchestrator:
         memories = self.db.get_memories_by_ids(memory_ids)
 
         # Dùng thực thể xuất hiện trong memory để truy ngược thêm dữ liệu quan hệ.
-        memory_npc_names = [item.get('npc') for item in memories if item.get('npc')]
-        memory_location_names = [item.get('location') for item in memories if item.get('location')]
+        memory_npc_names = [item.npc for item in memories]
+        memory_location_names = [item.location for item in memories]
 
-        npcs_from_memory = self.db.get_npcs_by_names(memory_npc_names, limit=3)
-        locations_from_memory = self.db.get_locations_by_names(memory_location_names, limit=3)
+        npcs_from_memory = self.db.get_npc_by_names(memory_npc_names, limit=3)
+        locations_from_memory = self.db.get_location_by_names(memory_location_names, limit=3)
 
         # Mở rộng theo truy vấn hiện tại để bắt thêm thực thể chưa xuất hiện trong top memory.
         entity_hits = self.db.search_entities_by_query(query=query, limit_per_table=2)
 
         # Gộp kết quả và khử trùng lặp theo ID để giữ context gọn, ổn định.
-        npc_map = {str(item['id']): item for item in npcs_from_memory}
-        for item in entity_hits.get('npcs', []):
-            npc_map.setdefault(str(item['id']), item)
+        all_npcs = npcs_from_memory + entity_hits.get('npcs', [])
+        npc_map = {item.id: item for item in all_npcs}
+        npcs = list(npc_map.values())
 
-        location_map = {str(item['id']): item for item in locations_from_memory}
-        for item in entity_hits.get('locations', []):
-            location_map.setdefault(str(item['id']), item)
+        all_locations = locations_from_memory + entity_hits.get('locations', [])
+        location_map = {item.id: item for item in all_locations}
+        locations = list(location_map.values())
 
-        return memory_ids, memories, list(npc_map.values()), list(location_map.values())
+        rag_context = self.long_term_memory.get_rag_context(memory_ids, memories, npcs, locations)
+
+        return memory_ids, memories, npcs, locations, rag_context
 
 
     async def _initialize_location(self):
@@ -110,57 +83,30 @@ class GameOrchestrator:
         Cập nhật Trạng thái người chơi và lưu địa điểm vào CSDL.
         """
         print("[Engine] Đang kiến tạo khu vực khởi đầu...")
-
-        # 1. Trích xuất bối cảnh từ World Bible
-        dyn_lore = self.world_state.dynamic_lore
-
         # Chuẩn hóa mảng world_type thành chuỗi để đưa vào prompt
         world_type_list = self.world_state.type
         world_type = ", ".join(world_type_list) if isinstance(world_type_list, list) else str(world_type_list)
 
         # 2. Nạp dữ liệu bối cảnh vào Prompt
-        sys_init = self.pm.get_prompt('LocationAgent', 'systemInit')
-        user_init = self.pm.get_prompt(
-            'LocationAgent', 'userInit',
-            world_name=self.world_state.name,
-            world_type=world_type,
-            theme_and_tone=self.world_state.theme_and_tone,
-            world_mission=self.world_state.mission
-        )
+        initial_location = await self.locationAgent.initialize_location(world_name = self.world_state.name,
+                                                               world_type = world_type,
+                                                               theme = self.world_state.theme_and_tone)
 
-        # 3. Yêu cầu LLM thiết kế không gian
-        location_data = await self.locationAgent.generate_location(
-            system_prompt=sys_init,
-            user_prompt=user_init
-        )
-
-        if not location_data:
+        if not initial_location:
             raise ValueError("[Lỗi] LocationAgent không thể sinh ra địa điểm đầu tiên!")
 
-        # 4. Trích xuất thuộc tính cấu thành Location
-        loc_name = location_data.get('location_name', 'Điểm khởi đầu')
-        desc = location_data.get('description', 'Một nơi hoang vắng.')
-        atmosphere = location_data.get('atmosphere', 'Yên tĩnh')
-
-        # 5. Khởi tạo Object Location
-        start_location = Location(
-            id=f"location_{self.db.num_locations}",
-            name=loc_name,
-            description=desc,
-            state=atmosphere,
-        )
         # Tạo ảnh và thêm đường dẫn ảnh vào
         img_path = await self.image_manager.get_or_create_location_image(
-            location_name=loc_name,
-            description=desc,
-            atmosphere=atmosphere
+            location_name=initial_location.name,
+            description=initial_location.description,
+            atmosphere=initial_location.state
         )
-        start_location.image_path = img_path
+        initial_location.image_path = img_path
 
         # 6. Ghi nhận địa điểm vào CSDL và cập nhật vị trí người chơi
-        self.db.add_location_to_db(start_location)
+        self.db.add_location_to_db(initial_location)
 
-        self.player_state.currentLocation = start_location
+        self.player_state.currentLocation = initial_location
 
         return
 
@@ -172,24 +118,17 @@ class GameOrchestrator:
         """
         print("[Engine] Đang kích hoạt World Architect...")
 
-        # 1. Chuẩn bị prompt
-        system_prompt = self.pm.get_prompt('WorldGenerateAgent', 'system')
-        user_prompt = self.pm.get_prompt('WorldGenerateAgent', 'user', user_input=player_idea)
+        # 1. Gọi WorldGenerateAgent tạo JSON cấu trúc thế giới
+        world_bible = await self.worldGenerator.generate_bible(player_idea=player_idea)
 
-        # 2. Gọi WorldGenerateAgent tạo JSON cấu trúc thế giới
-        world_bible = await self.worldGenerator.generate_bible(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt
-        )
-
-        # 3. Sao lưu cấu trúc thế giới ra thư mục data
+        # 2. Sao lưu cấu trúc thế giới ra thư mục data
         os.makedirs('./data', exist_ok=True)
         bible_path = './data/world_bible.json'
         with open(bible_path, 'w', encoding='utf-8') as f:
             json.dump(world_bible, f, ensure_ascii=False, indent=4)
             print(f"[Engine] Đã lưu Thông tin Thế Giới tại: {bible_path}")
 
-        # 4. Cập nhật các thông số cốt lõi vào WorldState
+        # 3. Cập nhật các thông số cốt lõi vào WorldState
         self.world_state.name = world_bible["system_requirements"].get('world_name', 'Vùng đất Vô danh')
         self.world_state.type = world_bible["system_requirements"].get('world_type', 'Normal')
         self.world_state.theme_and_tone = world_bible["system_requirements"].get('theme_and_tone', 'Normal')
@@ -207,37 +146,37 @@ class GameOrchestrator:
         """
         print("[Game Master đang chuẩn bị chương mở đầu...]")
 
-        # 1. Chuyển đổi từ vựng đặc trưng thành chuỗi để nạp vào hệ thống kể chuyện
+        # 1. Chuyển đổi từ vựng đặc trưng thành chuỗi
         dyn_vocab = self.world_state.dynamic_vocabulary
         vocab_str = ", ".join([f"{k}: {v}" for k, v in dyn_vocab.items()]) if dyn_vocab else "Không có"
 
-        # 2. Chuẩn bị bối cảnh Prologue
-        sys_init = self.pm.get_prompt('StoryAgent', 'systemInit')
+        prologue_text = ""
 
-        user_init = self.pm.get_prompt(
-            'StoryAgent', 'userInit',
-            world_name=self.world_state.name,
-            world_theme=self.world_state.theme_and_tone,
-            world_conflict=self.world_state.core_conflict,
-            world_mission=self.world_state.mission,
-            world_vocabulary=vocab_str,
+        # 2. Giao việc thẳng cho StoryAgent, Tổng quản chỉ việc in kết quả ra màn hình
+        story_stream = self.storyAgent.initialize_story(
+            name=self.world_state.name,
+            theme=self.world_state.theme_and_tone,
+            core_conflict=self.world_state.core_conflict,
+            mission=self.world_state.mission,
+            vocab=vocab_str,
             location_name=self.player_state.currentLocation.name,
-            location_atmosphere=self.player_state.currentLocation.state,
+            location_state=self.player_state.currentLocation.state,
             location_description=self.player_state.currentLocation.description
         )
 
-        prologue_text = ""
-        async for chunk in self.storyAgent.generate_stream(system_prompt=sys_init, user_prompt=user_init):
+        # Hứng từng chữ AI gõ ra
+        async for chunk in story_stream:
             print(chunk, end="", flush=True)
             prologue_text += chunk
 
+        # 3. Lưu vào trí nhớ ngắn hạn
         self.short_term_memory.add_memory('Wake up', prologue_text)
 
         return prologue_text
 
 
     async def _summarize_memory(self):
-        short_term_memory = self.short_term_memory.summarize()
+        short_term_memory = await self.short_term_memory.summarize()
 
         if short_term_memory is None:
             return
@@ -252,40 +191,11 @@ class GameOrchestrator:
         """
         print(f"\n[Bạn]: {player_input}")
 
-        past_context = self.short_term_memory.get_memory()
-
         # Kể diễn biến tiếp theo
         print("\n[đang suy nghĩ...]")
 
-        memory_ids, memories, npc_rows, location_rows = self._retrieve_relevant_memories(player_input, top_k=3)
-
-        # Chuẩn hóa RAG context thành 3 khối để prompt dễ đọc và dễ kiểm tra log.
-        memory_block = "\n".join(
-            [f"- [memory:{item['id']}] ({item['location']}) {item['text']}" for item in memories]
-        ) if memories else "- Không có ký ức liên quan."
-
-        npc_block = "\n".join(
-            [f"- [npc:{item['id']}] {item['name']} | personality: {item['personality']} | status: {item['status']} | location: {item['location']}"
-             for item in npc_rows]
-        ) if npc_rows else "- Không có NPC liên quan."
-
-        location_block = "\n".join(
-            [f"- [location:{item['id']}] {item['name']} | state: {item['state']} | desc: {item['description']}"
-             for item in location_rows]
-        ) if location_rows else "- Không có Location liên quan."
-
-        rag_context = (
-            "[MEMORY RETRIEVAL]\n" + memory_block +
-            "\n\n[NPC RETRIEVAL]\n" + npc_block +
-            "\n\n[LOCATION RETRIEVAL]\n" + location_block
-        )
-
-        if memory_ids:
-            print(f"[RAG] Top memory IDs: {memory_ids}")
-        if npc_rows:
-            print(f"[RAG] NPC IDs: {[item['id'] for item in npc_rows]}")
-        if location_rows:
-            print(f"[RAG] Location IDs: {[item['id'] for item in location_rows]}")
+        search_query = await self.get_rag_query(player_input, current_npc_name='Không có')
+        memory_ids, memories, npcs, locations, rag_context = self._retrieve_relevant_memories(search_query, top_k=3)
 
         sys_story = self.pm.get_prompt(
             'StoryAgent', 'system',
@@ -293,13 +203,12 @@ class GameOrchestrator:
             world_conflict=self.world_state.core_conflict,
             world_vocabulary=self.world_state.dynamic_vocabulary,
             current_location=self.player_state.currentLocation.name,
-            npc_name=None,
+            npc_name=[npc.name for npc in npcs],
             npc_personality=None,
             rag_context=rag_context,
             valid_paths_from_sql = None,
             system_directive="The player just acted. Describe the consequences and the reaction of the NPC/environment."
         )
-
         user_story = self.pm.get_prompt('StoryAgent', 'user', user_input=player_input)
 
         story_response = ""
@@ -309,9 +218,9 @@ class GameOrchestrator:
             print(chunk, end="", flush=True)
             story_response += chunk
         print("\n")
+
         # Thực hiện trích xuất thông tin 1 lần
         recent_interaction = f"Hành động của người chơi: {player_input}\nPhản hồi của thế giới: {story_response}"
-
         sys_extractor = self.pm.get_prompt('StateExtractor', 'system')
         user_extractor = self.pm.get_prompt('StateExtractor', 'user', conversation_history=recent_interaction)
 
@@ -321,28 +230,46 @@ class GameOrchestrator:
         # Bơm dữ liệu từ trí nhớ ngắn hạn sang trí nhớ dài hạn (FAISS)
         await self._summarize_memory()
 
-        # Cập nhật inventory
-        await self._update_inventory(player_input, story_response)
         # Chạy LocalAgent
         state_changes = await self.extractor.extract_state(sys_extractor, user_extractor)
-
         await self._update_inventory(
             items_added=state_changes.get("items_added", []),
             items_removed=state_changes.get("items_removed", [])
         )
 
         # Update Địa điểm
-        await self._update_location(loc_data=state_changes.get("new_location_entered"))
+        new_loc_data = state_changes.get("new_location_entered")
+        if new_loc_data:
+            new_location = Location(id = None,
+                                    name = new_loc_data['name'],
+                                    description = new_loc_data['description'],
+                                    state = new_loc_data['atmosphere'])
+            await self._update_location(location = new_location)
 
         # Update NPC
-        await self._update_npc(npc_data=state_changes.get("new_npc_encountered"))
+        new_npc_data = state_changes.get('new_npc_encountered')
+        if new_npc_data:
+            new_npc = NPC(id = None,
+                          name = new_npc_data['name'],
+                          description=new_npc_data['description'],
+                          personality=new_npc_data['personality'],
+                          affectionate=0,
+                          location = new_npc_data['location'],
+                          status = new_npc_data['status'],)
+            await self._update_npc(new_npc)
 
         # Lưu lại sự kiện vừa xảy ra vào SQL + VectorDB để dùng cho các lượt sau
-        self._save_memory_pipeline(
-            npc=None,
-            location=self.player_state.currentLocation,
-            story=f"Player: {player_input}\nStory: {story_response}"
+        encountered_npc = state_changes.get("new_npc_encountered")
+        npc_name_to_save = encountered_npc.get('name') if encountered_npc else None
+
+        new_memory = Memory(
+            location=self.player_state.currentLocation.name,
+            npc=npc_name_to_save,
+            text=f"Player: {player_input}\nStory: {story_response}"
         )
+
+        memory_id = self.db.add_memory_to_db(new_memory)
+        self.long_term_memory.add_memory_to_vector(new_memory.text, memory_id=memory_id)
 
         # Tạo lựa chọn
         choices = await self._generate_choices(story_response)
@@ -355,8 +282,6 @@ class GameOrchestrator:
 
     async def run(self):
         """Khởi động luồng điều khiển CLI để kiểm thử trò chơi."""
-        self.db.create_tables()
-        self.db.reset_database()
         self.db.create_tables()
         print("Hãy nhập ý tưởng thế giới mà bạn muốn xây dựng: ")
         player_idea = input()
@@ -404,6 +329,7 @@ class GameOrchestrator:
         
         return choices_data.get('choices', [])
 
+
     async def _update_inventory(self, items_added: list, items_removed: list):
         """Hàm chuyên xử lý logic túi đồ và tạo/xóa ảnh vật phẩm."""
         if items_added or items_removed:
@@ -437,27 +363,28 @@ class GameOrchestrator:
             inventory_status = ", ".join(self.player_state.inventory.keys()) if self.player_state.inventory else "Trống rỗng"
             print(f" [Balo hiện tại]: {inventory_status}")
 
-    async def _update_location(self, loc_data: dict):
+
+    async def _update_location(self, location:Location = None):
         """Hàm chuyên xử lý logic và hình ảnh khi sang Địa điểm mới."""
-        if loc_data:
-            print(f">> Phát hiện khu vực: {loc_data.get('name')}. State: {loc_data.get('atmosphere')}. Đang vẽ ảnh nền...")
+        if location:
+            print(f">> Phát hiện khu vực: {location.name}. State: {location.state}. Đang vẽ ảnh nền...")
             img_path = await self.image_manager.get_or_create_location_image(
-                location_name=loc_data.get("name", "Unknown"),
-                description=loc_data.get("description", ""),
-                atmosphere=loc_data.get("atmosphere", "Normal")
+                location_name=location.name,
+                description=location.description,
+                atmosphere=location.state
             )
             if img_path:
                 # Gắn ảnh vào thuộc tính của vị trí hiện tại
                 self.player_state.currentLocation.image_path = img_path
                 print(f"[UI] Đã tải xong ảnh nền: {img_path}")
 
-    async def _update_npc(self, npc_data: dict):
+    async def _update_npc(self, npc: NPC = None):
         """Hàm chuyên xử lý logic và hình ảnh khi gặp NPC mới."""
-        if npc_data:
-            print(f">> Phát hiện nhân vật: {npc_data.get('name')}. Đang vẽ ảnh nhân vật...")
+        if npc:
+            print(f">> Phát hiện nhân vật: {npc.name}. Đang vẽ ảnh nhân vật...")
             img_path = await self.image_manager.get_or_create_npc_image(
-                npc_name=npc_data.get("name", "Unknown"),
-                description=npc_data.get("description", "")
+                npc_name=npc.name,
+                description=npc.description
             )
             if img_path:
                 # Lưu đường dẫn ảnh NPC vào PlayerState để truyền qua Unity
@@ -475,7 +402,7 @@ class GameOrchestrator:
 
 
 
-    async def _get_rag_context(self, player_input: str, current_npc_name: str) -> str:
+    async def get_rag_query(self, player_input: str, current_npc_name) -> str:
         """
         Hàm con chịu trách nhiệm tổng hợp ngữ cảnh và truy vấn FAISS VectorDB.
         Trả về chuỗi văn bản chứa các sự kiện trong quá khứ.
@@ -493,24 +420,5 @@ class GameOrchestrator:
                                         context_window=context_str)
 
         search_query = await self.queryAgent.generate_query(sys_query, user_query)
-        print(f"   [Debug Query]: '{search_query}'")
+        return search_query
 
-        # 2. Chọc vào FAISS VectorDB
-        rag_context_str = "Không có sự kiện quá khứ nào đáng chú ý."
-
-        if search_query:
-            memory_ids = self.long_term_memory.search(search_query, top_k=2)
-
-            if isinstance(memory_ids, list) and len(memory_ids) > 0:
-                retrieved_memories = [
-                    self.long_term_memory.metadata[idx]
-                    for idx in memory_ids
-                    if idx in self.long_term_memory.metadata
-                ]
-                if retrieved_memories:
-                    rag_context_str = "\n".join(retrieved_memories)
-
-                    # BẬT X-RAY ĐỂ DEBUG DỮ LIỆU TÌM ĐƯỢC:
-                    print(f"   [Debug VectorDB]: {rag_context_str}")
-
-        return rag_context_str

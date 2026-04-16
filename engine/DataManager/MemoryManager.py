@@ -2,6 +2,7 @@ import faiss
 import numpy as np
 import os
 from typing import List, Optional
+import pickle
 from sentence_transformers import SentenceTransformer
 from engine.Agents.CloudAgents import SummarizeAgent
 from engine.PromptManager import PromptManager
@@ -12,15 +13,72 @@ class VectorMemory:
     Phục vụ cho tính năng RAG (Retrieval-Augmented Generation) của Game Engine.
     """
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str, db_dir = './data/'):
         # Tải mô hình nhúng (embedding model) từ Local
         self.encoder = SentenceTransformer(model_path)
-        self.dimension = 384
+        self.dimension = self.encoder.get_sentence_embedding_dimension()
         self.num_memory = 0
+
+
+        # Đường dẫn lưu trữ vật lý
+        self.index_path = os.path.join(db_dir, 'vector_index.bin')
+        self.meta_path = os.path.join(db_dir, 'vector_meta.pkl')
 
         # Khởi tạo không gian FAISS có hỗ trợ lưu trữ ID tùy chỉnh (IDMap)
         self.index = faiss.IndexIDMap(faiss.IndexFlatL2(self.dimension))
         self.metadata = {}
+
+        # KHÔI PHỤC DỮ LIỆU TỪ Ổ CỨNG LÊN (Nếu có)
+        self._load_db()
+
+
+    def get_rag_context(self, memory_ids, memories, npc_rows, location_rows) -> str:
+        # Chuẩn hóa RAG context thành 3 khối để prompt dễ đọc và dễ kiểm tra log.
+        memory_block = "\n".join(
+            [f"- [memory:{item.id}] ({item.location}) {item.text}" for item in memories]
+        ) if memories else "- Không có ký ức liên quan."
+
+        npc_block = "\n".join(
+            [
+                f"- [npc:{item.id}] {item.name} | personality: {item.personality} | status: {item.status} | location: {item.location}"
+                for item in npc_rows]
+        ) if npc_rows else "- Không có NPC liên quan."
+
+        location_block = "\n".join(
+            [f"- [location:{item.id}] {item.name} | state: {item.state} | desc: {item.description}"
+             for item in location_rows]
+        ) if location_rows else "- Không có Location liên quan."
+
+        rag_context = (
+                "[MEMORY RETRIEVAL]\n" + memory_block +
+                "\n\n[NPC RETRIEVAL]\n" + npc_block +
+                "\n\n[LOCATION RETRIEVAL]\n" + location_block
+        )
+
+        if memory_ids:
+            print(f"[RAG] Top memory IDs: {memory_ids}")
+        if npc_rows:
+            print(f"[RAG] NPC IDs: {[item.id for item in npc_rows]}")
+        if location_rows:
+            print(f"[RAG] Location IDs: {[item.id for item in location_rows]}")
+
+        return rag_context
+
+
+    def _load_db(self):
+        """Đọc vector và metadata từ ổ cứng khi bật game."""
+        if os.path.exists(self.index_path) and os.path.exists(self.meta_path):
+            self.index = faiss.read_index(self.index_path)
+            with open(self.meta_path, 'rb') as f:
+                self.metadata = pickle.load(f)
+            print(f"[VectorDB] Khôi phục thành công {self.index.ntotal} ký ức.")
+
+
+    def _save_db(self):
+        """Lưu vector và metadata xuống ổ cứng."""
+        faiss.write_index(self.index, self.index_path)
+        with open(self.meta_path, 'wb') as f:
+            pickle.dump(self.metadata, f)
 
 
     def add_memory_to_vector(self, text: str, memory_id: Optional[int] = None):
@@ -42,6 +100,8 @@ class VectorMemory:
         if memory_id is None:
             self.num_memory += 1
 
+        self._save_db()
+
 
     def search(self, query: str, top_k: int = 3) -> List[int]:
         """Tìm kiếm top_k ký ức có ngữ nghĩa tương đồng nhất với câu truy vấn."""
@@ -52,11 +112,11 @@ class VectorMemory:
         # Mã hóa câu hỏi của người chơi thành vector
         query_vector = self.encoder.encode([query]).astype('float32')
 
-        # D: Khoảng cách (độ lệch), I: Danh sách ID trả về
-        D, I = self.index.search(query_vector, top_k)
+        # d: Khoảng cách (độ lệch), i: Danh sách ID trả về
+        d, i = self.index.search(query_vector, top_k)
 
         # Lọc bỏ các ID lỗi (-1) và trả về mảng ID hợp lệ
-        return [int(idx) for idx in I[0] if idx != -1]
+        return [int(idx) for idx in i[0] if idx != -1]
 
 
     def reset_vector_db(self):
@@ -69,6 +129,9 @@ class VectorMemory:
         if hasattr(self, 'index_path') and os.path.exists(self.index_path):
             os.remove(self.index_path)
 
+        if os.path.exists(self.meta_path):
+            os.remove(self.meta_path)
+
         print("[VectorDB] Đã tẩy trắng Ký ức RAG!")
 
 
@@ -80,7 +143,7 @@ class ShortTermMemory:
         self.context_window = []
         self.scene_summary = ""
         self.pm = prompt_manager
-        self.summarizeAgent = SummarizeAgent(api_key=groq_api_key)
+        self.summarizeAgent = SummarizeAgent(api_key=groq_api_key, pm=self.pm)
 
 
     def add_memory(self, player_input, ai_response):
@@ -91,14 +154,28 @@ class ShortTermMemory:
         if len(self.context_window) > self.window_size:
             sys_prompt = self.pm.get_prompt('SummarizeAgent', 'system')
             user_prompt = self.pm.get_prompt('SummarizeAgent', 'user',
-                                            context_window = self.context_window)
+                                             context_window=self.context_window)
 
-            summarized_context = await self.summarizeAgent.summarize_chat(sys_prompt, user_prompt)
-            return summarized_context
+            try:
+                # 1. Gọi API TRƯỚC
+                summarized_context = await self.summarizeAgent.summarize_chat(sys_prompt, user_prompt)
 
-        else:
-            return None
+                # 2. Thành công rồi mới XÓA và CẬP NHẬT
+                self.scene_summary = summarized_context
+                # Giữ lại câu cuối cùng để làm cầu nối mượt mà cho LLM
+                self.context_window = [self.context_window[-1]]
+
+                return summarized_context
+            except Exception as e:
+                print(f"[Cảnh báo] Lỗi khi tóm tắt trí nhớ: {e}")
+                # Nếu lỗi, không xóa gì cả, để lượt sau thử tóm tắt lại
+                return None
+        return None
 
 
     def get_memory(self):
-        return self.context_window
+        context = []
+        if self.scene_summary:
+            context.append(f"[Tóm tắt diễn biến trước]: {self.scene_summary}")
+        context.extend(self.context_window)
+        return context

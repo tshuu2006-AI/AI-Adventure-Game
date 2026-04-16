@@ -1,6 +1,7 @@
 import os
 import hashlib
 from engine.ImageAPI import ImageAPI
+from world.Entity import *
 
 class ImageManager:
     """
@@ -24,6 +25,7 @@ class ImageManager:
         """
         hash_object = hashlib.md5(name.encode('utf-8'))
         return f"{hash_object.hexdigest()[:12]}.png"
+
 
     async def get_or_create_location_image(self, location_name: str, description: str, atmosphere: str) -> str:
         """
@@ -100,3 +102,36 @@ class ImageManager:
             return filepath
             
         return ""
+
+
+    def _clear_image_folders(self):
+        """Xóa toàn bộ file ảnh cũ trong thư mục để dọn chỗ cho Game mới."""
+        for folder in [self.npc_folder, self.loc_folder, self.item_folder]:
+            if os.path.exists(folder):
+                for filename in os.listdir(folder):
+                    file_path = os.path.join(folder, filename)
+                    try:
+                        # Chỉ xóa file, bỏ qua nếu nó là thư mục con (mặc dù ở đây không có)
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                    except Exception as e:
+                        print(f"[Database Lỗi] Không thể xóa ảnh cũ {file_path}: {e}")
+
+
+    def delete_image(self, file_path: str):
+        """Xóa một file ảnh cụ thể khỏi ổ cứng."""
+        if not file_path:
+            return
+
+        try:
+            # Kiểm tra xem đường dẫn có tồn tại và đúng là một file hay không
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                os.remove(file_path)
+                print(f"[ImageManager] Đã dọn dẹp ảnh: {file_path}")
+            else:
+                print(f"[ImageManager Cảnh báo] Không tìm thấy file để xóa: {file_path}")
+        except Exception as e:
+            # Bắt lỗi an toàn để game không bị crash nếu ổ cứng có vấn đề
+            print(f"[ImageManager Lỗi] Không thể xóa ảnh {file_path}: {e}")
+
+

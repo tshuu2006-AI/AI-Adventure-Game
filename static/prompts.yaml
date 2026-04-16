@@ -65,7 +65,6 @@ LocationAgent:
     - World Name: {world_name}
     - World Type: {world_type}
     - Theme & Tone: {theme_and_tone}
-    - Main Mission: {world_mission}
 
     Dựa vào bối cảnh trên, hãy thiết kế một ĐỊA ĐIỂM BẮT ĐẦU (Starting Location) thật ấn tượng cho người chơi.
 
@@ -88,13 +87,12 @@ NPCAgent:
     Tuyệt đối trả về JSON theo cấu trúc:
     {
       "name": "Tên NPC",
-      "occupation": "Nghề nghiệp/Vai trò",
       "personality": "Mô tả tính cách ngắn gọn",
-      "appearance": "Ngoại hình nổi bật (1 câu)",
-      "secret_motive": "Một động cơ hoặc bí mật nhỏ mà NPC này đang giấu",
-      "initial_dialogue": "Câu nói đầu tiên khi thấy người chơi"
+      "description": "Mô tả ngoại hình, câu chuyện ngắn gọn",
+      "affectionate": "Mức hảo cảm cho người chơi (-10 đến 10)",
+      "status": "trạng thái hiện tại"
     }
-  user: 'Địa điểm hiện tại: {location_name}. Không khí: {atmosphere}. Sinh 1 NPC.'
+  user: 'Địa điểm hiện tại: {location_name}. Không khí: {atmosphere}. Bối cảnh gặp nhau {story}. Sinh 1 NPC.'
 
 
 StoryAgent:
@@ -186,7 +184,10 @@ StateExtractor:
       "items_removed": ["item name in Vietnamese" or empty],
       "new_npc_encountered": {
          "name": "NPC name (if any)",
-         "description": "Physical appearance description (if any)"
+         "description": "Physical appearance description (if any)",
+         "personality": "The personality (if any)
+          "location": "The location to meet the NPC",
+          "status": "The status of the NPC (e.g. tired, hungry, ...)"
       } | null,
       "new_location_entered": {
          "name": "Location name (if any)",

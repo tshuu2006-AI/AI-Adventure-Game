@@ -1,4 +1,8 @@
-class BaseEntity():
+from dataclasses import dataclass, field
+from typing import Optional
+import time
+
+class BaseEntity:
     def __init__(self, id, name, type, description):
         self.id = id
         self.name = name
@@ -26,4 +30,17 @@ class NPC(BaseEntity):
         self.affectionate = affectionate
         self.location = location
         self.image_path = image_path
+
+
+@dataclass
+class Memory:
+    """
+    Thực thể đại diện cho một Ký ức/Sự kiện trong game.
+    """
+    location: str
+    text: str
+    npc: Optional[str] = None
+    id: Optional[int] = None
+    id_type: str = "memory"
+    made_at: int = field(default_factory=lambda: int(time.time()))
 
