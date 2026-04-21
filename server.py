@@ -49,7 +49,7 @@ def get_inventory_data():
 @app.post("/api/new_game")
 async def new_game(idea: str = Form(...)):
     try:
-        orchestrator.db.reset_database()
+        orchestrator.reset_game_all()
         orchestrator.db.create_tables()
         
         await orchestrator._create_new_world(player_idea=idea)
