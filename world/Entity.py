@@ -44,3 +44,15 @@ class Memory:
     id_type: str = "memory"
     made_at: int = field(default_factory=lambda: int(time.time()))
 
+@dataclass
+class Quest:
+    """
+    Thực thể đại diện cho một Nhiệm vụ trong game.
+    """
+    id: str
+    title: str
+    description: str
+    giver_npc: str
+    target_item: Optional[str] = None
+    reward_item: Optional[str] = None
+    status: str = "active"

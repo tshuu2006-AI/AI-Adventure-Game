@@ -34,11 +34,38 @@ LocationAgent:
   user: 'Travel: [{current_location}] -> [{target_location_from_router}]. Design it.'
 
 NPCAgent:
+  # system: |
+  #   Role: Character Designer. Task: Generate 1 random NPC fitting location context.
+  #   Rules: JSON output. Keys: English. Values: VIETNAMESE.
+  #   Format: {"name": "", "personality": "", "description": "", "affectionate": "int -10 to 10", "status": ""}
+  # user: 'Location: {location_name}. Atmosphere: {atmosphere}. Story: {story}. Generate NPC.'
+
+  # NPC được tạo ra, sẽ đọc ký ức quá khứ và bám vào nhiệm vụ chính của thế giới.
   system: |
-    Role: Character Designer. Task: Generate 1 random NPC fitting location context.
-    Rules: JSON output. Keys: English. Values: VIETNAMESE.
-    Format: {"name": "", "personality": "", "description": "", "affectionate": "int -10 to 10", "status": ""}
-  user: 'Location: {location_name}. Atmosphere: {atmosphere}. Story: {story}. Generate NPC.'
+    You are an expert RPG character designer. 
+    Create ONE NPC that fits the current setting and storyline, and can be linked to the player's past memories.
+    
+    [WORLD LORE]
+    - Main quest: {world_mission}
+    - Conflict: {world_conflict}
+
+    Strictly return a JSON using the following structure:
+    {
+      "name": "NPC Name",
+      "personality": "Personality description",
+      "description": "Appearance and a secret/motive related to the World Lore or Memories",
+      "affectionate": "Affection level (-10 to 10)",
+      "status": "Current status (e.g., Hiding, Searching...)"
+    }
+  user: |
+    [PAST MEMORIES (RAG)]
+    {rag_context}
+
+    [CURRENT EVENTS]
+    Location: {location_name} ({atmosphere})
+    Situation: {recent_story}
+    
+    Generate 1 NPC right now.
 
 StoryAgent:
   systemInit: |
@@ -64,6 +91,7 @@ StoryAgent:
     3. NO hallucinating unlisted paths/items/NPCs.
     4. NO questions (e.g., "Bạn chọn gì?"). NO choices. Describe outcome/environment and STOP.
     5. Specific Directive: {system_directive}
+    6. Quest Generation: CRITICAL! If the player interacts with the NPC, proactively have the NPC offer a request or mission related to the main storyline.
     Context: Theme: {world_theme} | Conflict: {world_conflict} | Vocab: {world_vocabulary}
     State: Loc: {current_location} | NPC: {npc_name} ({npc_personality}) | Paths: {valid_paths_from_sql}
     Memory: {rag_context}
@@ -87,7 +115,9 @@ StateExtractor:
       "items_added": [],
       "items_removed": [],
       "new_npc_encountered": {"name":"","description":"","personality":"","location":"","status":""} | null,
-      "new_location_entered": {"name":"","description":"","atmosphere":""} | null
+      "new_location_entered": {"name":"","description":"","atmosphere":""} | null,
+      "quest_assigned": {"title": "", "description": "", "giver_npc": "", "target_item": "" | null} | null,
+      "quest_completed": "Tên nhiệm vụ hoàn thành | null"
     }
   user: 'History: {conversation_history}'
 

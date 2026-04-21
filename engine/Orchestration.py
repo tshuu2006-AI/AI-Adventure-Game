@@ -5,7 +5,10 @@ from engine.PromptManager import PromptManager
 from engine.Agents.LocalAgents import IntentRouter, StateExtractor
 from engine.ImageAPI import ImageAPI
 from engine.DataManager.ImageManager import ImageManager
+from engine.NPCSpawner import NPCSpawner
+from world.Entity import Quest
 import asyncio
+import time
 
 import os
 class GameOrchestrator:
@@ -42,6 +45,9 @@ class GameOrchestrator:
         # 3. Khởi tạo các Local Agent (xử lý tác vụ phân tích, trích xuất dữ liệu nhanh)
         self.router = IntentRouter(pm=self.pm, model_name="qwen2.5:1.5b")
         self.extractor = StateExtractor(pm=self.pm, model_name="qwen2.5:1.5b")
+
+        self.NPCAgent = NPCAgent(api_key=groq_api_key, pm=self.pm)
+        self.npc_spawner = NPCSpawner(ai_agent=self.NPCAgent)
 
         self.progress_msg = "Sẵn sàng"
         self.progress_pct = 0.0
@@ -249,6 +255,8 @@ class GameOrchestrator:
         if not isinstance(state_changes, dict):
             state_changes = {}
 
+        self._update_quests(state_changes)
+
         # 3. Áp dụng các thay đổi trạng thái theo tuần tự
         update_tasks.append(
             self._update_inventory(
@@ -272,19 +280,18 @@ class GameOrchestrator:
 
         new_npc_data = state_changes.get('new_npc_encountered')
         encountered_npc_name = None
+        
         if new_npc_data:
-            new_npc = NPC(
-                id=None,
-                name=new_npc_data.get('name'),
-                description=new_npc_data.get('description'),
-                personality=new_npc_data.get('personality'),
-                affectionate=0,
-                location=new_npc_data.get('location'),
-                status=new_npc_data.get('status')
+            new_npc = await self.npc_spawner.spawn(
+                is_important_event=True,
+                world_state=self.world_state,
+                player_state=self.player_state,
+                rag_context=rag_context,
+                recent_story=story_response
             )
+            
             encountered_npc_name = new_npc.name
             self.db.add_npc_to_db(new_npc)
-
             update_tasks.append(self._update_npc(new_npc))
 
         await asyncio.gather(*update_tasks)
@@ -298,14 +305,12 @@ class GameOrchestrator:
         memory_id = self.db.add_memory_to_db(new_memory)
         self.long_term_memory.add_memory_to_vector(new_memory.text, memory_id=memory_id)
 
-
         # 5. Tạo lựa chọn (Chạy SAU CÙNG để đảm bảo ChoiceAgent biết về vị trí/NPC mới)
         choices = await self._generate_choices(story_response)
         self._display_choices(choices)
 
         self.progress_msg = "Hoàn tất!"
         self.progress_pct = 1.0
-
 
         return story_response, choices
 
@@ -373,6 +378,42 @@ class GameOrchestrator:
         )
         
         return choices_data.get('choices', [])
+
+
+    def _update_quests(self, state_changes: dict):
+        """Hàm con phụ trách xử lý logic nhận và trả nhiệm vụ."""
+    
+        # XỬ LÝ NHIỆM VỤ MỚI
+        new_quest_data = state_changes.get("quest_assigned")
+        if new_quest_data:
+            quest_id = f"q_{int(time.time())}"
+            new_quest = Quest(
+                id=quest_id,
+                title=new_quest_data.get('title', 'Nhiệm vụ ẩn'),
+                description=new_quest_data.get('description', ''),
+                giver_npc=new_quest_data.get('giver_npc', 'Vô danh'),
+                target_item=new_quest_data.get('target_item')
+            )
+            self.player_state.active_quests[quest_id] = new_quest
+            print(f"\n[Hệ Thống] BẠN NHẬN ĐƯỢC NHIỆM VỤ MỚI: {new_quest.title}")
+            print(f"   >> {new_quest.description}")
+
+        # XỬ LÝ TRẢ NHIỆM VỤ
+        completed_quest_title = state_changes.get("quest_completed")
+        if completed_quest_title:
+            quest_to_remove = None
+            # Duyệt qua các quest đang làm để tìm quest có tên trùng khớp
+            for q_id, q_obj in self.player_state.active_quests.items():
+                if q_obj.title.lower() in completed_quest_title.lower() or completed_quest_title.lower() in q_obj.title.lower():
+                    quest_to_remove = q_id
+                    break
+            
+            # Nếu tìm thấy, chuyển nó từ active sang completed
+            if quest_to_remove:
+                completed_q = self.player_state.active_quests.pop(quest_to_remove)
+                completed_q.status = "completed"
+                self.player_state.completed_quests.append(completed_q)
+                print(f"\n[Hệ Thống] HOÀN THÀNH NHIỆM VỤ: {completed_q.title}")
 
 
     async def _update_inventory(self, items_added: list, items_removed: list):

@@ -76,23 +76,37 @@ class WorldGenerateAgent(BaseCloudAgent):
 
 
 class NPCAgent(BaseCloudAgent):
-    """Agent chịu trách nhiệm thiết kế và sinh ra thông tin NPC ở dạng JSON."""
-    async def generate_npc(self, location_name: str, atmosphere: str, story: str):
-        try:
-            sys_prompt = self.pm.get_prompt('NPCAgent', 'system')
-            user_prompt = self.pm.get_prompt('NPCAgent', 'user', location_name=location_name, atmosphere=atmosphere,
-                                             story=story)
+    """Agent chịu trách nhiệm thiết kế và sinh ra thông tin NPC ở dạng JSON có tính liên kết cốt truyện (RAG)."""
+    def __init__(self, api_key, pm):
+        super().__init__(api_key, pm)
 
+    async def generate_npc(self, world_mission: str, world_conflict: str, rag_context: str, location_name: str, atmosphere: str, recent_story: str):
+        # Gọi PromptManager để nạp các biến động vào file yaml
+        system_prompt = self.pm.get_prompt(
+            'NPCAgent', 'system',
+            world_mission=world_mission,
+            world_conflict=world_conflict
+        )
+        
+        user_prompt = self.pm.get_prompt(
+            'NPCAgent', 'user',
+            rag_context=rag_context,
+            location_name=location_name,
+            atmosphere=atmosphere,
+            recent_story=recent_story
+        )
+
+        try:
             response = await self._chat(messages=[
-                {"role": "system", "content": sys_prompt},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ], temperature=0.8, response_format={"type": "json_object"})
+            
             return json.loads(response.choices[0].message.content)
 
         except Exception as e:
-            self._log_error("generate_npc", e)
-            return {"name": "Người lạ", "personality": "Bí ẩn", "description": "Một bóng người không rõ mặt",
-                    "affectionate": 0, "status": "Bình thường"}
+            print(f"[NPC ERROR] Lỗi khi sinh NPC: {e}")
+            return {}
 
 
 class LocationAgent(BaseCloudAgent):

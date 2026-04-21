@@ -514,6 +514,8 @@ class PlayerState:
     def __init__(self):
         self.currentLocation = None
         self.inventory = {}
+        self.active_quests = {}
+        self.completed_quests = []
 
 
 class WorldState:
