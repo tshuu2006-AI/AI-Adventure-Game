@@ -1,7 +1,8 @@
-import os
 import hashlib
+import os
+
 from engine.ImageAPI import ImageAPI
-from world.Entity import *
+
 
 class ImageManager:
     """
@@ -104,7 +105,7 @@ class ImageManager:
         return ""
 
 
-    def _clear_image_folders(self):
+    def clear_image_folders(self):
         """Xóa toàn bộ file ảnh cũ trong thư mục để dọn chỗ cho Game mới."""
         for folder in [self.npc_folder, self.loc_folder, self.item_folder]:
             if os.path.exists(folder):

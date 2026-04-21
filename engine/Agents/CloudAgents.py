@@ -3,6 +3,14 @@ from groq import AsyncGroq
 from typing import List, Dict, Any, AsyncGenerator
 from engine.PromptManager import PromptManager
 from world.Entity import *
+import logging
+
+
+logging.basicConfig(
+    level=logging.ERROR,
+    format='[%(asctime)s] %(name)s - %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 
 class BaseCloudAgent:
@@ -15,6 +23,8 @@ class BaseCloudAgent:
         self.client = AsyncGroq(api_key=api_key)
         self.model = model_name
         self.pm = pm
+
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     async def _chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, stream: bool = False,
                     response_format: Dict = None, n: int = 1):
@@ -30,6 +40,13 @@ class BaseCloudAgent:
             n=n
         )
 
+    def _log_error(self, context: str, error: Exception):
+        """
+        Hàm dùng chung để bắt và ghi nhận lỗi.
+        exc_info=True sẽ in ra toàn bộ dấu vết (Stack Trace) để bạn biết lỗi ở dòng nào.
+        """
+        self.logger.error(f"Lỗi tại {context}: {str(error)}", exc_info=True)
+
 
 # ==================
 # CÁC CLOUD AGENTS
@@ -37,10 +54,6 @@ class BaseCloudAgent:
 
 class WorldGenerateAgent(BaseCloudAgent):
     """Agent chịu trách nhiệm khởi tạo 'Kinh thánh Thế giới' (World Bible) ở dạng JSON."""
-    def __init__(self, api_key, pm):
-        super().__init__(api_key, pm)
-
-
     async def generate_bible(self, player_idea: str) -> dict:
 
         system_prompt = self.pm.get_prompt('WorldGenerateAgent', 'system')
@@ -51,36 +64,39 @@ class WorldGenerateAgent(BaseCloudAgent):
             {"role": "user", "content": user_prompt}
         ]
 
-        # Sử dụng JSON mode (response_format) và nhiệt độ thấp (0.4) để đảm bảo cấu trúc chặt chẽ
-        response = await self._chat(messages=messages, temperature=0.4, stream=False,
-                                    response_format={"type": "json_object"})
-        return json.loads(response.choices[0].message.content)
+        try:
+            response = await self._chat(messages=messages, temperature=0.4, stream=False,
+                                        response_format={"type": "json_object"})
+            return json.loads(response.choices[0].message.content)
+
+        except Exception as e:
+            self._log_error("generate_choices", e)
+
+            return {}
 
 
 class NPCAgent(BaseCloudAgent):
     """Agent chịu trách nhiệm thiết kế và sinh ra thông tin NPC ở dạng JSON."""
-    def __init__(self, api_key, pm):
-        super().__init__(api_key, pm)
-
-    async def generate_npc(self, system_prompt: str, user_prompt: str):
+    async def generate_npc(self, location_name: str, atmosphere: str, story: str):
         try:
-            # Nhiệt độ cao (0.8) giúp NPC có tính cách đa dạng và sáng tạo hơn
+            sys_prompt = self.pm.get_prompt('NPCAgent', 'system')
+            user_prompt = self.pm.get_prompt('NPCAgent', 'user', location_name=location_name, atmosphere=atmosphere,
+                                             story=story)
+
             response = await self._chat(messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_prompt}
             ], temperature=0.8, response_format={"type": "json_object"})
             return json.loads(response.choices[0].message.content)
 
         except Exception as e:
-            print(f"[NPC ERROR] {e}")
-            return {}
+            self._log_error("generate_npc", e)
+            return {"name": "Người lạ", "personality": "Bí ẩn", "description": "Một bóng người không rõ mặt",
+                    "affectionate": 0, "status": "Bình thường"}
 
 
 class LocationAgent(BaseCloudAgent):
     """Agent chịu trách nhiệm tạo ra các địa điểm và bối cảnh xung quanh ở dạng JSON."""
-    def __init__(self, api_key, pm):
-        super().__init__(api_key, pm)
-
     async def initialize_location(self, world_name, world_type, theme) -> Location:
         sys_init = self.pm.get_prompt('LocationAgent', 'systemInit')
         user_init = self.pm.get_prompt(
@@ -90,11 +106,19 @@ class LocationAgent(BaseCloudAgent):
             theme_and_tone=theme,
         )
 
-        location_data = await self.generate_location(sys_init, user_init)
+        location_data = await self._generate_location(sys_init, user_init)
         return location_data
 
 
-    async def generate_location(self, system_prompt: str, user_prompt: str) -> Location:
+    async def generate_location(self, current_location: str, target_location: str) -> Dict:
+        sys_prompt = self.pm.get_prompt('LocationAgent', 'system')
+        user_prompt = self.pm.get_prompt('LocationAgent', 'user', current_location=current_location,
+                                         target_location_from_router=target_location)
+        location_data = await self._generate_location(sys_prompt, user_prompt)
+        return location_data
+
+
+    async def _generate_location(self, system_prompt: str, user_prompt: str) -> Location:
         try:
             response = await self._chat(messages=[
                 {"role": "system", "content": system_prompt},
@@ -109,15 +133,12 @@ class LocationAgent(BaseCloudAgent):
             return location
 
         except Exception as e:
-            print(f"[LOCATION ERROR] {e}")
-            return None
+            self._log_error("generate_location", e)
+            return {}
 
 
 class StoryAgent(BaseCloudAgent):
     """Agent Game Master đóng vai trò kể chuyện và phản hồi hành động của người chơi theo thời gian thực."""
-    def __init__(self, api_key, pm):
-        super().__init__(api_key, pm)
-
     async def initialize_story(self, name, theme, core_conflict, mission, vocab, location_name, location_state,
                                location_description) -> AsyncGenerator[str, None]:
 
@@ -136,73 +157,115 @@ class StoryAgent(BaseCloudAgent):
         )
 
         # 2. Gọi hàm stream nội bộ và "bắn" từng đoạn chữ (chunk) ra ngoài
-        async for chunk in self.generate_stream(system_prompt=sys_init, user_prompt=user_init):
+        async for chunk in self._generate_stream(system_prompt=sys_init, user_prompt=user_init):
+            yield chunk
+
+    async def generate_story(self, world_theme: str, world_conflict: str, world_vocabulary: dict,
+                              current_location: str, npc_names: list, rag_context: str,
+                              system_directive: str, user_input: str) -> AsyncGenerator[str, None]:
+
+        # 1. Agent TỰ LOAD prompt của chính nó
+        sys_prompt = self.pm.get_prompt(
+            'StoryAgent', 'system',
+            world_theme=world_theme,
+            world_conflict=world_conflict,
+            world_vocabulary=world_vocabulary,
+            current_location=current_location,
+            npc_name=npc_names,
+            npc_personality=None,
+            rag_context=rag_context,
+            valid_paths_from_sql=None,
+            system_directive=system_directive
+        )
+
+        user_prompt = self.pm.get_prompt('StoryAgent', 'user', user_input=user_input)
+
+        async for chunk in self._generate_stream(system_prompt=sys_prompt, user_prompt=user_prompt):
             yield chunk
 
 
-    async def generate_stream(self, system_prompt: str, user_prompt: str) -> AsyncGenerator[str, None]:
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        # Kích hoạt chế độ stream để trả về từng đoạn chữ (chunk) tạo cảm giác AI đang "gõ"
-        stream = await self._chat(messages=messages, temperature=0.9, stream=True)
-        async for chunk in stream:
-            content = chunk.choices[0].delta.content
-            if content:
-                yield content
+    async def _generate_stream(self, system_prompt: str, user_prompt: str) -> AsyncGenerator[str, None]:
+        try:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            # Kích hoạt chế độ stream để trả về từng đoạn chữ (chunk) tạo cảm giác AI đang "gõ"
+            stream = await self._chat(messages=messages, temperature=0.9, stream=True)
+            async for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+
+
+        except Exception as e:
+            self._log_error("generate_stream", e)
+            yield "Có một sự xáo trộn trong không gian... (Lỗi kết nối cốt truyện)"
 
 
 class SummarizeAgent(BaseCloudAgent):
     """
-    Agent chạy trên Cloud (Groq) làm nhiệm vụ tóm tắt hội thoại thành 1 câu.
+    Agent chạy trên Cloud (Groq) làm nhiệm vụ tóm tắt hội thoại.
+    Phục vụ cho việc tối ưu bộ nhớ dài hạn (RAG).
     """
-    def __init__(self, api_key, pm):
-        super().__init__(api_key, pm)
-    async def summarize_chat(self, system_prompt: str, user_prompt: str) -> str:
+    async def summarize_chat(self, context_window: list) -> str:
+        """
+        Nhận danh sách lịch sử hội thoại, tự build prompt và trả về bản tóm tắt.
+        """
+        # 1. Tự quản lý việc lấy prompt thay vì bắt Orchestrator làm hộ
+        sys_prompt = self.pm.get_prompt('SummarizeAgent', 'system')
+        user_prompt = self.pm.get_prompt(
+            'SummarizeAgent', 'user',
+            context_window=context_window
+        )
+
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": sys_prompt},
             {"role": "user", "content": user_prompt}
         ]
 
         try:
-            # temperature=0.3 để câu văn khách quan, chính xác, không bịa chuyện
             response = await self._chat(
                 messages=messages,
                 temperature=0.3,
                 stream=False
             )
-
-            # Vì file YAML của bạn yêu cầu trả về MỘT CÂU DUY NHẤT,
-            # nên ta lấy thẳng content text, dùng strip() để xóa khoảng trắng thừa
             summary_text = response.choices[0].message.content.strip()
 
             return summary_text
 
         except Exception as e:
-            print(f"[SUMMARIZE ERROR] Lỗi khi gọi API tóm tắt: {e}")
+            self._log_error("summarize_chat", e)
             return ""
-        
+
 
 class ChoiceAgent(BaseCloudAgent):
     """Agent chịu trách nhiệm phân tích tình huống và gợi ý các hành động tiếp theo."""
-    def __init__(self, api_key, pm):
-        super().__init__(api_key, pm)
 
-    async def generate_choices(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+    async def generate_choices(self, current_location: str, npc_name: str, recent_story_summary: str) -> Dict[str, Any]:
+
+        # Tự load prompt
+        sys_prompt = self.pm.get_prompt('ChoiceAgent', 'system')
+        user_prompt = self.pm.get_prompt(
+            'ChoiceAgent', 'user',
+            current_location=current_location,
+            npc_name=npc_name,
+            recent_story_summary=recent_story_summary
+        )
+
         try:
             response = await self._chat(
                 messages=[
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": sys_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7, 
+                temperature=0.7,
                 response_format={"type": "json_object"}
             )
             return json.loads(response.choices[0].message.content)
         except Exception as e:
-            print(f"[CHOICE ERROR] {e}")
-            return {"choices": []}
+            self._log_error("generate_choices", e)
+            return {"choices": [{"id": 1, "action_text": "Tiếp tục quan sát xung quanh", "style": "Thận trọng"}]}
 
 
 class QueryAgent(BaseCloudAgent):
@@ -210,27 +273,22 @@ class QueryAgent(BaseCloudAgent):
     Agent chịu trách nhiệm tổng hợp ngữ cảnh (context, location, NPC)
     thành một câu truy vấn ngắn gọn để search trong Vector Memory (FAISS).
     """
-    def __init__(self, api_key, pm):
-        super().__init__(api_key, pm)
-
-    async def generate_query(self, system_prompt: str, user_prompt: str) -> str:
+    async def generate_query(self, current_location: str, npc_name: str, context_window: str) -> str:
+        sys_prompt = self.pm.get_prompt('QueryAgent', 'system')
+        user_prompt = self.pm.get_prompt(
+            'QueryAgent', 'user',
+            current_location=current_location,
+            npc_name=npc_name,
+            context_window=context_window
+        )
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": sys_prompt},
             {"role": "user", "content": user_prompt}
         ]
-
         try:
-            # Nhiệt độ thấp (0.2) để trích xuất keyword chính xác, khách quan
-            response = await self._chat(
-                messages=messages,
-                temperature=0.2,
-                stream=False
-            )
-
-            # Lấy chuỗi truy vấn và loại bỏ khoảng trắng/dấu nháy thừa
-            search_query = response.choices[0].message.content.strip().strip('"\'')
-            return search_query
+            response = await self._chat(messages=messages, temperature=0.2, stream=False)
+            return response.choices[0].message.content.strip().strip('"\'')
 
         except Exception as e:
-            print(f"[QUERY ERROR] Lỗi khi tạo câu truy vấn VectorDB: {e}")
+            self._log_error("generate_query", e)
             return ""
