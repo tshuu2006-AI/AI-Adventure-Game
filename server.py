@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 from dotenv import load_dotenv
 from engine.Orchestration import GameOrchestrator
+import traceback
 
 app = FastAPI()
 
@@ -71,7 +72,20 @@ async def new_game(idea: str = Form(...)):
             "inventory": get_inventory_data()
         }
     except Exception as e:
+        # 🌟 IN CHI TIẾT LỖI RA MÀN HÌNH TERMINAL ĐỂ DEBUG
+        print("\n" + "="*40)
+        print("❌ LỖI CRASH TẠI /api/new_game:")
+        traceback.print_exc() 
+        print("="*40 + "\n")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/api/progress")
+async def get_progress():
+    """API để Unity hỏi thăm tiến độ hiện tại."""
+    return {
+        "message": orchestrator.progress_msg,
+        "percent": orchestrator.progress_pct
+    }
 
 @app.post("/api/play")
 async def play(action: str = Form(...)):
@@ -95,13 +109,28 @@ async def play(action: str = Form(...)):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/api/settings")
-async def update_settings(quality: str = Form(...)):
-    """Cập nhật chất lượng ảnh (low, medium, high) từ Unity."""
+async def update_settings(quality: str = Form(None), enable_image: str = Form(None)):
+    """Cập nhật chất lượng ảnh và bật/tắt ảnh từ Unity."""
     try:
-        # Gán trực tiếp vào thuộc tính quality của ImageAPI
-        orchestrator.image_manager.api.quality = quality.lower()
-        print(f"[Server] Đã đổi chất lượng ảnh thành: {quality.upper()}")
-        return {"message": f"Đã chuyển đồ họa sang {quality.upper()}"}
+        msg_parts = []
+        
+        # 1. Nếu Unity gửi lệnh đổi chất lượng
+        if quality is not None:
+            orchestrator.image_manager.api.quality = quality.lower()
+            msg_parts.append(f"Đồ họa: {quality.upper()}")
+            
+        # 2. Nếu Unity gửi lệnh bật/tắt ảnh
+        if enable_image is not None:
+            is_enabled = (enable_image.lower() == "true")
+            orchestrator.image_manager.api.enable_image = is_enabled
+            state_str = "BẬT" if is_enabled else "TẮT"
+            msg_parts.append(f"Tạo ảnh: {state_str}")
+
+        # Gộp thông báo trả về
+        final_msg = " | ".join(msg_parts) if msg_parts else "Đã cập nhật!"
+        print(f"[Server] Cài đặt: {final_msg}")
+        
+        return {"message": final_msg}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
