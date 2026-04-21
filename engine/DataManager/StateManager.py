@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import json 
 from typing import Dict, List, Union
 from world.Entity import *
 
@@ -39,17 +40,33 @@ class BaseManager:
 
         cursor = self.conn.cursor()
 
-        # 1. Kiểm tra tồn tại (Dùng self.table_name để linh hoạt)
+        # 1. Kiểm tra tồn tại
         cursor.execute(f"SELECT 1 FROM {self.table_name} WHERE LOWER(name) = ?", (entity.name.lower(),))
         if cursor.fetchone() is not None:
             print(f"[{self.table_name}] Đối tượng có tên '{entity.name}' đã tồn tại!")
             return False
 
-        # 2. Lấy câu SQL và Dữ liệu từ lớp con
-        insert_query, params = self._get_insert_data(entity)
+        # 2. Lấy câu SQL và Dữ liệu nguyên thủy từ lớp con
+        insert_query, raw_params = self._get_insert_data(entity)
 
-        # 3. Thực thi chèn dữ liệu
-        cursor.execute(insert_query, params)
+        # ========================================================
+        # 3. ÉP KIỂU TỰ ĐỘNG (Sửa lỗi "type 'list' is not supported")
+        # ========================================================
+        processed_params = []
+        for param in raw_params:
+            if isinstance(param, (list, dict)):
+                # Biến list/dict thành chuỗi JSON, giữ nguyên tiếng Việt
+                processed_params.append(json.dumps(param, ensure_ascii=False))
+            else:
+                # Giữ nguyên nếu là string, int, float...
+                processed_params.append(param)
+        
+        # Chuyển lại thành tuple để SQLite đọc được
+        final_params = tuple(processed_params)
+        # ========================================================
+
+        # 4. Thực thi chèn dữ liệu
+        cursor.execute(insert_query, final_params)
         return True
 
 

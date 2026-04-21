@@ -3,7 +3,7 @@ import os
 
 
 class PromptManager:
-    def __init__(self, yaml_path: str = 'static/prompts.yaml'):
+    def __init__(self, yaml_path: str = './static/prompts.yaml'):
         """
         Khởi tạo PromptManager và tự động nạp file YAML vào bộ nhớ.
         """
