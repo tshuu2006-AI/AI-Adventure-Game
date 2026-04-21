@@ -377,14 +377,18 @@ class DatabaseManager:
     def reset_database(self):
         """Xóa sạch dữ liệu trong các bảng và reset bộ đếm ID. Dùng khi tạo Game mới."""
         cursor = self.conn.cursor()
+        try:
+            cursor.execute("DELETE FROM Memory")
+            cursor.execute("DELETE FROM NPCs")
+            cursor.execute("DELETE FROM Locations")
 
-        cursor.execute("DELETE FROM Memory")
-        cursor.execute("DELETE FROM NPCs")
-        cursor.execute("DELETE FROM Locations")
+            cursor.execute("DELETE FROM sqlite_sequence WHERE name='Memory'")
+            cursor.execute("DELETE FROM sqlite_sequence WHERE name='NPCs'")
+            cursor.execute("DELETE FROM sqlite_sequence WHERE name='Locations'")
 
-        cursor.execute("DELETE FROM sqlite_sequence WHERE name='Memory'")
-        cursor.execute("DELETE FROM sqlite_sequence WHERE name='NPCs'")
-        cursor.execute("DELETE FROM sqlite_sequence WHERE name='Locations'")
+            print("[Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQL!")
+        except Exception as loi_he_thong:
+            print(f"[Database] Bỏ qua dọn dẹp do cấu trúc chưa tồn tại. Lỗi: {loi_he_thong}")
 
         self.location_manager.reset()
         self.npc_manager.reset()
