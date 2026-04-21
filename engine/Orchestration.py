@@ -5,6 +5,7 @@ from engine.PromptManager import PromptManager
 from engine.Agents.LocalAgents import IntentRouter, StateExtractor
 from engine.ImageAPI import ImageAPI
 from engine.DataManager.ImageManager import ImageManager
+import asyncio
 
 import os
 class GameOrchestrator:
@@ -39,8 +40,8 @@ class GameOrchestrator:
         self.image_manager = ImageManager(api=self.image_api)
 
         # 3. Khởi tạo các Local Agent (xử lý tác vụ phân tích, trích xuất dữ liệu nhanh)
-        self.router = IntentRouter(model_name="qwen2.5:1.5b")
-        self.extractor = StateExtractor(model_name="qwen2.5:1.5b")
+        self.router = IntentRouter(pm=self.pm, model_name="qwen2.5:1.5b")
+        self.extractor = StateExtractor(pm=self.pm, model_name="qwen2.5:1.5b")
 
         print("Hệ thống sẵn sàng!")
 
@@ -183,15 +184,12 @@ class GameOrchestrator:
 
         self.long_term_memory.add_memory_to_vector(short_term_memory)
 
-
     async def _process_game_turn(self, player_input: str):
         """
         Xử lý vòng lặp chính của một lượt tương tác.
         Đẩy hành động người chơi cho StoryAgent để tạo ra phản ứng của thế giới.
         """
         print(f"\n[Bạn]: {player_input}")
-
-        # Kể diễn biến tiếp theo
         print("\n[đang suy nghĩ...]")
 
         search_query = await self.get_rag_query(player_input, current_npc_name='Không có')
@@ -214,65 +212,72 @@ class GameOrchestrator:
             story_response += chunk
         print("\n")
 
-        # Thực hiện trích xuất thông tin 1 lần
-        recent_interaction = f"Hành động của người chơi: {player_input}\nPhản hồi của thế giới: {story_response}"
-        sys_extractor = self.pm.get_prompt('StateExtractor', 'system')
-        user_extractor = self.pm.get_prompt('StateExtractor', 'user', conversation_history=recent_interaction)
+        # ==========================================
+        # BẮT ĐẦU TỐI ƯU LUỒNG XỬ LÝ NỀN (ASYNC)
+        # ==========================================
 
-        # Lưu vào short-term memory câu vừa tương tác xong
+        # 1. Lưu ngay câu hội thoại vừa rồi vào bộ nhớ ngắn hạn TRƯỚC khi tóm tắt
         self.short_term_memory.add_memory(player_input, story_response)
 
-        # Bơm dữ liệu từ trí nhớ ngắn hạn sang trí nhớ dài hạn (FAISS)
-        await self._summarize_memory()
+        # 2. Gom các tác vụ LLM độc lập để chạy SONG SONG (Tiết kiệm 50% thời gian)
+        recent_interaction = f"Hành động của người chơi: {player_input}\nPhản hồi của thế giới: {story_response}"
 
-        # Chạy LocalAgent
-        state_changes = await self.extractor.extract_state(sys_extractor, user_extractor)
+        extract_task = asyncio.create_task(self.extractor.extract_state(chat_history=recent_interaction))
+        summarize_task = asyncio.create_task(self._summarize_memory())
+
+        # Đợi cả 2 tác vụ API hoàn thành cùng lúc
+        state_changes, _ = await asyncio.gather(extract_task, summarize_task)
+
+        # Bảo vệ dữ liệu đề phòng LLM Extractor trả về rỗng do lỗi
+        if not isinstance(state_changes, dict):
+            state_changes = {}
+
+        # 3. Áp dụng các thay đổi trạng thái theo tuần tự
         await self._update_inventory(
             items_added=state_changes.get("items_added", []),
             items_removed=state_changes.get("items_removed", [])
         )
 
-        # Update Địa điểm
-        new_loc_data = state_changes.get("new_location_entered", None)
+        new_loc_data = state_changes.get("new_location_entered")
         if new_loc_data:
-            new_location = Location(id = None,
-                                    name = new_loc_data.get('name', None),
-                                    description = new_loc_data.get('description', None),
-                                    state = new_loc_data.get('atmosphere', None))
-            await self._update_location(location = new_location)
+            new_location = Location(
+                id=None,
+                name=new_loc_data.get('name'),
+                description=new_loc_data.get('description'),
+                state=new_loc_data.get('atmosphere')
+            )
+            await self._update_location(location=new_location)
 
-        # Update NPC
-        new_npc_data = state_changes.get('new_npc_encountered', None)
+        new_npc_data = state_changes.get('new_npc_encountered')
+        encountered_npc_name = None
         if new_npc_data:
-            new_npc = NPC(id = None,
-                          name = new_npc_data.get('name', None),
-                          description=new_npc_data.get('description', None),
-                          personality=new_npc_data.get('personality', None),
-                          affectionate=0,
-                          location = new_npc_data.get('location', None),
-                          status = new_npc_data.get('status', None)
-                          )
+            new_npc = NPC(
+                id=None,
+                name=new_npc_data.get('name'),
+                description=new_npc_data.get('description'),
+                personality=new_npc_data.get('personality'),
+                affectionate=0,
+                location=new_npc_data.get('location'),
+                status=new_npc_data.get('status')
+            )
             await self._update_npc(new_npc)
+            encountered_npc_name = new_npc.name
 
-        # Lưu lại sự kiện vừa xảy ra vào SQL + VectorDB để dùng cho các lượt sau
-        encountered_npc = state_changes.get("new_npc_encountered")
-        npc_name_to_save = encountered_npc.get('name') if encountered_npc else None
-
+        # 4. Lưu sự kiện vào SQL + FAISS VectorDB
         new_memory = Memory(
             location=self.player_state.currentLocation.name,
-            npc=npc_name_to_save,
+            npc=encountered_npc_name,
             text=f"Player: {player_input}\nStory: {story_response}"
         )
-
         memory_id = self.db.add_memory_to_db(new_memory)
         self.long_term_memory.add_memory_to_vector(new_memory.text, memory_id=memory_id)
 
-        # Tạo lựa chọn
+        # 5. Tạo lựa chọn (Chạy SAU CÙNG để đảm bảo ChoiceAgent biết về vị trí/NPC mới)
         choices = await self._generate_choices(story_response)
-    
         self._display_choices(choices)
 
         return story_response, choices
+
 
     async def reset_game_all(self):
         """Dọn dẹp toàn bộ dữ liệu cũ để chuẩn bị cho một thế giới mới."""
