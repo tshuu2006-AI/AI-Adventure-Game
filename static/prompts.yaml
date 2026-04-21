@@ -50,13 +50,13 @@ NPCAgent:
     - Conflict: {world_conflict}
 
     Strictly return a JSON using the following structure:
-    {
+    {{
       "name": "NPC Name",
       "personality": "Personality description",
       "description": "Appearance and a secret/motive related to the World Lore or Memories",
       "affectionate": "Affection level (-10 to 10)",
       "status": "Current status (e.g., Hiding, Searching...)"
-    }
+    }}
   user: |
     [PAST MEMORIES (RAG)]
     {rag_context}
@@ -75,7 +75,7 @@ StoryAgent:
     1. Instantly match Theme & Tone.
     2. Integrate Main Mission & Core Conflict naturally.
     3. Describe player waking/arriving at Starting Location.
-    4. Seamlessly use World Vocabulary.
+    4. Seamlessly use World Vocabulary (CRITICAL: You MUST translate these terms into natural Vietnamese. DO NOT output raw English snake_case keys).
     5. End with immediate tension/cliffhanger. NO questions (e.g., "Bạn làm gì?"). NO explicit choices. Just stop.
   userInit: |
     World: {world_name} | {world_theme} | {world_conflict} | {world_mission} | {world_vocabulary}
@@ -87,7 +87,7 @@ StoryAgent:
     Language: STRICTLY VIETNAMESE. Use "Bạn".
     Rules:
     1. Adapt writing style strictly to Theme & Tone.
-    2. Use World Vocabulary naturally.
+    2. Use World Vocabulary naturally (CRITICAL: You MUST translate these terms into natural Vietnamese. DO NOT output raw English snake_case keys like 'feather_spell_weaving').
     3. NO hallucinating unlisted paths/items/NPCs.
     4. NO questions (e.g., "Bạn chọn gì?"). NO choices. Describe outcome/environment and STOP.
     5. Specific Directive: {system_directive}
@@ -109,15 +109,37 @@ SummarizeAgent:
 StateExtractor:
   system: |
     Role: State Tracker. Task: Extract inventory/affection/entity changes from interaction.
-    Rules: JSON only. Item/entity names in VIETNAMESE. Use empty array [] or 0 if no change.
-    Format: {
-      "npc_affection_change": -5 to 5,
+    Rules: 
+    1. Output STRICTLY a valid JSON object.
+    2. ALL string values (names, descriptions, quest titles, etc.) MUST be in STRICTLY VIETNAMESE. Do NOT translate or summarize in English.
+    3. CRITICAL LOGIC FOR ITEMS: 
+       - If the player consumes, eats, drinks, drops, gives away, or loses an item, you MUST add it to the "items_removed" array.
+       - ONLY add items to the "items_added" array if the player explicitly finds, receives, buys, or creates a NEW item.
+    4. If there is NO change for a specific field, you MUST use 0, [], or null. Do not use words like "null" or "-5 to 5".
+    Format expected (Use null for objects if they do not appear in the scene):
+    {
+      "npc_affection_change": 0,
       "items_added": [],
       "items_removed": [],
-      "new_npc_encountered": {"name":"","description":"","personality":"","location":"","status":""} | null,
-      "new_location_entered": {"name":"","description":"","atmosphere":""} | null,
-      "quest_assigned": {"title": "", "description": "", "giver_npc": "", "target_item": "" | null} | null,
-      "quest_completed": "Tên nhiệm vụ hoàn thành | null"
+      "new_npc_encountered": {
+        "name": "Tên",
+        "description": "Mô tả",
+        "personality": "Tính cách",
+        "location": "Vị trí",
+        "status": "Trạng thái"
+      },
+      "new_location_entered": {
+        "name": "Tên",
+        "description": "Mô tả",
+        "atmosphere": "Bầu không khí"
+      },
+      "quest_assigned": {
+        "title": "Tên nhiệm vụ",
+        "description": "Mô tả",
+        "giver_npc": "Người giao",
+        "target_item": "Vật phẩm"
+      },
+      "quest_completed": "Tên nhiệm vụ"
     }
   user: 'History: {conversation_history}'
 
@@ -127,7 +149,7 @@ ChoiceAgent:
     Rules:
     1. Address immediate physical context first (doors, paths, threats).
     2. Add diverse playstyles (Friendly, Hostile, Stealth, etc.).
-    3. 1st-person perspective ("Tôi..."). Short (<15 words). Logical to physics.
+    3. 1st-person perspective ("Tôi"). Short (<15 words). Logical to physics.
     Output: JSON. Keys: English. Values: VIETNAMESE.
     Format: {"choices": [{"id": 1, "action_text": "text", "style": "approach style"}]}
   user: |

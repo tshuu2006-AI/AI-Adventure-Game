@@ -139,17 +139,19 @@ class LocationAgent(BaseCloudAgent):
                 {"role": "user", "content": user_prompt}
             ], temperature=0.8, response_format={"type": "json_object"})
 
-            location_data =  json.loads(response.choices[0].message.content)
-            location = Location(id = 0,
-                                name=location_data['location_name'],
-                                description=location_data['description'],
-                                state=location_data['atmosphere'])
+            location_data = json.loads(response.choices[0].message.content)
+            
+            location = Location(
+                id=0,
+                name=location_data.get('location_name', 'Vùng đất bí ẩn'),
+                description=location_data.get('description', 'Một nơi bí ẩn chưa rõ hình thù.'),
+                state=location_data.get('atmosphere', 'Tĩnh lặng')
+            )
             return location
 
         except Exception as e:
             self._log_error("generate_location", e)
             return {}
-
 
 class StoryAgent(BaseCloudAgent):
     """Agent Game Master đóng vai trò kể chuyện và phản hồi hành động của người chơi theo thời gian thực."""

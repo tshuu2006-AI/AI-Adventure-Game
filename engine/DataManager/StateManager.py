@@ -87,15 +87,15 @@ class NPCManager(BaseManager):
 
 
     def _get_insert_data(self, npc: NPC):
-        query = """
-                INSERT INTO NPCs (name, personality, description, affectionate, location, currentStatus, image_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """
-        params = (npc.name, npc.personality, npc.description, npc.affectionate, npc.location, npc.status,
-                  npc.image_path)
-        self.num_npc += 1  # Tăng biến đếm
+            query = """
+                    INSERT INTO NPCs (name, personality, description, affectionLevel, location, currentStatus, image_path)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """
+            params = (npc.name, npc.personality, npc.description, npc.affectionate, npc.location, npc.status,
+                    npc.image_path)
+            self.num_npc += 1  # Tăng biến đếm
 
-        return query, params
+            return query, params
 
 
     def get_by_names(self, npc_names: List[str], limit: int = 3) -> List[NPC]:

@@ -10,10 +10,10 @@ class NPCSpawner:
         self.ai_agent = ai_agent  # Nhận NPCAgent từ Orchestrator truyền vào
         
         # Dữ liệu cho Procedural Generation
-        self.first_names = ["Kael", "Lyra", "Gorn", "Elara", "Darius"]
+        self.first_names = ["Kael", "Lyra", "Gorn", "Elara", "Darius", "Faker", "Mixi", "Sena", "Nobita", "Garen", "Naruto"]
         self.last_names = ["Ironfoot", "Shadow", "Sunwalker", "Storm"]
         self.traits = ["Nóng nảy", "Tham lam", "Nhát gan", "Hào sảng"]
-        self.jobs = ["Lính canh đang tuần tra", "Thương gia", "Kẻ lang thang"]
+        self.jobs = ["Lính canh đang tuần tra", "Thương gia", "Kẻ lang thang", "Thợ rèn đang nghỉ ngơi", "Dân làng"]
 
     async def spawn(self, is_important_event: bool, world_state, player_state, rag_context: str, recent_story: str) -> NPC:
         """Hàm logic chính để Orchestrator gọi."""
