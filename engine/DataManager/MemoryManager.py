@@ -31,6 +31,24 @@ class VectorMemory:
         # KHÔI PHỤC DỮ LIỆU TỪ Ổ CỨNG LÊN (Nếu có)
         self._load_db()
 
+    def reset_vector_db(self):
+        """Xóa trắng FAISS index, metadata và reset bộ đếm, đưa bộ nhớ về trạng thái ban đầu."""
+        # 1. Khởi tạo lại Index mới với cùng số chiều (dimension) ban đầu
+        self.index = faiss.IndexIDMap(faiss.IndexFlatL2(self.dimension))
+
+        # 2. Xóa sạch metadata và reset bộ đếm ID
+        self.metadata = {}
+        self.num_memory = 0  # Quan trọng: để ID bắt đầu lại từ 0
+
+        # 3. Xóa các file vật lý trên ổ cứng để tránh nạp lại dữ liệu cũ khi khởi động lại
+        if os.path.exists(self.index_path):
+            os.remove(self.index_path)
+        if os.path.exists(self.meta_path):
+            os.remove(self.meta_path)
+
+        print("[VectorDB] Đã tẩy trắng toàn bộ Ký ức RAG và file vật lý!")
+
+
 
     def get_rag_context(self, memory_ids, memories, npc_rows, location_rows) -> str:
         # Chuẩn hóa RAG context thành 3 khối để prompt dễ đọc và dễ kiểm tra log.
@@ -119,23 +137,6 @@ class VectorMemory:
         return [int(idx) for idx in i[0] if idx != -1]
 
 
-    def reset_vector_db(self):
-        """Xóa trắng FAISS index và metadata, đưa bộ nhớ về trạng thái ban đầu."""
-        # Khởi tạo lại Index mới với cùng cấu trúc như hàm __init__
-        self.index = faiss.IndexIDMap(faiss.IndexFlatL2(self.dimension))
-        self.metadata = {}
-
-        # Xóa file index vật lý nếu có tồn tại trên ổ cứng
-        if hasattr(self, 'index_path') and os.path.exists(self.index_path):
-            os.remove(self.index_path)
-
-        if os.path.exists(self.meta_path):
-            os.remove(self.meta_path)
-
-        print("[VectorDB] Đã tẩy trắng Ký ức RAG!")
-
-
-
 class ShortTermMemory:
 
     def __init__(self, groq_api_key, prompt_manager : PromptManager, window_size=3):
@@ -152,13 +153,9 @@ class ShortTermMemory:
 
     async def summarize(self):
         if len(self.context_window) > self.window_size:
-            sys_prompt = self.pm.get_prompt('SummarizeAgent', 'system')
-            user_prompt = self.pm.get_prompt('SummarizeAgent', 'user',
-                                             context_window=self.context_window)
-
             try:
                 # 1. Gọi API TRƯỚC
-                summarized_context = await self.summarizeAgent.summarize_chat(sys_prompt, user_prompt)
+                summarized_context = await self.summarizeAgent.summarize_chat(self.context_window)
 
                 # 2. Thành công rồi mới XÓA và CẬP NHẬT
                 self.scene_summary = summarized_context

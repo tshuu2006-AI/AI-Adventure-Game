@@ -27,13 +27,13 @@ class GameOrchestrator:
         self.world_state = WorldState()
 
         # 2. Khởi tạo các Cloud Agent (xử lý logic phức tạp, sáng tạo nội dung)
-        self.worldGenerator = WorldGenerateAgent(api_key=groq_api_key, pm=self.pm)
-        self.storyAgent = StoryAgent(api_key=groq_api_key, pm=self.pm)
-        self.NPCAgent = NPCAgent(api_key=groq_api_key, pm=self.pm)
-        self.locationAgent = LocationAgent(api_key=groq_api_key, pm=self.pm)
-        self.choiceAgent = ChoiceAgent(api_key=groq_api_key, pm=self.pm) # Khởi tạo ChoiceAgent
+        self.world_generator = WorldGenerateAgent(api_key=groq_api_key, pm=self.pm)
+        self.story_agent = StoryAgent(api_key=groq_api_key, pm=self.pm)
+        self.npc_agent = NPCAgent(api_key=groq_api_key, pm=self.pm)
+        self.location_agent = LocationAgent(api_key=groq_api_key, pm=self.pm)
+        self.choice_agent = ChoiceAgent(api_key=groq_api_key, pm=self.pm) # Khởi tạo ChoiceAgent
 
-        self.queryAgent = QueryAgent(api_key=groq_api_key, pm=self.pm) # Mới thêm
+        self.query_agent = QueryAgent(api_key=groq_api_key, pm=self.pm) # Mới thêm
 
         self.image_api = ImageAPI(base_url="https://unspelt-nonbrutally-eleanore.ngrok-free.dev") # Cập nhật link ngrok
         self.image_manager = ImageManager(api=self.image_api)
@@ -88,7 +88,7 @@ class GameOrchestrator:
         world_type = ", ".join(world_type_list) if isinstance(world_type_list, list) else str(world_type_list)
 
         # 2. Nạp dữ liệu bối cảnh vào Prompt
-        initial_location = await self.locationAgent.initialize_location(world_name = self.world_state.name,
+        initial_location = await self.location_agent.initialize_location(world_name = self.world_state.name,
                                                                world_type = world_type,
                                                                theme = self.world_state.theme_and_tone)
 
@@ -119,7 +119,7 @@ class GameOrchestrator:
         print("[Engine] Đang kích hoạt World Architect...")
 
         # 1. Gọi WorldGenerateAgent tạo JSON cấu trúc thế giới
-        world_bible = await self.worldGenerator.generate_bible(player_idea=player_idea)
+        world_bible = await self.world_generator.generate_bible(player_idea=player_idea)
 
         # 2. Sao lưu cấu trúc thế giới ra thư mục data
         os.makedirs('./data', exist_ok=True)
@@ -153,7 +153,7 @@ class GameOrchestrator:
         prologue_text = ""
 
         # 2. Giao việc thẳng cho StoryAgent, Tổng quản chỉ việc in kết quả ra màn hình
-        story_stream = self.storyAgent.initialize_story(
+        story_stream = self.story_agent.initialize_story(
             name=self.world_state.name,
             theme=self.world_state.theme_and_tone,
             core_conflict=self.world_state.core_conflict,
@@ -196,27 +196,20 @@ class GameOrchestrator:
 
         search_query = await self.get_rag_query(player_input, current_npc_name='Không có')
         memory_ids, memories, npcs, locations, rag_context = self._retrieve_relevant_memories(search_query, top_k=3)
-
-        sys_story = self.pm.get_prompt(
-            'StoryAgent', 'system',
-            world_theme=self.world_state.theme_and_tone,
-            world_conflict=self.world_state.core_conflict,
-            world_vocabulary=self.world_state.dynamic_vocabulary,
-            current_location=self.player_state.currentLocation.name,
-            npc_name=[npc.name for npc in npcs],
-            npc_personality=None,
-            rag_context=rag_context,
-            valid_paths_from_sql = None,
-            system_directive="The player just acted. Describe the consequences and the reaction of the NPC/environment."
-        )
+        story_response = ""
         recent_history = "\n".join(self.short_term_memory.get_memory())
         full_user_input = f"[Lịch sử hội thoại gần đây]:\n{recent_history}\n\n[Hành động mới của người chơi]: {player_input}"
-        user_story = self.pm.get_prompt('StoryAgent', 'user', user_input=full_user_input)
 
-        story_response = ""
-
-        # Stream nội dung trả về để hiển thị tuần tự
-        async for chunk in self.storyAgent.generate_stream(sys_story, user_story):
+        async for chunk in self.story_agent.generate_story(
+                world_theme=self.world_state.theme_and_tone,
+                world_conflict=self.world_state.core_conflict,
+                world_vocabulary=self.world_state.dynamic_vocabulary,
+                current_location=self.player_state.currentLocation.name,
+                npc_names=[npc.name for npc in npcs],
+                rag_context=rag_context,
+                system_directive="The player just acted. Describe the consequences and the reaction of the NPC/environment.",
+                user_input=full_user_input
+        ):
             print(chunk, end="", flush=True)
             story_response += chunk
         print("\n")
@@ -240,24 +233,25 @@ class GameOrchestrator:
         )
 
         # Update Địa điểm
-        new_loc_data = state_changes.get("new_location_entered")
+        new_loc_data = state_changes.get("new_location_entered", None)
         if new_loc_data:
             new_location = Location(id = None,
-                                    name = new_loc_data['name'],
-                                    description = new_loc_data['description'],
-                                    state = new_loc_data['atmosphere'])
+                                    name = new_loc_data.get('name', None),
+                                    description = new_loc_data.get('description', None),
+                                    state = new_loc_data.get('atmosphere', None))
             await self._update_location(location = new_location)
 
         # Update NPC
-        new_npc_data = state_changes.get('new_npc_encountered')
+        new_npc_data = state_changes.get('new_npc_encountered', None)
         if new_npc_data:
             new_npc = NPC(id = None,
-                          name = new_npc_data['name'],
-                          description=new_npc_data['description'],
-                          personality=new_npc_data['personality'],
+                          name = new_npc_data.get('name', None),
+                          description=new_npc_data.get('description', None),
+                          personality=new_npc_data.get('personality', None),
                           affectionate=0,
-                          location = new_npc_data['location'],
-                          status = new_npc_data['status'],)
+                          location = new_npc_data.get('location', None),
+                          status = new_npc_data.get('status', None)
+                          )
             await self._update_npc(new_npc)
 
         # Lưu lại sự kiện vừa xảy ra vào SQL + VectorDB để dùng cho các lượt sau
@@ -280,11 +274,26 @@ class GameOrchestrator:
 
         return story_response, choices
 
+    async def reset_game_all(self):
+        """Dọn dẹp toàn bộ dữ liệu cũ để chuẩn bị cho một thế giới mới."""
+        print("[Engine] Đang tiến hành đại tu hệ thống dữ liệu...")
 
+        # 1. Reset SQL Database (NPCs, Locations, Memories)
+        # Hàm này bạn đã định nghĩa trong DatabaseManager
+        self.db.reset_database()
+
+        # 2. Reset Vector Database (Ký ức ngữ nghĩa)
+        self.long_term_memory.reset_vector_db()
+
+        # 3. Xóa ảnh cũ (NPC, Item, Location) để tránh rác ổ cứng
+        # Hàm này có sẵn trong ImageManager bạn đã viết
+        self.image_manager.clear_image_folders()
+
+        print("[Engine] Hệ thống đã sạch sẽ. Sẵn sàng khởi tạo thế giới mới!")
 
     async def run(self):
         """Khởi động luồng điều khiển CLI để kiểm thử trò chơi."""
-        self.db.reset_database()
+        await self.reset_game_all()
         self.db.create_tables()
         print("Hãy nhập ý tưởng thế giới mà bạn muốn xây dựng: ")
         player_idea = input()
@@ -317,18 +326,12 @@ class GameOrchestrator:
         # 1. Lấy thông tin NPC hiện tại (nếu có) từ PlayerState hoặc Memory
         # Tạm thời để None nếu hệ thống chưa lưu NPC active trong scene
         current_npc_name = "Không có"
-        
-        # 2. Nạp dữ liệu vào Prompt từ prompts.yaml
-        sys_prompt = self.pm.get_prompt('ChoiceAgent', 'system')
-        user_prompt = self.pm.get_prompt(
-            'ChoiceAgent', 'user',
+
+        choices_data = await self.choice_agent.generate_choices(
             current_location=self.player_state.currentLocation.name,
             npc_name=current_npc_name,
             recent_story_summary=story_context
         )
-
-        # 3. Gọi Agent để lấy JSON lựa chọn
-        choices_data = await self.choiceAgent.generate_choices(sys_prompt, user_prompt)
         
         return choices_data.get('choices', [])
 
@@ -415,13 +418,10 @@ class GameOrchestrator:
 
         print("\n[Hệ thống đang rà soát ký ức...]")
 
-        # 1. Gọi QueryAgent đẻ ra từ khóa tìm kiếm
-        sys_query = self.pm.get_prompt('QueryAgent', 'system')
-        user_query = self.pm.get_prompt('QueryAgent', 'user',
-                                        current_location=self.player_state.currentLocation.name,
-                                        npc_name=current_npc_name,
-                                        context_window=context_str)
-
-        search_query = await self.queryAgent.generate_query(sys_query, user_query)
+        search_query = await self.query_agent.generate_query(
+            current_location=self.player_state.currentLocation.name,
+            npc_name=current_npc_name,
+            context_window=context_str
+        )
         return search_query
 
