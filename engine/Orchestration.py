@@ -43,6 +43,9 @@ class GameOrchestrator:
         self.router = IntentRouter(pm=self.pm, model_name="qwen2.5:1.5b")
         self.extractor = StateExtractor(pm=self.pm, model_name="qwen2.5:1.5b")
 
+        self.progress_msg = "Sẵn sàng"
+        self.progress_pct = 0.0
+
         print("Hệ thống sẵn sàng!")
 
 
@@ -84,6 +87,9 @@ class GameOrchestrator:
         Cập nhật Trạng thái người chơi và lưu địa điểm vào CSDL.
         """
         print("[Engine] Đang kiến tạo khu vực khởi đầu...")
+        self.progress_msg = "Tạo ảnh..."
+        self.progress_pct = 0.5
+
         # Chuẩn hóa mảng world_type thành chuỗi để đưa vào prompt
         world_type_list = self.world_state.type
         world_type = ", ".join(world_type_list) if isinstance(world_type_list, list) else str(world_type_list)
@@ -118,6 +124,8 @@ class GameOrchestrator:
         Lưu trạng thái vào WorldState và sao lưu ra file JSON vật lý.
         """
         print("[Engine] Đang kích hoạt World Architect...")
+        self.progress_msg = "Tạo cốt truyện..."
+        self.progress_pct = 0.3
 
         # 1. Gọi WorldGenerateAgent tạo JSON cấu trúc thế giới
         world_bible = await self.world_generator.generate_bible(player_idea=player_idea)
@@ -148,6 +156,9 @@ class GameOrchestrator:
         print("[Game Master đang chuẩn bị chương mở đầu...]")
 
         # 1. Chuyển đổi từ vựng đặc trưng thành chuỗi
+        self.progress_msg = "Chương mở đầu..."
+        self.progress_pct = 0.7
+
         dyn_vocab = self.world_state.dynamic_vocabulary
         vocab_str = ", ".join([f"{k}: {v}" for k, v in dyn_vocab.items()]) if dyn_vocab else "Không có"
 
@@ -192,6 +203,9 @@ class GameOrchestrator:
         print(f"\n[Bạn]: {player_input}")
         print("\n[đang suy nghĩ...]")
 
+        self.progress_msg = "Viết câu truyện..."
+        self.progress_pct = 0.2
+
         search_query = await self.get_rag_query(player_input, current_npc_name='Không có')
         memory_ids, memories, npcs, locations, rag_context = self._retrieve_relevant_memories(search_query, top_k=3)
         story_response = ""
@@ -212,9 +226,12 @@ class GameOrchestrator:
             story_response += chunk
         print("\n")
 
+        self.progress_msg = "Xử lý dữ liệu..."
+        self.progress_pct = 0.4
         # ==========================================
         # BẮT ĐẦU TỐI ƯU LUỒNG XỬ LÝ NỀN (ASYNC)
         # ==========================================
+        update_tasks = []
 
         # 1. Lưu ngay câu hội thoại vừa rồi vào bộ nhớ ngắn hạn TRƯỚC khi tóm tắt
         self.short_term_memory.add_memory(player_input, story_response)
@@ -233,9 +250,11 @@ class GameOrchestrator:
             state_changes = {}
 
         # 3. Áp dụng các thay đổi trạng thái theo tuần tự
-        await self._update_inventory(
-            items_added=state_changes.get("items_added", []),
-            items_removed=state_changes.get("items_removed", [])
+        update_tasks.append(
+            self._update_inventory(
+                items_added=state_changes.get("items_added", []),
+                items_removed=state_changes.get("items_removed", [])
+            )
         )
 
         new_loc_data = state_changes.get("new_location_entered")
@@ -246,7 +265,10 @@ class GameOrchestrator:
                 description=new_loc_data.get('description'),
                 state=new_loc_data.get('atmosphere')
             )
-            await self._update_location(location=new_location)
+            self.player_state.currentLocation = new_location
+            self.db.add_location_to_db(new_location)
+
+            update_tasks.append(self._update_location(location=new_location))
 
         new_npc_data = state_changes.get('new_npc_encountered')
         encountered_npc_name = None
@@ -260,8 +282,12 @@ class GameOrchestrator:
                 location=new_npc_data.get('location'),
                 status=new_npc_data.get('status')
             )
-            await self._update_npc(new_npc)
             encountered_npc_name = new_npc.name
+            self.db.add_npc_to_db(new_npc)
+
+            update_tasks.append(self._update_npc(new_npc))
+
+        await asyncio.gather(*update_tasks)
 
         # 4. Lưu sự kiện vào SQL + FAISS VectorDB
         new_memory = Memory(
@@ -272,9 +298,14 @@ class GameOrchestrator:
         memory_id = self.db.add_memory_to_db(new_memory)
         self.long_term_memory.add_memory_to_vector(new_memory.text, memory_id=memory_id)
 
+
         # 5. Tạo lựa chọn (Chạy SAU CÙNG để đảm bảo ChoiceAgent biết về vị trí/NPC mới)
         choices = await self._generate_choices(story_response)
         self._display_choices(choices)
+
+        self.progress_msg = "Hoàn tất!"
+        self.progress_pct = 1.0
+
 
         return story_response, choices
 
@@ -327,6 +358,9 @@ class GameOrchestrator:
         story_context: Có thể là story_response vừa tạo hoặc tóm tắt gần nhất.
         """
         print("[Engine] Đang tính toán các lựa chọn tiếp theo...")
+
+        self.progress_msg = "Sinh lựa chọn..."
+        self.progress_pct = 0.9
 
         # 1. Lấy thông tin NPC hiện tại (nếu có) từ PlayerState hoặc Memory
         # Tạm thời để None nếu hệ thống chưa lưu NPC active trong scene

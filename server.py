@@ -13,10 +13,11 @@ app = FastAPI()
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
 orchestrator = GameOrchestrator(
-    db_path="./data/World.db", 
-    vector_model_path="all-MiniLM-L6-v2", # Cập nhật đúng model bạn đang dùng
+    db_path="./data/World.db",
+    vector_model_path="all-MiniLM-L6-v2",  # Cập nhật đúng model bạn đang dùng
     groq_api_key=api_key
 )
+
 
 def clean_ai_text(text: str) -> str:
     """Xóa bỏ chuỗi suy nghĩ <think>...</think> của AI nếu có."""
@@ -24,6 +25,7 @@ def clean_ai_text(text: str) -> str:
     # Cờ re.DOTALL giúp regex khớp được cả các dấu xuống dòng (\n) bên trong thẻ think
     cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
     return cleaned.strip()
+
 
 def image_to_base64(image_path):
     if not image_path or not os.path.exists(image_path):
@@ -33,6 +35,7 @@ def image_to_base64(image_path):
             return base64.b64encode(image_file.read()).decode('utf-8')
     except:
         return ""
+
 
 def get_inventory_data():
     """Chuyển đổi Dictionary túi đồ thành mảng để gửi qua Unity."""
@@ -46,23 +49,24 @@ def get_inventory_data():
             })
     return inv_list
 
+
 @app.post("/api/new_game")
 async def new_game(idea: str = Form(...)):
     try:
-        orchestrator.reset_game_all()
+        orchestrator.db.reset_database()
         orchestrator.db.create_tables()
-        
+
         await orchestrator._create_new_world(player_idea=idea)
         await orchestrator._initialize_location()
         raw_prologue = await orchestrator._initialize_story()
 
         prologue_text = clean_ai_text(raw_prologue)
-        
+
         choices_data = await orchestrator._generate_choices(prologue_text)
         choices = [c['action_text'] for c in choices_data]
-        
+
         bg_path = getattr(orchestrator.player_state.currentLocation, 'image_path', "")
-        
+
         return {
             "speaker": "Game Master",
             "story": prologue_text,
@@ -73,11 +77,12 @@ async def new_game(idea: str = Form(...)):
         }
     except Exception as e:
         # 🌟 IN CHI TIẾT LỖI RA MÀN HÌNH TERMINAL ĐỂ DEBUG
-        print("\n" + "="*40)
+        print("\n" + "=" * 40)
         print("❌ LỖI CRASH TẠI /api/new_game:")
-        traceback.print_exc() 
-        print("="*40 + "\n")
+        traceback.print_exc()
+        print("=" * 40 + "\n")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.get("/api/progress")
 async def get_progress():
@@ -87,13 +92,14 @@ async def get_progress():
         "percent": orchestrator.progress_pct
     }
 
+
 @app.post("/api/play")
 async def play(action: str = Form(...)):
     try:
         raw_story, raw_choices = await orchestrator._process_game_turn(action)
         story_response = clean_ai_text(raw_story)
         choices = [c['action_text'] for c in raw_choices]
-        
+
         bg_path = getattr(orchestrator.player_state.currentLocation, 'image_path', "")
         char_path = getattr(orchestrator.player_state, 'current_npc_image', "")
 
@@ -108,17 +114,18 @@ async def play(action: str = Form(...)):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+
 @app.post("/api/settings")
 async def update_settings(quality: str = Form(None), enable_image: str = Form(None)):
     """Cập nhật chất lượng ảnh và bật/tắt ảnh từ Unity."""
     try:
         msg_parts = []
-        
+
         # 1. Nếu Unity gửi lệnh đổi chất lượng
         if quality is not None:
             orchestrator.image_manager.api.quality = quality.lower()
             msg_parts.append(f"Đồ họa: {quality.upper()}")
-            
+
         # 2. Nếu Unity gửi lệnh bật/tắt ảnh
         if enable_image is not None:
             is_enabled = (enable_image.lower() == "true")
@@ -127,12 +134,16 @@ async def update_settings(quality: str = Form(None), enable_image: str = Form(No
             msg_parts.append(f"Tạo ảnh: {state_str}")
 
         # Gộp thông báo trả về
-        final_msg = " | ".join(msg_parts) if msg_parts else "Đã cập nhật!"
+        final_msg = " | ".join(msg_parts) if msg_parts else "Không có thay đổi nào!"
         print(f"[Server] Cài đặt: {final_msg}")
-        
+
         return {"message": final_msg}
+
+    # Đã sửa lại khối except thụt lề đúng vị trí
     except Exception as e:
+        print(f"❌ LỖI TẠI /api/settings: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.post("/api/save_game")
 async def save_game():
@@ -141,6 +152,7 @@ async def save_game():
         return {"message": "Đã lưu tiến trình game!"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.post("/api/load_game")
 async def load_game():
@@ -154,6 +166,7 @@ async def load_game():
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
