@@ -1,11 +1,10 @@
 import faiss
 import numpy as np
 import os
-from typing import List, Optional
+from typing import Optional
 import pickle
 from sentence_transformers import SentenceTransformer
-from engine.Agents.CloudAgents import SummarizeAgent
-from engine.PromptManager import PromptManager
+from engine.Subengine.PromptManager import PromptManager
 
 class VectorMemory:
     """
@@ -18,6 +17,7 @@ class VectorMemory:
         self.encoder = SentenceTransformer(model_path)
         self.dimension = self.encoder.get_sentence_embedding_dimension()
         self.num_memory = 0
+        self.game_turn = 0
 
 
         # Đường dẫn lưu trữ vật lý
@@ -25,7 +25,7 @@ class VectorMemory:
         self.meta_path = os.path.join(db_dir, 'vector_meta.pkl')
 
         # Khởi tạo không gian FAISS có hỗ trợ lưu trữ ID tùy chỉnh (IDMap)
-        self.index = faiss.IndexIDMap(faiss.IndexFlatL2(self.dimension))
+        self.index = faiss.IndexIDMap(faiss.IndexFlatIP(self.dimension))
         self.metadata = {}
 
         # KHÔI PHỤC DỮ LIỆU TỪ Ổ CỨNG LÊN (Nếu có)
@@ -34,7 +34,7 @@ class VectorMemory:
     def reset_vector_db(self):
         """Xóa trắng FAISS index, metadata và reset bộ đếm, đưa bộ nhớ về trạng thái ban đầu."""
         # 1. Khởi tạo lại Index mới với cùng số chiều (dimension) ban đầu
-        self.index = faiss.IndexIDMap(faiss.IndexFlatL2(self.dimension))
+        self.index = faiss.IndexIDMap(faiss.IndexFlatIP(self.dimension))
 
         # 2. Xóa sạch metadata và reset bộ đếm ID
         self.metadata = {}
@@ -47,7 +47,6 @@ class VectorMemory:
             os.remove(self.meta_path)
 
         print("[VectorDB] Đã tẩy trắng toàn bộ Ký ức RAG và file vật lý!")
-
 
 
     def get_rag_context(self, memory_ids, memories, npc_rows, location_rows) -> str:
@@ -63,7 +62,7 @@ class VectorMemory:
         ) if npc_rows else "- Không có NPC liên quan."
 
         location_block = "\n".join(
-            [f"- [location:{item.id}] {item.name} | state: {item.state} | desc: {item.description}"
+            [f"- [location:{item.id}] {item.name} | atmosphere: {item.atmosphere} | desc: {item.description}"
              for item in location_rows]
         ) if location_rows else "- Không có Location liên quan."
 
@@ -104,6 +103,8 @@ class VectorMemory:
         # Chuyển đổi văn bản thành vector NumPy chuẩn float32
         vector = self.encoder.encode([text]).astype('float32')
 
+        faiss.normalize_L2(vector)
+
         # Nếu caller truyền ID từ SQL, dùng trực tiếp để đồng bộ hai hệ.
         # Nếu không, fallback sang bộ đếm nội bộ để tương thích mã cũ.
         vector_id = int(memory_id) if memory_id is not None else int(self.num_memory)
@@ -112,7 +113,7 @@ class VectorMemory:
         self.index.remove_ids(np.array([vector_id]).astype('int64'))
 
         # Lưu vector vào FAISS và ánh xạ với memory_id
-        self.index.add_with_ids(vector, np.array([vector_id]).astype('int64'))
+        self.index.add_with_ids(vector, np.array([vector_id]).astype('int64')) # Type: ignore
         self.metadata[vector_id] = text
 
         if memory_id is None:
@@ -121,58 +122,51 @@ class VectorMemory:
         self._save_db()
 
 
-    def search(self, query: str, top_k: int = 3) -> List[int]:
-        """Tìm kiếm top_k ký ức có ngữ nghĩa tương đồng nhất với câu truy vấn."""
+    def search(self, query: str, top_k: int = 15) -> list:
+        """Tìm kiếm top_k ký ức và trả về Tuple(ID, Vector_Score)."""
         # Bỏ qua nếu database chưa có ký ức nào
         if self.index.ntotal == 0:
             return []
 
         # Mã hóa câu hỏi của người chơi thành vector
         query_vector = self.encoder.encode([query]).astype('float32')
+        faiss.normalize_L2(query_vector)
 
-        # d: Khoảng cách (độ lệch), i: Danh sách ID trả về
-        d, i = self.index.search(query_vector, top_k)
+        # D: Khoảng cách (similarity score), I: Danh sách ID trả về
+        distances, indices = self.index.search(query_vector, top_k) # type: ignore
 
-        # Lọc bỏ các ID lỗi (-1) và trả về mảng ID hợp lệ
-        return [int(idx) for idx in i[0] if idx != -1]
+        normalized_distances = []
+        result_ids = []
+
+        for similarity_score, idx in zip(distances[0], indices[0]):
+            if idx != -1:  # Lọc bỏ các ID rác do FAISS tự điền thiếu
+                # Chặn dưới ở mức 0.0 để tránh số âm phá hỏng thuật toán Reranking
+                normalized_score = max(0.0, float(similarity_score))
+
+                normalized_distances.append(normalized_score)
+                result_ids.append(idx)
+        return result_ids, normalized_distances
+
+
+    def update_game_turn(self):
+        self.game_turn += 1
 
 
 class ShortTermMemory:
 
-    def __init__(self, groq_api_key, prompt_manager : PromptManager, window_size=3):
+    def __init__(self, prompt_manager : PromptManager, window_size=4):
         self.window_size = window_size
         self.context_window = []
-        self.scene_summary = ""
         self.pm = prompt_manager
-        self.summarizeAgent = SummarizeAgent(api_key=groq_api_key, pm=self.pm)
+        self.current_atomic_memories = None
 
 
-    def add_memory(self, player_input, ai_response):
-        self.context_window.append(f"player: {player_input}\nGameMaster: {ai_response}")
-
-
-    async def summarize(self):
-        if len(self.context_window) > self.window_size:
-            try:
-                # 1. Gọi API TRƯỚC
-                summarized_context = await self.summarizeAgent.summarize_chat(self.context_window)
-
-                # 2. Thành công rồi mới XÓA và CẬP NHẬT
-                self.scene_summary = summarized_context
-                # Giữ lại câu cuối cùng để làm cầu nối mượt mà cho LLM
-                self.context_window = [self.context_window[-1]]
-
-                return summarized_context
-            except Exception as e:
-                print(f"[Cảnh báo] Lỗi khi tóm tắt trí nhớ: {e}")
-                # Nếu lỗi, không xóa gì cả, để lượt sau thử tóm tắt lại
-                return None
-        return None
+    def add_memory(self, player_input, story_response, atomic_memories):
+        self.context_window.append(f"player: {player_input}\nGameMaster: {story_response}")
+        if len(self.context_window) > 1:
+            self.context_window[1] = self.current_atomic_memories
+        self.current_atomic_memories = atomic_memories
 
 
     def get_memory(self):
-        context = []
-        if self.scene_summary:
-            context.append(f"[Tóm tắt diễn biến trước]: {self.scene_summary}")
-        context.extend(self.context_window)
-        return context
+        return self.context_window

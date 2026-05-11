@@ -1,7 +1,7 @@
 import json
 from groq import AsyncGroq
 from typing import List, Dict, Any, AsyncGenerator
-from engine.PromptManager import PromptManager
+from engine.Subengine.PromptManager import PromptManager
 from world.Entity import *
 import logging
 
@@ -19,7 +19,7 @@ class BaseCloudAgent:
     Quản lý việc kết nối API và cung cấp hàm gọi LLM dùng chung.
     """
 
-    def __init__(self, api_key: str, pm: PromptManager,  model_name: str = "qwen/qwen3-32b"):
+    def __init__(self, api_key: str, pm: PromptManager,  model_name: str = "openai/gpt-oss-120b"):
         self.client = AsyncGroq(api_key=api_key)
         self.model = model_name
         self.pm = pm
@@ -129,7 +129,7 @@ class LocationAgent(BaseCloudAgent):
             location = Location(id = 0,
                                 name=location_data['location_name'],
                                 description=location_data['description'],
-                                state=location_data['atmosphere'])
+                                atmosphere=location_data['atmosphere'])
             return location
 
         except Exception as e:
@@ -139,7 +139,7 @@ class LocationAgent(BaseCloudAgent):
 
 class StoryAgent(BaseCloudAgent):
     """Agent Game Master đóng vai trò kể chuyện và phản hồi hành động của người chơi theo thời gian thực."""
-    async def initialize_story(self, name, theme, core_conflict, mission, vocab, location_name, location_state,
+    async def initialize_story(self, name, theme, core_conflict, mission, vocab, location_name, location_atmosphere,
                                location_description) -> AsyncGenerator[str, None]:
 
         # 1. Tự động lấy Prompt (Chuyên viên tự lo)
@@ -152,7 +152,7 @@ class StoryAgent(BaseCloudAgent):
             world_mission=mission,
             world_vocabulary=vocab,
             location_name=location_name,
-            location_atmosphere=location_state,
+            location_atmosphere=location_atmosphere,
             location_description=location_description
         )
 
@@ -203,42 +203,6 @@ class StoryAgent(BaseCloudAgent):
             yield "Có một sự xáo trộn trong không gian... (Lỗi kết nối cốt truyện)"
 
 
-class SummarizeAgent(BaseCloudAgent):
-    """
-    Agent chạy trên Cloud (Groq) làm nhiệm vụ tóm tắt hội thoại.
-    Phục vụ cho việc tối ưu bộ nhớ dài hạn (RAG).
-    """
-    async def summarize_chat(self, context_window: list) -> str:
-        """
-        Nhận danh sách lịch sử hội thoại, tự build prompt và trả về bản tóm tắt.
-        """
-        # 1. Tự quản lý việc lấy prompt thay vì bắt Orchestrator làm hộ
-        sys_prompt = self.pm.get_prompt('SummarizeAgent', 'system')
-        user_prompt = self.pm.get_prompt(
-            'SummarizeAgent', 'user',
-            context_window=context_window
-        )
-
-        messages = [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-
-        try:
-            response = await self._chat(
-                messages=messages,
-                temperature=0.3,
-                stream=False
-            )
-            summary_text = response.choices[0].message.content.strip()
-
-            return summary_text
-
-        except Exception as e:
-            self._log_error("summarize_chat", e)
-            return ""
-
-
 class ChoiceAgent(BaseCloudAgent):
     """Agent chịu trách nhiệm phân tích tình huống và gợi ý các hành động tiếp theo."""
 
@@ -273,13 +237,13 @@ class QueryAgent(BaseCloudAgent):
     Agent chịu trách nhiệm tổng hợp ngữ cảnh (context, location, NPC)
     thành một câu truy vấn ngắn gọn để search trong Vector Memory (FAISS).
     """
-    async def generate_query(self, current_location: str, npc_name: str, context_window: str) -> str:
+    async def generate_query(self, current_location: str, npc_names: list, context: str) -> str:
         sys_prompt = self.pm.get_prompt('QueryAgent', 'system')
         user_prompt = self.pm.get_prompt(
             'QueryAgent', 'user',
             current_location=current_location,
-            npc_name=npc_name,
-            context_window=context_window
+            npc_name=npc_names,
+            context_window=context
         )
         messages = [
             {"role": "system", "content": sys_prompt},
@@ -292,3 +256,4 @@ class QueryAgent(BaseCloudAgent):
         except Exception as e:
             self._log_error("generate_query", e)
             return ""
+

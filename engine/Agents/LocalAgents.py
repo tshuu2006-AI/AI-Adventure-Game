@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Dict, Any
 from openai import AsyncOpenAI
-from engine.PromptManager import PromptManager
+from engine.Subengine.PromptManager import PromptManager
 
 class BaseLocalAgent:
     """
@@ -94,14 +94,13 @@ class StateExtractor(BaseLocalAgent):
     """
     Agent Kế toán viên: Trích xuất vật phẩm/chỉ số từ lịch sử trò chuyện.
     """
-    # Đã xóa __init__ thừa
 
     # Chỉ nhận dữ liệu thô (chat_history)
-    async def extract_state(self, chat_history: str) -> Dict[str, Any]:
+    async def extract_state(self, player_input: str, story_response: str) -> Dict[str, Any]:
         """
         Đọc đoạn hội thoại và tính toán sự thay đổi vật phẩm, độ hảo cảm.
         """
-        # Tự quản lý prompt
+        chat_history = f"Player: {player_input}\nWorld's response: {story_response}"
         sys_prompt = self.pm.get_prompt('StateExtractor', 'system')
         user_prompt = self.pm.get_prompt('StateExtractor', 'user', conversation_history=chat_history)
 

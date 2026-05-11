@@ -16,9 +16,9 @@ class Item(BaseEntity):
 
 
 class Location(BaseEntity):
-    def __init__(self, id, name, description, state, image_path = None):
+    def __init__(self, id, name, description, atmosphere, image_path = None):
         super().__init__(id, name, "location", description)
-        self.state = state
+        self.atmosphere = atmosphere
         self.image_path = image_path
 
 
@@ -42,5 +42,6 @@ class Memory:
     npc: Optional[str] = None
     id: Optional[int] = None
     id_type: str = "memory"
-    made_at: int = field(default_factory=lambda: int(time.time()))
+    game_turn: int = None
+
 

@@ -135,10 +135,10 @@ class LocationManager(BaseManager):
     def _get_insert_data(self, location: Location):
         """Cung cấp nguyên liệu INSERT cho lớp cha."""
         query = """
-            INSERT INTO Locations (name, description, currentState, image_path) 
+            INSERT INTO Locations (name, description, atmosphere, image_path) 
             VALUES (?, ?, ?, ?)
         """
-        params = (location.name, location.description, location.state, location.image_path)
+        params = (location.name, location.description, location.atmosphere, location.image_path)
         self.num_location += 1 #
         return query, params
 
@@ -146,7 +146,7 @@ class LocationManager(BaseManager):
     def get_by_names(self, location_names: List[str], limit: int = 3) -> List[Location]:
         """Truy xuất thông tin Location theo tên (không phân biệt hoa thường)."""
         query_template = """
-                         SELECT location_id, name, description, currentState, image_path
+                         SELECT location_id, name, description, atmosphere, image_path
                          FROM Locations
                          WHERE LOWER(name) IN ({placeholders}) LIMIT ? \
                          """
@@ -155,7 +155,7 @@ class LocationManager(BaseManager):
         locations = [Location(id=row[0],
                               name=row[1],
                               description=row[2],
-                              state=row[3],
+                              atmosphere=row[3],
                               image_path=row[4])
                      for row in location_rows]
 
@@ -211,8 +211,8 @@ class MemoryManager(BaseManager):
 
         # 1. Chèn dữ liệu trực tiếp từ các thuộc tính của Object
         cursor.execute(
-            f"INSERT INTO {self.table_name} (made_at, npc, location, {text_column}) VALUES (?, ?, ?, ?)",
-            (memory_obj.made_at, memory_obj.npc, memory_obj.location, memory_obj.text)
+            f"INSERT INTO {self.table_name} (npc, location, {text_column}, gameturn) VALUES (?, ?, ?, ?)",
+            (memory_obj.npc, memory_obj.location, memory_obj.text, memory_obj.game_turn)
         )
 
         # 2. Lấy ID do SQLite vừa tự động cấp
@@ -244,7 +244,7 @@ class MemoryManager(BaseManager):
 
         cursor.execute(
             f"""
-            SELECT id, id_type, made_at, npc, location, {text_column} AS text
+            SELECT id, id_type, npc, location, {text_column} AS text, gameturn
             FROM {self.table_name}
             WHERE id IN ({placeholders})
             """,
@@ -260,10 +260,10 @@ class MemoryManager(BaseManager):
             mem_obj = Memory(
                 id=mem_id,
                 id_type=row[1] if row[1] else 'memory',
-                made_at=row[2],
-                npc=row[3],
-                location=row[4],
-                text=row[5]
+                npc=row[2],
+                location=row[3],
+                text=row[4],
+                game_turn = row[5]
             )
             rows_by_id[mem_id] = mem_obj
 
@@ -319,7 +319,7 @@ class DatabaseManager:
                     location_id INTEGER CONSTRAINT PK_Locations PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE,
                     description TEXT NOT NULL,
-                    currentState TEXT,
+                    atmosphere TEXT,
                     image_path TEXT
                 )
                 """)
@@ -327,12 +327,12 @@ class DatabaseManager:
             # Khởi tạo bảng quản lý Trạng thái & Hình ảnh của Địa điểm
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXISTS Location_states
+                CREATE TABLE IF NOT EXISTS Location_atmosphere
                 (
-                    state TEXT,  
+                    atmosphere TEXT,  
                     location_name TEXT, image_path TEXT NOT NULL, 
-                    CONSTRAINT PK_Locations PRIMARY KEY (state, location_name), 
-                    CONSTRAINT FK_state_location FOREIGN KEY(location_name) REFERENCES Locations(name))
+                    CONSTRAINT PK_Locations PRIMARY KEY (location_name, atmosphere), 
+                    CONSTRAINT FK_atmosphere_location FOREIGN KEY(location_name) REFERENCES Locations(name))
                 """)
 
             # Khởi tạo bảng danh mục NPC
@@ -376,6 +376,7 @@ class DatabaseManager:
                     npc TEXT,
                     location TEXT NOT NULL,
                     description TEXT NOT NULL,
+                    gameturn INT NOT NULL,
                     CONSTRAINT FK_Memory_NPCs FOREIGN KEY (npc) REFERENCES NPCs(name),
                     CONSTRAINT FK_Memory_Locations FOREIGN KEY (location) REFERENCES Locations(name)
                 )
@@ -402,6 +403,10 @@ class DatabaseManager:
             cursor.execute("DELETE FROM sqlite_sequence WHERE name='Memory'")
             cursor.execute("DELETE FROM sqlite_sequence WHERE name='NPCs'")
             cursor.execute("DELETE FROM sqlite_sequence WHERE name='Locations'")
+
+            cursor.execute("DROP TABLE Memory")
+            cursor.execute("DROP TABLE NPCs")
+            cursor.execute("DROP TABLE Memory")
 
             print("[Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQL!")
         except Exception as loi_he_thong:
@@ -479,9 +484,9 @@ class DatabaseManager:
 
         cursor.execute(
             """
-            SELECT location_id, name, description, currentState, image_path
+            SELECT location_id, name, description, atmosphere, image_path
             FROM Locations
-            WHERE LOWER(name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(currentState) LIKE ?
+            WHERE LOWER(name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(atmosphere) LIKE ?
             LIMIT ?
             """,
             (like_query, like_query, like_query, limit_per_table)
@@ -501,7 +506,7 @@ class DatabaseManager:
         locations = [Location(id=row[0],
                               name=row[1],
                               description=row[2],
-                              state=row[3],
+                              atmosphere=row[3],
                               image_path=row[4])
                      for row in location_rows]
 
@@ -513,6 +518,7 @@ class PlayerState:
 
     def __init__(self):
         self.currentLocation = None
+        self.currentNPCs = []
         self.inventory = {}
 
 
