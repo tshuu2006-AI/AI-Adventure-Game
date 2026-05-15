@@ -4,7 +4,7 @@ import os
 from typing import Optional
 import pickle
 from sentence_transformers import SentenceTransformer
-from engine.Subengine.PromptManager import PromptManager
+from engine.Utils.PromptManager import PromptManager
 
 class VectorMemory:
     """

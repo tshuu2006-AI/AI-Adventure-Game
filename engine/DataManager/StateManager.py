@@ -518,8 +518,10 @@ class PlayerState:
 
     def __init__(self):
         self.currentLocation = None
+        self.currentTurn = 0
         self.currentNPCs = []
         self.inventory = {}
+
 
 
 class WorldState:

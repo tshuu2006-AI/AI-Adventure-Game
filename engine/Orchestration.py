@@ -2,7 +2,8 @@
 import time
 
 from engine.DataManager.StateManager import DatabaseManager, PlayerState, WorldState
-from engine.Subengine.PromptManager import PromptManager
+from engine.Subengine.ActionProcessor import ActionProcessor
+from engine.Utils.PromptManager import PromptManager
 from engine.ImageAPI import ImageAPI
 from engine.DataManager.ImageManager import ImageManager
 
@@ -22,12 +23,22 @@ class GameOrchestrator:
         self.world_state = WorldState()
 
         # Khởi tạo các Subsystem (Phân chia rành mạch)
-        self.memory_sys = MemoryProcessor(self.db, vector_model_path, groq_api_key, self.pm)
+        self.memory_sys = MemoryProcessor(self.db,
+                                          vector_model_path = vector_model_path,
+                                          groq_api_key = groq_api_key,
+                                          pm = self.pm)
+
+        self.action_sys = ActionProcessor(db = self.db,
+                                                 player_state= self.player_state,
+                                                 pm = self.pm)
 
         self.image_api = ImageAPI()
         self.image_manager = ImageManager(api=self.image_api)
 
-        self.state_sys = StateProcessor(self.db, self.player_state, self.image_manager, self.pm)
+        self.state_sys = StateProcessor(db = self.db,
+                                        player_state = self.player_state,
+                                        image_manager = self.image_manager,
+                                        pm = self.pm)
 
         # ĐƯA STORY DIRECTOR VÀO ĐÂY (Thay thế cho các Cloud Agents lẻ tẻ)
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)
@@ -38,6 +49,7 @@ class GameOrchestrator:
         """Luồng chính siêu gọn gàng sau khi tích hợp Đạo diễn"""
 
         print(f"\n[Bạn]: {player_input}\n[đang suy nghĩ...]")
+        system_directive = await self.action_sys.pre_process(player_input)
         start_turn_time = time.perf_counter()
 
         hybrid_context, npcs_context = await self.memory_sys.get_hybrid_context(
@@ -51,7 +63,7 @@ class GameOrchestrator:
 
         # Trực tiếp gọi hàm narrate_turn của StoryDirector
         async for chunk in self.story_director.narrate_turn(
-                player_input, self.world_state, self.player_state, npcs_context, hybrid_context
+                player_input, self.world_state, self.player_state, npcs_context, hybrid_context, system_directive
         ):
             if not first_token and chunk.strip():
                 print(f"\n[Profile] TTFT: {time.perf_counter() - start_story:.3f}s")

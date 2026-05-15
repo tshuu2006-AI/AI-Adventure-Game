@@ -3,7 +3,6 @@ import asyncio
 import time
 from world.Entity import Location, NPC
 from engine.Agents.LocalAgents import StateExtractor
-from engine.Agents.LocalAgents import IntentRouter
 
 
 class StateProcessor:
@@ -11,8 +10,8 @@ class StateProcessor:
         self.db = db
         self.player_state = player_state
         self.image_manager = image_manager
+        # self.action_processor = ActionProcessor(pm = pm, model_name = "qwen2.5:1.5b")
         self.extractor = StateExtractor(pm=pm, model_name="qwen2.5:1.5b")
-        self.intent_parser = IntentRouter(pm=pm, model_name = "qwen2.5:1.5b")
 
 
     async def _handle_new_location(self, new_loc_data: dict) -> Location:
@@ -34,11 +33,12 @@ class StateProcessor:
 
         print(f">> [Hệ Thống] Phát hiện khu vực mới: {new_location.name}. Đang tải ảnh nền...")
 
+
         # 2. Gọi ImageManager tải/vẽ ảnh nền (Chạy bất đồng bộ)
         img_path = await self.image_manager.get_or_create_location_image(
             location_name=new_location.name,
             description=new_location.description,
-            atmosphere=new_location.state
+            atmosphere=new_location.atmosphere
         )
 
         # 3. Cập nhật PlayerState

@@ -1,7 +1,7 @@
 import json
 from groq import AsyncGroq
 from typing import List, Dict, Any, AsyncGenerator
-from engine.Subengine.PromptManager import PromptManager
+from engine.Utils.PromptManager import PromptManager
 from world.Entity import *
 import logging
 
@@ -171,7 +171,7 @@ class StoryAgent(BaseCloudAgent):
             world_conflict=world_conflict,
             world_vocabulary=world_vocabulary,
             current_location=current_location,
-            npc_name=npc_names,
+            npc_names=npc_names,
             npc_personality=None,
             rag_context=rag_context,
             valid_paths_from_sql=None,

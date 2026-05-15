@@ -127,7 +127,7 @@ class MemoryProcessor:
             npcs = []
             locations = []
 
-            loc_data = self.db.get_location_by_name(current_location_name)
+            loc_data = self.db.get_location_by_names(current_location_name)
             if loc_data: locations.append(loc_data)
 
             if current_npc_names:

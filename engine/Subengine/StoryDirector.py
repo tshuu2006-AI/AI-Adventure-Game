@@ -25,13 +25,17 @@ class StoryDirector:
         self.world_generator = WorldGenerateAgent(api_key=groq_api_key, pm=self.pm, model_name="qwen/qwen3-32b")
         self.location_agent = LocationAgent(api_key=groq_api_key, pm=self.pm, model_name="qwen/qwen3-32b")
 
-    async def narrate_turn(self, player_input: str, world_state, player_state, npcs_context, hybrid_rag_context) -> \
+    async def narrate_turn(self, player_input: str,
+                           world_state,
+                           player_state, npcs_context,
+                           hybrid_rag_context,
+                           system_directive) -> \
     AsyncGenerator[str, None]:
         """
         Nhận toàn bộ Bối cảnh + RAG + Hành động của người chơi để sinh cốt truyện (Streaming).
         Hàm này trả về một Generator để GameOrchestrator có thể in từng chữ ra màn hình.
         """
-        full_user_input = f"[Bối cảnh hiện tại]:\n{hybrid_rag_context}\n\n[Hành động mới của người chơi]: {player_input}"
+        full_user_input = f"[Context]:\n{hybrid_rag_context}\n\n[Player action]: {player_input}"
 
         npc_names = [npc.name for npc in npcs_context] if npcs_context else ["Không có"]
 
@@ -43,7 +47,7 @@ class StoryDirector:
             current_location=player_state.currentLocation.name,
             npc_names=npc_names,
             rag_context=hybrid_rag_context,  # Đã bao gồm cả FAISS và Cửa sổ trượt 4 lượt
-            system_directive="Narrate the immediate physical consequences of the player's action. Stop abruptly at a point of tension.",
+            system_directive=system_directive,
             user_input=full_user_input
         )
 
