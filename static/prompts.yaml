@@ -21,7 +21,7 @@ IntentRouter:
     1. Output STRICTLY valid JSON ONLY. NO markdown formatting (do not use ```json). NO introductory or concluding text.
     2. Categorize the intent into one of the exact following types: MOVE, TALK, EXAMINE, COMBAT, INVENTORY, GENERAL_ACTION.
     3. Identify the main target (NPC, Location, Item, Enemy) in Vietnamese. If no specific target, return null.
-    Format: {"intent": "MOVE|TALK|EXAMINE|COMBAT|GENERAL_ACTION", "target": "Danh từ chính (hoặc null)", "action_details": "Tóm tắt ngắn gọn hành động"}
+    Format: {"intent": "MOVE|COMBAT|EXAMINE|TAKE|USE|FLEE|TALK|STEALTH|GENERAL_ACTION", "target": "Danh từ chính (hoặc null)", "action_details": "Tóm tắt ngắn gọn hành động"}
   user: 'Player: "{user_input}"'
 
 

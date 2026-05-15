@@ -1,4 +1,4 @@
-import sqlite3
+
 import os
 import json 
 from typing import Dict, List, Union
@@ -15,39 +15,35 @@ class BaseManager:
     def reset(self):
         raise NotImplementedError
 
-    def _fetch_records_by_names(self, query_template: str, names: List[str], limit: int) -> list:
+    async def _fetch_records_by_names(self, query_template: str, names: List[str], limit: int) -> list:
         """Hàm Helper dùng chung để tránh lặp code khi tìm kiếm theo tên."""
         normalized_names = [name.strip() for name in names if name and str(name).strip()]
         if not normalized_names: return []
 
         placeholders = ", ".join(["?"] * len(normalized_names))
         final_query = query_template.format(placeholders=placeholders)
+        params = (*[name.lower() for name in normalized_names], limit)
 
-        with self.conn:  # Tự động commit/rollback
-            cursor = self.conn.cursor()
-            params = (*[name.lower() for name in normalized_names], limit)
-            cursor.execute(final_query, params)
-            return cursor.fetchall()
+        async with self.conn.execute(final_query, params) as cursor:
+            return await cursor.fetchall()
 
 
     def _get_insert_data(self, entity):
         raise NotImplementedError
 
 
-    def add_to_db(self, entity: BaseEntity):
+    async def add_to_db(self, entity: BaseEntity):
         if not entity:
             return False
 
-        cursor = self.conn.cursor()
-
         # 1. Kiểm tra tồn tại
-        cursor.execute(f"SELECT 1 FROM {self.table_name} WHERE LOWER(name) = ?", (entity.name.lower(),))
-        if cursor.fetchone() is not None:
-            print(f"[{self.table_name}] Đối tượng có tên '{entity.name}' đã tồn tại!")
-            return False
+        async with self.conn.execute(f"SELECT 1 FROM {self.table_name} WHERE LOWER(name) = ?",
+                                     (entity.name.lower(),)) as cursor:
+            if await cursor.fetchone() is not None:
+                return False
 
         # 2. Lấy câu SQL và Dữ liệu nguyên thủy từ lớp con
-        insert_query, raw_params = self._get_insert_data(entity)
+        insert_query, raw_params = await self._get_insert_data(entity)
 
         # ========================================================
         # 3. ÉP KIỂU TỰ ĐỘNG (Sửa lỗi "type 'list' is not supported")
@@ -55,7 +51,7 @@ class BaseManager:
         processed_params = []
         for param in raw_params:
             if isinstance(param, (list, dict)):
-                # Biến list/dict thành chuỗi JSON, giữ nguyên tiếng Việt
+
                 processed_params.append(json.dumps(param, ensure_ascii=False))
             else:
                 # Giữ nguyên nếu là string, int, float...
@@ -66,11 +62,11 @@ class BaseManager:
         # ========================================================
 
         # 4. Thực thi chèn dữ liệu
-        cursor.execute(insert_query, final_params)
+        await self.conn.execute(insert_query, final_params)
         return True
 
 
-    def get_by_names(self, npc_names: List[str], limit: int = 3):
+    async def get_by_names(self, npc_names: List[str], limit: int = 3):
         raise NotImplementedError
 
 
@@ -86,7 +82,7 @@ class NPCManager(BaseManager):
         self.num_npc = 0
 
 
-    def _get_insert_data(self, npc: NPC):
+    async def _get_insert_data(self, npc: NPC):
         query = """
                 INSERT INTO NPCs (name, personality, description, affectionate, location, currentStatus, image_path)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -98,15 +94,15 @@ class NPCManager(BaseManager):
         return query, params
 
 
-    def get_by_names(self, npc_names: List[str], limit: int = 3) -> List[NPC]:
+    async def get_by_names(self, npc_names: List[str], limit: int = 3) -> List[NPC]:
         """Truy xuất thông tin NPC theo tên (không phân biệt hoa thường)."""
         query_template = """
-            SELECT npc_id, name, personality, description, affectionLevel, location, currentStatus, image_path 
+            SELECT npc_id, name, personality, description, affectionate, location, currentStatus, image_path 
             FROM NPCs
             WHERE LOWER(name) IN ({placeholders})
             LIMIT ?
             """
-        npc_rows = self._fetch_records_by_names(query_template=query_template, names=npc_names, limit = limit)
+        npc_rows = await self._fetch_records_by_names(query_template=query_template, names=npc_names, limit = limit)
 
         npcs = [NPC(id = row[0],
                     name = row[1],
@@ -143,14 +139,15 @@ class LocationManager(BaseManager):
         return query, params
 
 
-    def get_by_names(self, location_names: List[str], limit: int = 3) -> List[Location]:
+    async def get_by_names(self, location_names: List[str], limit: int = 3) -> List[Location]:
         """Truy xuất thông tin Location theo tên (không phân biệt hoa thường)."""
         query_template = """
                          SELECT location_id, name, description, atmosphere, image_path
                          FROM Locations
                          WHERE LOWER(name) IN ({placeholders}) LIMIT ? \
                          """
-        location_rows = self._fetch_records_by_names(query_template=query_template, names=location_names, limit=limit)
+
+        location_rows = await self._fetch_records_by_names(query_template=query_template, names=location_names, limit=limit)
 
         locations = [Location(id=row[0],
                               name=row[1],
@@ -173,21 +170,25 @@ class MemoryManager(BaseManager):
         pass
 
 
-    def ensure_memory_type_column(self, cursor):
+    async def ensure_memory_type_column(self, cursor):
         """Bổ sung cột id_type cho bảng Memory và backfill dữ liệu cũ."""
-        cursor.execute("PRAGMA table_info(Memory)")
-        columns = {row[1] for row in cursor.fetchall()}
+        async with self.conn.execute("PRAGMA table_info(Memory)") as cursor:
+            rows = await cursor.fetchall()
+            columns = {row[1] for row in rows}
 
         if 'id_type' not in columns:
-            cursor.execute("ALTER TABLE Memory ADD COLUMN id_type TEXT DEFAULT 'memory'")
+            await self.conn.execute("ALTER TABLE Memory ADD COLUMN id_type TEXT DEFAULT 'memory'")
 
-        cursor.execute(
+
+        await self.conn.execute(
             """
             UPDATE Memory
             SET
                 id_type = COALESCE(id_type, 'memory')
             """
         )
+
+        await self.conn.commit()
 
 
     def _get_memory_text_column(self, cursor) -> str:
@@ -202,7 +203,7 @@ class MemoryManager(BaseManager):
 
         raise ValueError("[Lỗi DB] Bảng Memory không có cột văn bản hợp lệ (story/description).")
 
-    def add_memory(self, memory_obj: Memory) -> int:
+    async def add_memory(self, memory_obj: Memory) -> int:
         """
         Nhận vào một đối tượng Memory (dataclass) và lưu xuống CSDL.
         """
@@ -230,7 +231,7 @@ class MemoryManager(BaseManager):
 
         return new_id
 
-    def get_memories_by_ids(self, memory_ids: List[int]) -> List[Memory]:
+    async def get_memories_by_ids(self, memory_ids: List[int]) -> List[Memory]:
         """
         Truy xuất Ký ức theo danh sách ID.
         Trả về danh sách các đối tượng Memory (thay vì Dictionary cục mịch như xưa).
@@ -281,22 +282,26 @@ class DatabaseManager:
 
         self.db_path = db_path
         self.db_folder = db_folder
-        self.conn = self._get_connection()
+        self.conn = None
         self.npc_manager = NPCManager(db_path, self.conn)
         self.location_manager = LocationManager(db_path, self.conn)
         self.memory_manager = MemoryManager(db_path, self.conn)
         self.created_at = None
 
 
-    def _get_connection(self):
-        """Mở kết nối an toàn với WAL mode."""
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        conn.execute('PRAGMA journal_mode=WAL;')
-        conn.execute('PRAGMA foreign_keys = ON;')
-        return conn
+    async def connect(self):
+        """Mở kết nối bất đồng bộ."""
+        import aiosqlite
+        self.conn = await aiosqlite.connect(self.db_path)
+        await self.conn.execute('PRAGMA journal_mode=WAL;')
+        await self.conn.execute('PRAGMA foreign_keys = ON;')
+        # Cập nhật connection cho các manager con
+        self.npc_manager.conn = self.conn
+        self.location_manager.conn = self.conn
+        self.memory_manager.conn = self.conn
 
 
-    def create_tables(self):
+    async def create_tables(self):
         """
         Khởi tạo cấu trúc cơ sở dữ liệu.
         Tạo thư mục chứa data nếu chưa có, và tự động tạo các bảng cần thiết.
@@ -312,7 +317,7 @@ class DatabaseManager:
             print("Successfully connected to database!")
 
             # Khởi tạo bảng danh mục Địa điểm
-            cursor.execute(
+            await self.conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS Locations
                 (
@@ -325,7 +330,7 @@ class DatabaseManager:
                 """)
 
             # Khởi tạo bảng quản lý Trạng thái & Hình ảnh của Địa điểm
-            cursor.execute(
+            await self.conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS Location_atmosphere
                 (
@@ -336,7 +341,7 @@ class DatabaseManager:
                 """)
 
             # Khởi tạo bảng danh mục NPC
-            cursor.execute(
+            await self.conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS NPCs
                 (
@@ -344,7 +349,7 @@ class DatabaseManager:
                     name TEXT UNIQUE,
                     personality TEXT,
                     description TEXT,
-                    affectionLevel INTEGER,
+                    affectionate INTEGER,
                     location TEXT NOT NULL,
                     currentStatus TEXT,
                     image_path TEXT,
@@ -354,7 +359,7 @@ class DatabaseManager:
             )
 
             # Khởi tạo bảng quản lý Trạng thái & Hình ảnh của NPC
-            cursor.execute(
+            await self.conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS NPC_status
                 (
@@ -368,7 +373,7 @@ class DatabaseManager:
             )
 
             # Khởi tạo bảng Ký ức (Ghi nhận lại sự kiện lịch sử)
-            cursor.execute(
+            await self.conn.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS Memory (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -384,7 +389,7 @@ class DatabaseManager:
             )
 
             self.memory_manager.ensure_memory_type_column(cursor)
-            self.conn.commit()
+            await self.conn.commit()
 
 
         except Exception as e:
@@ -425,6 +430,7 @@ class DatabaseManager:
         Lưu diễn biến cốt truyện vào bảng Memory.
         Trả về khóa chính (ID) để có thể đồng bộ ánh xạ sang VectorDB (RAG).
         """
+
         new_id = self.memory_manager.add_memory(memory_obj)
         self.conn.commit()  # Chốt sổ an toàn
         return new_id
@@ -473,7 +479,7 @@ class DatabaseManager:
 
         cursor.execute(
             """
-            SELECT npc_id, name, personality, description, affectionLevel, location, currentStatus, image_path 
+            SELECT npc_id, name, personality, description, affectionate, location, currentStatus, image_path 
             FROM NPCs
             WHERE LOWER(name) LIKE ? OR LOWER(personality) LIKE ? OR LOWER(description) LIKE ?
             LIMIT ?

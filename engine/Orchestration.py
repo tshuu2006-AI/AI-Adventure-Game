@@ -28,9 +28,9 @@ class GameOrchestrator:
                                           groq_api_key = groq_api_key,
                                           pm = self.pm)
 
-        self.action_sys = ActionProcessor(db = self.db,
-                                                 player_state= self.player_state,
-                                                 pm = self.pm)
+        self.action_sys = ActionProcessor(  db = self.db,
+                                            player_state= self.player_state,
+                                            pm = self.pm)
 
         self.image_api = ImageAPI()
         self.image_manager = ImageManager(api=self.image_api)
@@ -40,13 +40,14 @@ class GameOrchestrator:
                                         image_manager = self.image_manager,
                                         pm = self.pm)
 
-        # ĐƯA STORY DIRECTOR VÀO ĐÂY (Thay thế cho các Cloud Agents lẻ tẻ)
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)
 
         print("Hệ thống sẵn sàng!")
 
     async def _process_game_turn(self, player_input: str):
-        """Luồng chính siêu gọn gàng sau khi tích hợp Đạo diễn"""
+        """
+        Luồng xử lí game sau mỗi lượt chọn của người chơi
+        """
 
         print(f"\n[Bạn]: {player_input}\n[đang suy nghĩ...]")
         system_directive = await self.action_sys.pre_process(player_input)
@@ -74,14 +75,14 @@ class GameOrchestrator:
         print()
 
         # 3. CHẠY TÁC VỤ NỀN (Local LLM bẻ Chunk + Cập nhật State, UI)
-        encountered_npc_name, atomic_memory = await self.state_sys.process_background_tasks(player_input, story_response)
+        encountered_npc_names, atomic_memory = await self.state_sys.process_background_tasks(player_input, story_response)
 
         # 4. LƯU KÝ ỨC
         self.memory_sys.save_turn(player_input=player_input,
                                   story_response=story_response,
                                   atomic_memories=atomic_memory,
                                   current_location_name=self.player_state.currentLocation.name,
-                                  encountered_npc_name=encountered_npc_name)
+                                  encountered_npc_names=encountered_npc_names)
 
         # 5. SINH MENU LỰA CHỌN (Qua StoryDirector)
         choices = await self.story_director.generate_player_choices(
@@ -167,7 +168,7 @@ class GameOrchestrator:
             story_response=story_response,
             atomic_memories=[f"Nhân vật chính thức tỉnh tại {starting_loc_obj.name}."],
             current_location_name=starting_loc_obj.name,
-            encountered_npc_name=None
+            encountered_npc_names=None
         )
 
         # 6. Mở vòng lặp Game Loop

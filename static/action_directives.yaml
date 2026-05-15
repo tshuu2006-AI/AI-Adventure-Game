@@ -1,0 +1,118 @@
+BaseDirectives:
+  # ==========================================
+  # 1. MOVE (Di chuyển)
+  # ==========================================
+  MOVE:
+    SUCCESS: >
+      The player WANTS to move to '{target}'.
+      Evaluate the physical and logical possibility. If successful, narrate the smooth transition and strictly set current location to '{target}'.
+      If inherently blocked by physical logic (e.g., a locked door with no key), narrate the failure and keep the old location.
+
+    FAILURE: >
+      The player WANTS to move to '{target}'.
+      However, halfway there, create a sudden obstacle, trap, or ambush that violently interrupts their journey.
+      Narrate the tense situation. The player is NOT yet at '{target}'.
+
+  # ==========================================
+  # 2. COMBAT (Chiến đấu)
+  # ==========================================
+  COMBAT:
+    SUCCESS: >
+      The player initiates combat or a hostile action. 
+      The player's action is highly effective. Narrate with a fast pace, focusing on their physical prowess, the weapons used, and the significant damage or tactical advantage inflicted on the target.
+
+    FAILURE: >
+      The player initiates combat or a hostile action. 
+      However, the attack misses, is parried, or the enemy brutally counters. Narrate with a fast pace, focusing on the player's physical struggle, loss of momentum, and the immediate danger they are now facing.
+
+  # ==========================================
+  # 3. EXAMINE (Quan sát/Khám phá)
+  # ==========================================
+  EXAMINE:
+    SUCCESS: >
+      The player is examining the surroundings or an object. 
+      They successfully discover a valuable clue, hidden detail, or useful mechanism. Focus on rich sensory details (visual, auditory, tactile) to provide clear insights.
+
+    FAILURE: >
+      The player is examining the surroundings or an object. 
+      However, their investigation is clumsy or unlucky. They accidentally trigger a trap, alert a nearby threat, or cause the object to break/react dangerously. Narrate the sudden shift from quiet observation to physical risk.
+
+  # ==========================================
+  # 4. TAKE (Nhặt/Lấy đồ)
+  # ==========================================
+  TAKE:
+    SUCCESS: >
+      The player attempts to pick up, take, or loot '{target}'. 
+      The action is successful. Narrate the physical action of securing the item. YOU MUST include detail it in the story.
+
+    FAILURE: >
+      The player attempts to pick up, take, or loot '{target}'. 
+      However, the item is unable to be looted for some reasons. Narrate the failure to acquire the item.
+
+  # ==========================================
+  # 5. USE (Sử dụng vật phẩm/Tương tác)
+  # ==========================================
+  USE:
+    SUCCESS: >
+      The player uses or equips '{target}'. 
+      The action succeeds perfectly. Describe the positive physical effect (e.g., healing, unlocking a door, activating a machine). If it's a consumable that gets destroyed, you must clearly include the details.
+
+    FAILURE: >
+      The player uses or equips '{target}'. 
+      The action fails drastically. The item malfunctions, breaks, backfires, or has an unexpected negative effect (e.g., poisoning, jamming a lock). Narrate the physical consequence. If the item is ruined, you must clearly include the details.
+
+  # ==========================================
+  # 6. FLEE (Bỏ chạy)
+  # ==========================================
+  FLEE:
+    SUCCESS: >
+      The player attempts to run away or escape from the current danger. 
+      Narrate a chaotic, fast-paced escape that ends safely. Transition them to a safe adjacent area and strictly set current location to that new area.
+
+    FAILURE: >
+      The player attempts to run away or escape from the current danger. 
+      However, their path is suddenly blocked, they trip, or the enemy cuts them off. Narrate the terrifying realization that they are trapped. They remain in the current location.
+
+  # ==========================================
+  # 7. STEALTH (Hành động lén lút)
+  # ==========================================
+  STEALTH:
+    SUCCESS: >
+      The player attempts to hide, sneak, or move silently. 
+      Narrate the high-tension, quiet atmosphere. The environment provides enough cover, and they successfully bypass the threat or reach their vantage point undetected.
+
+    FAILURE: >
+      The player attempts to hide, sneak, or move silently. 
+      Suddenly, the silence breaks. A snapped twig, a knocked-over object, or a sharp-eyed enemy exposes them. Narrate the immediate panic of being discovered.
+
+  # ==========================================
+  # 8. GENERAL_ACTION (Hành động chung)
+  # ==========================================
+  GENERAL_ACTION:
+    SUCCESS: >
+      The player attempts an action. It succeeds as intended. 
+      Narrate the player's action realistically based on the context, focusing on smooth physical execution and the expected positive outcome.
+
+    FAILURE: >
+      The player attempts an action. It goes wrong due to environmental factors, clumsiness, or an unforeseen complication. 
+      Narrate the physical failure realistically and the immediate setback it causes.
+
+  # ==========================================
+  # 9. TALK(NÓI CHUYỆN)
+  # ==========================================
+  TALK:
+    SUCCESS: >
+      The player is talking to '{target}'. 
+      Based on their relationship and the context, generate the NPC's dialogue and reaction. Make it natural and fitting to the lore.
+    FAILURE: >
+      The player tries to talk to '{target}'. 
+      However, the NPC is distracted, hostile, or ignores them. Narrate the awkward or tense silence.
+
+RNGModifiers:
+  NPC_EVENT: >
+     [SUDDEN EVENT] A character, creature, or monster (either fitting the current context or ENTIRELY NEW)
+    suddenly appears and interrupts or interacts with the player.
+
+  LOCATION_EVENT: >
+     [SUDDEN DISCOVERY] The player accidentally stumbles into, falls into, or discovers a BRAND NEW HIDDEN LOCATION
+    (e.g., a secret cave, a hidden room, a dark thicket). Narrate this discovery and strictly set current location to this new place.

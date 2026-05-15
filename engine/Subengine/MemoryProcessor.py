@@ -155,17 +155,25 @@ class MemoryProcessor:
         return rag_context, npcs
 
 
-    def save_turn(self, player_input: str, story_response:str, atomic_memories: List[str], current_location_name: str , encountered_npc_name: str):
+    def save_turn(self, player_input: str, story_response:str, atomic_memories: List[str], current_location_name: List[str] , encountered_npc_names: str):
         """Lưu lại ký ức sau khi Turn kết thúc"""
         self.short_term_memory.add_memory(player_input = player_input, story_response = story_response, atomic_memories = atomic_memories)
 
         for atomic_memory in atomic_memories:
-            new_memory = Memory(location=current_location_name, npc=encountered_npc_name,
-                                text=atomic_memory, game_turn = self.long_term_memory.game_turn)
+            if encountered_npc_names:
 
-            memory_id = self.db.add_memory_to_db(new_memory)
-            self.long_term_memory.add_memory_to_vector(new_memory.text, memory_id=memory_id)
+                for encountered_npc_name in encountered_npc_names:
+                    new_memory = Memory(location=current_location_name, npc=encountered_npc_name,
+                                        text=atomic_memory, game_turn = self.long_term_memory.game_turn)
 
+                    memory_id = self.db.add_memory_to_db(new_memory)
+                    self.long_term_memory.add_memory_to_vector(new_memory.text, memory_id=memory_id)
+            else:
+                new_memory = Memory(location=current_location_name, npc=None,
+                                    text=atomic_memory, game_turn=self.long_term_memory.game_turn)
+
+                memory_id = self.db.add_memory_to_db(new_memory)
+                self.long_term_memory.add_memory_to_vector(new_memory.text, memory_id=memory_id)
         self.long_term_memory.update_game_turn()
 
 

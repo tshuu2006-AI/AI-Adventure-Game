@@ -102,14 +102,14 @@ class StoryDirector:
         location_description = starting_location.description
 
         story_stream = self.story_agent.initialize_story(name=world_name,
-                                                                 theme= theme_and_tone,
-                                                                 core_conflict = core_conflict,
-                                                                 mission = world_mission,
-                                                                 vocab = vocabulary,
-                                                                 location_name=location_name,
-                                                                 location_atmosphere=location_atmosphere,
-                                                                 location_description = location_description
-                                                                 )
+                                                        theme= theme_and_tone,
+                                                        core_conflict = core_conflict,
+                                                        mission = world_mission,
+                                                        vocab = vocabulary,
+                                                        location_name=location_name,
+                                                        location_atmosphere=location_atmosphere,
+                                                        location_description = location_description
+                                                        )
 
         async for chunk in story_stream:
             yield chunk
