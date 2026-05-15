@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Dict, Any
 from openai import AsyncOpenAI
-from engine.Subengine.PromptManager import PromptManager
+from engine.Utils.PromptManager import PromptManager
 
 class BaseLocalAgent:
     """
