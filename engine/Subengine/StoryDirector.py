@@ -4,6 +4,7 @@ from typing import AsyncGenerator
 from world.Entity import Location
 
 from engine.Agents.CloudAgents import StoryAgent, ChoiceAgent, WorldGenerateAgent, LocationAgent
+from engine.Utils.logger import game_logger  # Thêm import logger
 
 
 class StoryDirector:
@@ -25,12 +26,14 @@ class StoryDirector:
         self.world_generator = WorldGenerateAgent(api_key=groq_api_key, pm=self.pm, model_name="qwen/qwen3-32b")
         self.location_agent = LocationAgent(api_key=groq_api_key, pm=self.pm, model_name="qwen/qwen3-32b")
 
+        game_logger.debug("[StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).")
+
     async def narrate_turn(self, player_input: str,
                            world_state,
                            player_state, npcs_context,
                            hybrid_rag_context,
                            system_directive) -> \
-    AsyncGenerator[str, None]:
+            AsyncGenerator[str, None]:
         """
         Nhận toàn bộ Bối cảnh + RAG + Hành động của người chơi để sinh cốt truyện (Streaming).
         Hàm này trả về một Generator để GameOrchestrator có thể in từng chữ ra màn hình.
@@ -38,6 +41,9 @@ class StoryDirector:
         full_user_input = f"[Context]:\n{hybrid_rag_context}\n\n[Player action]: {player_input}"
 
         npc_names = [npc.name for npc in npcs_context] if npcs_context else ["Không có"]
+
+        game_logger.debug(
+            f"[StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: '{player_input[:50]}...'")
 
         # Kích hoạt StoryAgent sinh chữ
         stream = self.story_agent.generate_story(
@@ -60,7 +66,7 @@ class StoryDirector:
         """
         Dựa vào kết quả đoạn truyện vừa sinh ra để làm ra 3-4 lựa chọn tiếp theo.
         """
-        print("\n[StoryDirector] Đang tính toán các lựa chọn tiếp theo...")
+        game_logger.info("[StoryDirector] Đang tính toán các lựa chọn tiếp theo...")
 
         npc_name = encountered_npc_name if encountered_npc_name else "Không có"
 
@@ -70,23 +76,38 @@ class StoryDirector:
             recent_story_summary=recent_story_text  # Đưa đoạn truyện vừa kể vào đây để AI ra lựa chọn sát thực tế
         )
 
-        return choices_data.get('choices', [])
+        choices_list = choices_data.get('choices', [])
+        game_logger.debug(f"[StoryDirector] Đã tạo thành công {len(choices_list)} lựa chọn khả thi.")
+
+        return choices_list
 
     # ---- CÁC HÀM KHỞI TẠO GAME BỎ VÀO ĐÂY ----
-    async def create_world_bible(self, player_idea: str, path = './data/world_bible.json') -> dict:
-        world_bible =  await self.world_generator.generate_bible(player_idea=player_idea)
-        with open(path, 'w', encoding='utf-8') as file:
-            json.dump(world_bible, file, indent=4, ensure_ascii=False)
+    async def create_world_bible(self, player_idea: str, path='./data/world_bible.json') -> dict:
+        game_logger.info("[StoryDirector] Đang tạo World Bible từ ý tưởng người chơi...")
+        world_bible = await self.world_generator.generate_bible(player_idea=player_idea)
+
+        try:
+            with open(path, 'w', encoding='utf-8') as file:
+                json.dump(world_bible, file, indent=4, ensure_ascii=False)
+            game_logger.debug(f"[StoryDirector] Đã lưu World Bible xuống file: {path}")
+        except Exception as e:
+            game_logger.error(f"[StoryDirector Lỗi] Không thể lưu file World Bible: {e}", exc_info=True)
+
         return world_bible
 
 
     async def create_starting_location(self, world_name, world_type, theme):
+        game_logger.info(f"[StoryDirector] Đang khởi tạo địa điểm xuất phát cho thế giới '{world_name}'...")
         return await self.location_agent.initialize_location(world_name, world_type, theme)
 
 
     async def initialize_story(self, starting_location: Location):
-        with open("./data/world_bible.json", "r", encoding='utf-8') as file:
-            world_bible = json.load(file)
+        try:
+            with open("./data/world_bible.json", "r", encoding='utf-8') as file:
+                world_bible = json.load(file)
+        except Exception as e:
+            game_logger.error(f"[StoryDirector Lỗi] Không thể đọc file world_bible.json: {e}", exc_info=True)
+            world_bible = {}  # Fallback an toàn
 
         sys_requirements = world_bible.get("system_requirements", {})
         world_name = sys_requirements.get("world_name", None)
@@ -101,17 +122,17 @@ class StoryDirector:
         location_atmosphere = starting_location.atmosphere
         location_description = starting_location.description
 
+        game_logger.info(f"[StoryDirector] Bắt đầu sinh phân đoạn truyện mở đầu tại '{location_name}'...")
+
         story_stream = self.story_agent.initialize_story(name=world_name,
-                                                        theme= theme_and_tone,
-                                                        core_conflict = core_conflict,
-                                                        mission = world_mission,
-                                                        vocab = vocabulary,
-                                                        location_name=location_name,
-                                                        location_atmosphere=location_atmosphere,
-                                                        location_description = location_description
-                                                        )
+                                                         theme=theme_and_tone,
+                                                         core_conflict=core_conflict,
+                                                         mission=world_mission,
+                                                         vocab=vocabulary,
+                                                         location_name=location_name,
+                                                         location_atmosphere=location_atmosphere,
+                                                         location_description=location_description
+                                                         )
 
         async for chunk in story_stream:
             yield chunk
-
-

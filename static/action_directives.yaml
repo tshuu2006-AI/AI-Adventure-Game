@@ -110,9 +110,9 @@ BaseDirectives:
 
 RNGModifiers:
   NPC_EVENT: >
-     [SUDDEN EVENT] A character, creature, or monster (either fitting the current context or ENTIRELY NEW)
+    [SUDDEN EVENT] A character, creature, or monster (either fitting the current context or ENTIRELY NEW)
     suddenly appears and interrupts or interacts with the player.
 
   LOCATION_EVENT: >
-     [SUDDEN DISCOVERY] The player accidentally stumbles into, falls into, or discovers a BRAND NEW HIDDEN LOCATION
+    [SUDDEN DISCOVERY] The player accidentally stumbles into, falls into, or discovers a BRAND NEW HIDDEN LOCATION
     (e.g., a secret cave, a hidden room, a dark thicket). Narrate this discovery and strictly set current location to this new place.

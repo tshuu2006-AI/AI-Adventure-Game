@@ -77,11 +77,15 @@ class WorldGenerateAgent(BaseCloudAgent):
 
 class NPCAgent(BaseCloudAgent):
     """Agent chịu trách nhiệm thiết kế và sinh ra thông tin NPC ở dạng JSON."""
-    async def generate_npc(self, location_name: str, atmosphere: str, story: str):
+    async def generate_npc(self, npc_name, context):
         try:
-            sys_prompt = self.pm.get_prompt('NPCAgent', 'system')
-            user_prompt = self.pm.get_prompt('NPCAgent', 'user', location_name=location_name, atmosphere=atmosphere,
-                                             story=story)
+            sys_prompt = self.pm.get_prompt('NPCAgent',
+                                            'system')
+
+            user_prompt = self.pm.get_prompt('NPCAgent',
+                                             'user',
+                                             context=context,
+                                             npc_name = npc_name)
 
             response = await self._chat(messages=[
                 {"role": "system", "content": sys_prompt},
@@ -110,10 +114,11 @@ class LocationAgent(BaseCloudAgent):
         return location_data
 
 
-    async def generate_location(self, current_location: str, target_location: str) -> Dict:
+    async def generate_location(self, current_location: str, target_location: str, context: str) -> Dict:
         sys_prompt = self.pm.get_prompt('LocationAgent', 'system')
         user_prompt = self.pm.get_prompt('LocationAgent', 'user', current_location=current_location,
-                                         target_location_from_router=target_location)
+                                         target_location_from_router=target_location,
+                                         context = context)
         location_data = await self._generate_location(sys_prompt, user_prompt)
         return location_data
 

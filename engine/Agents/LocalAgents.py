@@ -1,4 +1,4 @@
-import json
+
 import logging
 from typing import Dict, Any
 from openai import AsyncOpenAI
@@ -92,31 +92,116 @@ class IntentRouter(BaseLocalAgent):
 
 class StateExtractor(BaseLocalAgent):
     """
-    Agent Kế toán viên: Trích xuất vật phẩm/chỉ số từ lịch sử trò chuyện.
+    Agent Kế toán viên: Trích xuất sự thay đổi vật phẩm, NPC và địa điểm từ lịch sử trò chuyện.
+    Phiên bản Tối ưu (Slim Extraction) dành cho LLM 1.5B để tránh ảo giác và tăng tốc độ.
     """
+    async def extract_state(self, player_input: str, story_response: str, player_state) -> Dict[str, Any]:
+        """
+        Đọc đoạn hội thoại và tìm sự thay đổi về danh sách vật phẩm, NPC và Khu vực.
+        """
+        # 1. Trích xuất ngữ cảnh (Context) từ PlayerState hiện tại
+        if player_state.inventory:
+            # Lấy danh sách tên các vật phẩm đang có trong túi
+            inventory_str = ", ".join(list(player_state.inventory.keys()))
+        else:
+            inventory_str = "Trống rỗng"
 
-    # Chỉ nhận dữ liệu thô (chat_history)
-    async def extract_state(self, player_input: str, story_response: str) -> Dict[str, Any]:
-        """
-        Đọc đoạn hội thoại và tính toán sự thay đổi vật phẩm, độ hảo cảm.
-        """
-        chat_history = f"Player: {player_input}\nWorld's response: {story_response}"
+        if player_state.currentNPCs:
+            # Lấy danh sách tên các NPC đang đứng cùng người chơi
+            npc_str = ", ".join([npc.name for npc in player_state.currentNPCs])
+        else:
+            npc_str = "Không có ai"
+
+        location_str = player_state.currentLocation.name if player_state.currentLocation else "Chưa xác định"
+
+        # 2. Gọi PromptManager và nhồi dữ liệu
         sys_prompt = self.pm.get_prompt('StateExtractor', 'system')
-        user_prompt = self.pm.get_prompt('StateExtractor', 'user', conversation_history=chat_history)
+        user_prompt = self.pm.get_prompt(
+            'StateExtractor',
+            'user',
+            current_location=location_str,
+            current_npcs=npc_str,
+            current_inventory=inventory_str,
+            player_input=player_input,
+            story_response=story_response
+        )
 
+        # 3. Gọi API LLM Local
         result = await self._generate_json(
             system_prompt=sys_prompt,
             user_prompt=user_prompt,
-            max_tokens=250
+            max_tokens=200  # Giữ ở mức 200 là quá đủ cho các mảng chỉ chứa tên
         )
 
-        # Trả về fallback data an toàn nếu parse lỗi
+        # 4. Fallback an toàn (Giá trị mặc định nếu API lỗi hoặc trả về JSON hỏng)
         if not result:
+            self.logger.warning("[StateExtractor] Fallback kích hoạt do không nhận được JSON hợp lệ.")
             return {
-                "npc_affection_change": 0,
                 "items_added": [],
                 "items_removed": [],
-                "new_npc_encountered": None,
+                "npcs_arrived": [],
+                "npcs_left": [],
                 "new_location_entered": None
             }
+
         return result
+
+
+import json
+import re
+from engine.Utils.logger import game_logger
+
+
+class MemoryExtractor:
+    def __init__(self, pm, model_name="qwen2.5:1.5b"):
+        self.pm = pm
+        self.model_name = model_name
+
+    async def extract_memory(self, player_input: str, story_response: str) -> dict:
+        """Trích xuất Ký ức nguyên tử từ lượt chơi hiện tại."""
+
+        # 1. Lấy Prompt từ YAML
+        sys_prompt = self.pm.get_prompt("MemoryExtractor", 'system')
+        few_shots = self.pm.get_prompt("MemoryExtractor", "FewShot_Examples")
+
+        full_system_prompt = f"{sys_prompt}\n{few_shots}"
+
+        user_prompt = self.pm.get_prompt(
+            'StateExtractor',
+            'user',
+            player_input = player_input,
+            story_response = story_response
+        )
+
+        try:
+            # 2. Gọi Qwen 1.5b
+            raw_response = await self._generate_json(
+                system_prompt=full_system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=200  # Giữ ở mức 200 là quá đủ cho các mảng chỉ chứa tên
+            )
+
+            # 3. LÀM SẠCH VÀ ÉP KIỂU JSON (Cực kỳ quan trọng)
+            return self._parse_json_safely(raw_response)
+
+        except Exception as e:
+            game_logger.error(f"[MemoryExtractor] Lỗi trích xuất ký ức: {e}", exc_info=True)
+            return {"atomic_memories": []}
+
+    def _parse_json_safely(self, text: str) -> dict:
+        """Tìm và trích xuất khối JSON từ chuỗi văn bản hỗn loạn."""
+        try:
+            # Tìm đoạn text nằm giữa { và } (Bao gồm cả nhiều dòng)
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match:
+                json_str = match.group(0)
+                return json.loads(json_str)
+            else:
+                game_logger.warning(f"[MemoryExtractor] Không tìm thấy JSON hợp lệ trong chuỗi: {text[:50]}...")
+                return {"atomic_memories": []}
+        except json.JSONDecodeError as e:
+            game_logger.warning(f"[MemoryExtractor] Lỗi parse JSON: {e} | Text gốc: {text}")
+            return {"atomic_memories": []}
+
+
+

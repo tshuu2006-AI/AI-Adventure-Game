@@ -34,18 +34,18 @@ LocationAgent:
     Context: {world_name} | {world_type} | {theme_and_tone}
     Create starting location.
   system: |
-    Role: World Builder. Task: Design new location player travels to.
+    Role: World Builder. Task: Design new location player travels to base on the context.
     Rules: JSON output. Keys: English. Values: VIETNAMESE.
     Format: {"location_name": "Tên", "description": "3 câu miêu tả", "atmosphere": "3 từ khóa", "connected_paths": ["Path 1", "Path 2"]}
-  user: 'Travel: [{current_location}] -> [{target_location_from_router}]. Design it.'
+  user: 'Travel: {current_location} -> {target_location_from_router}. Context: {context} .Design it.'
 
 
 NPCAgent:
   system: |
-    Role: Character Designer. Task: Generate 1 random NPC fitting location context.
+    Role: Character Designer. Task: Generate 1 random NPC fitting context.
     Rules: JSON output. Keys: English. Values: VIETNAMESE.
     Format: {"name": "", "personality": "", "description": "", "affectionate": "int -10 to 10", "status": ""}
-  user: 'Location: {location_name}. Atmosphere: {atmosphere}. Story: {story}. Generate NPC.'
+  user: 'Context: {context}, Name: {npc_name}. Generate NPC.'
 
 
 StoryAgent:
@@ -93,22 +93,34 @@ SummarizeAgent:
 
 StateExtractor:
   system: |
-    Role: Data Extractor. Language: Vietnamese.
-    Task: Read the recent interaction and extract:
-    1. Inventory changes.
-    2. Affection changes.
-    3. atomic_memories: Break down the events into 1-3 independent, atomic facts. Start each fact with "Người chơi..." or "NPC [Name]...". NO compound sentences.
-    Output STRICTLY in JSON.
-    Format: {
-      "npc_affection_change": -5 to 5,
-      "items_added": [],
-      "items_removed": [],
-      "new_npc_encountered": {"name":"","description":"","personality":"","location":"","status":""} | null,
-      "new_location_entered": {"name":"","description":"","atmosphere":""} | null,
-      "atomic_memories": []
+    Role: Game State Tracker. Language: Vietnamese.
+    Task: Read the recent game interaction and detect changes based on the provided Context.
+    
+    RULES:
+    1. ITEMS ADDED: List names of items the player successfully picked up, bought, or received.
+    2. ITEMS REMOVED: If an item is lost, consumed, or thrown away, you MUST output its EXACT name from the [Current Inventory].
+    3. NPCS ARRIVED: List names of characters/creatures that just appeared or approached the player. Only output short names.
+    4. NPCS LEFT: If an NPC from [Current NPCs] dies, runs away, or the player leaves them behind, output their EXACT name.
+    5. NEW LOCATION: If the player travels to a completely new area (different from [Current Location]), output the new location's name. If staying in the same place, return null.
+    6. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
+    
+    Format:
+    {
+      "items_added": ["Tên item mới"],
+      "items_removed": ["Tên item cũ bị mất"],
+      "npcs_arrived": ["Tên NPC mới"],
+      "npcs_left": ["Tên NPC cũ rời đi"],
+      "new_location_entered": "Tên địa điểm mới"
     }
-  user: "{conversation_history}"
+  user: |
+    [Context]
+    - Current Location: {current_location}
+    - Current NPCs: {current_npcs}
+    - Current Inventory: {current_inventory}
 
+    [Interaction]
+    Player: {player_input}
+    GameMaster: {story_response}
 
 
 ChoiceAgent:
@@ -136,3 +148,57 @@ QueryAgent:
     Loc: {current_location} | NPC: {npc_name}
     Chat: {context_window}
     Query:
+    
+    
+
+MemoryExtractor:
+  system: |
+    You are a strict and objective AI Secretary for a text-based RPG game.
+    Your ONLY task is to read the latest interaction between the Player and the Game Master (GM) and extract key events into "Atomic Memories".
+    
+    RULES FOR ATOMIC MEMORIES:
+    1. Third-Person Only: NEVER use "Tôi" (I) or "Bạn" (You). Always use "Người chơi" (The Player) or specific character names.
+    2. Atomic Structure: Each memory must be a single, short, independent sentence with full Subject + Verb + Object.
+    3. Objective Facts: Extract only tangible actions, discoveries, or lore. Ignore decorative descriptions, inner thoughts, or minor atmospheric details.
+    4. Language: Always write the memories in Vietnamese.
+    
+    OUTPUT FORMAT:
+    You must output ONLY a valid JSON object. DO NOT output any conversational text, explanations, or markdown code blocks.
+    
+    {
+      "atomic_memories": [
+        "sentence 1",
+        "sentence 2",..
+      ]
+    }
+
+  user: |
+    [Interaction]
+    Player: {player_input}
+    GameMaster: {story_response}
+
+
+  # Cung cấp ví dụ (Few-Shot) là cách duy nhất để mô hình 1.5b hiểu đúng định dạng
+  FewShot_Examples: |
+    ---
+    [EXAMPLE 1]
+    Player: Tôi rút kiếm ra và chém vào tên lính gác.
+    GM: Lưỡi kiếm của bạn xé gió, chém một vết sâu vào tay tên lính gác khiến hắn lùi lại và hét lên đau đớn. Tên hắn là Kael.
+    Output: 
+    {
+      "atomic_memories": [
+        "Người chơi đã rút kiếm tấn công lính gác Kael.",
+        "Người chơi đã chém bị thương Kael."
+      ]
+    }
+    
+    [EXAMPLE 2]
+    Player: Nhìn xung quanh căn phòng xem có gì không.
+    GM: Căn phòng tối tăm bốc mùi ẩm mốc. Trên chiếc bàn gỗ mục nát, bạn thấy một cuốn nhật ký cũ bọc da và một chiếc chìa khóa bằng đồng.
+    Output:
+    {
+      "atomic_memories": [
+        "Người chơi đã kiểm tra căn phòng tối.",
+        "Người chơi đã phát hiện một cuốn nhật ký cũ và một chiếc chìa khóa đồng trên bàn."
+      ]
+    }
