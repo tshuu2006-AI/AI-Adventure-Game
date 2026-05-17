@@ -152,9 +152,9 @@ import re
 from engine.Utils.logger import game_logger
 
 
-class MemoryExtractor:
+class MemoryExtractor(BaseLocalAgent):
     def __init__(self, pm, model_name="qwen2.5:1.5b"):
-        self.pm = pm
+        super().__init__(pm=pm, model_name=model_name)
         self.model_name = model_name
 
     async def extract_memory(self, player_input: str, story_response: str) -> dict:
@@ -167,10 +167,10 @@ class MemoryExtractor:
         full_system_prompt = f"{sys_prompt}\n{few_shots}"
 
         user_prompt = self.pm.get_prompt(
-            'StateExtractor',
+            'MemoryExtractor',
             'user',
-            player_input = player_input,
-            story_response = story_response
+            player_input=player_input,
+            story_response=story_response
         )
 
         try:
@@ -182,6 +182,8 @@ class MemoryExtractor:
             )
 
             # 3. LÀM SẠCH VÀ ÉP KIỂU JSON (Cực kỳ quan trọng)
+            if isinstance(raw_response, dict):
+                return raw_response
             return self._parse_json_safely(raw_response)
 
         except Exception as e:

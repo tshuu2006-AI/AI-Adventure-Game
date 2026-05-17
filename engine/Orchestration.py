@@ -17,7 +17,7 @@ class GameOrchestrator:
     def __init__(self, db_path, vector_model_path, groq_api_key):
         game_logger.info("Đang khởi tạo hệ thống Eldoria Game Engine...")
 
-        self.pm = PromptManager('static/prompts.yaml')
+        self.pm = PromptManager('./static/prompts.yaml')
         self.db = DatabaseManager(db_path=db_path)
         self.player_state = PlayerState()
         self.world_state = WorldState()
@@ -41,6 +41,7 @@ class GameOrchestrator:
                                         pm=self.pm)
 
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)
+        self.last_choices = []
 
         game_logger.info("Hệ thống đã sẵn sàng!")
 
@@ -93,6 +94,7 @@ class GameOrchestrator:
             encountered_npc_name = encountered_npc_names,
             recent_story_text=story_response
         )
+        self.last_choices = choices
         self._display_choices(choices)
 
         game_logger.debug(f"[Profile] Tổng thời gian Turn: {time.perf_counter() - start_turn_time:.3f}s")
@@ -179,7 +181,16 @@ class GameOrchestrator:
             encountered_npc_names=[]
         )
 
-        # 6. Mở vòng lặp Game Loop
+        # 6. Tạo lựa chọn đầu tiên từ prologue
+        choices = await self.story_director.generate_player_choices(
+            current_location_name=self.player_state.currentLocation.name,
+            encountered_npc_name=[],
+            recent_story_text=story_response
+        )
+        self.last_choices = choices
+        self._display_choices(choices)
+
+        # 7. Mở vòng lặp Game Loop
         game_logger.info("=== BẮT ĐẦU VÒNG LẶP GAME CHÍNH (GAME LOOP) ===")
         while True:
             player_input = input("\nBạn muốn làm gì? (Gõ 'exit' để thoát): ")
@@ -193,7 +204,14 @@ class GameOrchestrator:
                     await self.db.conn.close()
                 break
 
+            resolved_input = player_input
+            if self.last_choices and player_input.strip().isdigit():
+                choice_id = int(player_input.strip())
+                matched = next((c for c in self.last_choices if c.get("id") == choice_id), None)
+                if matched and matched.get("action_text"):
+                    resolved_input = matched["action_text"]
+
             try:
-                await self._process_game_turn(player_input)
+                await self._process_game_turn(resolved_input)
             except Exception as e:
                 game_logger.error(f"[Game Loop] Lỗi nghiêm trọng ở Turn hiện tại: {e}", exc_info=True)

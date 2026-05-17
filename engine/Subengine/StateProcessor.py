@@ -58,17 +58,21 @@ class StateProcessor:
         Trả về đối tượng Location để sử dụng ở các bước tiếp theo.
         """
         # 1. Khởi tạo đối tượng Location từ dữ liệu JSON của LLM
-        new_loc_data = await self.location_agent.generate_location(current_location=self.player_state.currentLocation.name,
-                                                             target_location= new_location_entered_name,
-                                                             context = context)
-
-
-        new_location = Location(
-            id=None,
-            name=new_loc_data.get('name', 'Vùng đất vô danh'),
-            description=new_loc_data.get('description', ''),
-            atmosphere=new_loc_data.get('atmosphere', 'Bình thường')
+        new_loc_data = await self.location_agent.generate_location(
+            current_location=self.player_state.currentLocation.name,
+            target_location=new_location_entered_name,
+            context=context
         )
+
+        if isinstance(new_loc_data, Location):
+            new_location = new_loc_data
+        else:
+            new_location = Location(
+                id=None,
+                name=new_loc_data.get('location_name') or new_loc_data.get('name', 'Vùng đất vô danh'),
+                description=new_loc_data.get('description', ''),
+                atmosphere=new_loc_data.get('atmosphere', 'Bình thường')
+            )
 
         game_logger.info(f">> [Hệ Thống] Phát hiện khu vực mới: {new_location.name}. Đang tải ảnh nền...")
 
