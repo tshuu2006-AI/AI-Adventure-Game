@@ -5,6 +5,8 @@ from engine.Utils.PromptManager import PromptManager
 from engine.ImageAPI import ImageAPI
 from engine.DataManager.ImageManager import ImageManager
 from engine.Utils.logger import game_logger  # Thêm import logger
+from engine.Utils.AudioManager import AudioManager
+from engine.Agents.LocalAgents import MusicClassifier
 
 # Import các Subsystem đã được module hóa (Bao gồm cả Đạo diễn)
 from engine.Subengine.ActionProcessor import ActionProcessor
@@ -23,6 +25,8 @@ class GameOrchestrator:
         self.world_state = WorldState()
         self.image_api = ImageAPI()
         self.image_manager = ImageManager(api=self.image_api)
+        self.audio_manager = AudioManager()
+        self.music_classifier = MusicClassifier(pm = self.pm, model_name = "qwen2.5:1.5b")
 
         # Khởi tạo các Subsystem (Phân chia rành mạch)
         self.memory_sys = MemoryProcessor(self.db,
@@ -78,8 +82,13 @@ class GameOrchestrator:
         print()
 
         # 3. CHẠY TÁC VỤ NỀN (Local LLM bẻ Chunk + Cập nhật State, UI)
-        atomic_memories = await self.state_sys.process_background_tasks(player_input, story_response)
+        atomic_memories, scene_emotion = await self.state_sys.process_background_tasks(player_input, story_response)
         encountered_npc_names = [npc.name for npc in self.player_state.currentNPCs]
+
+        # Gọi nhạc nền:
+        if hasattr(self, 'audio_manager'):
+            self.audio_manager.play_music(scene_emotion)
+
         # 4. LƯU KÝ ỨC
         await self.memory_sys.save_turn(player_input=player_input,
                                         story_response=story_response,
@@ -159,6 +168,11 @@ class GameOrchestrator:
             starting_loc_obj.name, starting_loc_obj.description, starting_loc_obj.atmosphere
         )
 
+        # Tạo nhạc cho turn 0
+        print(f"[Hệ thống] Đang phân tích nhạc nền cho không khí: '{starting_loc_obj.atmosphere}'...")
+        turn0_emotion = await self.music_classifier.classify_emotion(starting_loc_obj.atmosphere)
+        self.audio_manager.play_music(turn0_emotion)
+
         # 5. Kể đoạn mở đầu (Prologue)
         print("\n" + "=" * 50)
         print("PROLOGUE".center(50))
@@ -193,7 +207,7 @@ class GameOrchestrator:
         # 7. Mở vòng lặp Game Loop
         game_logger.info("=== BẮT ĐẦU VÒNG LẶP GAME CHÍNH (GAME LOOP) ===")
         while True:
-            player_input = input("\nBạn muốn làm gì? (Gõ 'exit' để thoát): ")
+            player_input = input("\nBạn muốn làm gì? (Gõ 'exit' để thoát, 'on' để bật nhạc, 'off' để tắt nhạc: ")
 
             if player_input.lower() in ['exit', 'quit', 'thoát']:
                 print("\n[Hệ thống] Đang lưu và đóng Database. Hẹn gặp lại!")
@@ -203,6 +217,19 @@ class GameOrchestrator:
                     # Phải await việc đóng connection trong aiosqlite
                     await self.db.conn.close()
                 break
+
+            # Tắt bật nhạc
+            if player_input.lower().strip() in ['off', 'tắt nhạc', 'mute']:
+                print("[Hệ thống] 🔇 Đã TẮT nhạc nền.")
+                if hasattr(self, 'audio_manager'):
+                    self.audio_manager.toggle_music(False)
+                continue
+
+            if player_input.lower().strip() in ['on', 'bật nhạc', 'unmute']:
+                print("[Hệ thống] 🔊 Đã BẬT nhạc nền.")
+                if hasattr(self, 'audio_manager'):
+                    self.audio_manager.toggle_music(True)
+                continue
 
             resolved_input = player_input
             if self.last_choices and player_input.strip().isdigit():

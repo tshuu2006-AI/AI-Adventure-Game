@@ -102,7 +102,8 @@ StateExtractor:
     3. NPCS ARRIVED: List names of characters/creatures that just appeared or approached the player. Only output short names.
     4. NPCS LEFT: If an NPC from [Current NPCs] dies, runs away, or the player leaves them behind, output their EXACT name.
     5. NEW LOCATION: If the player travels to a completely new area (different from [Current Location]), output the new location's name. If staying in the same place, return null.
-    6. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
+    6. SCENE EMOTION: Analyze the current interaction's mood. You must output exacly one of these words in Vietnamese: "bình thường", "căng thẳng", "buồn", "chiến thắng" or "rùng rợn".
+    7. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
     
     Format:
     {
@@ -111,6 +112,7 @@ StateExtractor:
       "npcs_arrived": ["Tên NPC mới"],
       "npcs_left": ["Tên NPC cũ rời đi"],
       "new_location_entered": "Tên địa điểm mới"
+      "scene_emotion:" "bình thường"
     }
   user: |
     [Context]

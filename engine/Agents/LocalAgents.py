@@ -130,7 +130,7 @@ class StateExtractor(BaseLocalAgent):
         result = await self._generate_json(
             system_prompt=sys_prompt,
             user_prompt=user_prompt,
-            max_tokens=200  # Giữ ở mức 200 là quá đủ cho các mảng chỉ chứa tên
+            max_tokens=220  # Giữ ở mức 200 là quá đủ cho các mảng chỉ chứa tên
         )
 
         # 4. Fallback an toàn (Giá trị mặc định nếu API lỗi hoặc trả về JSON hỏng)
@@ -141,7 +141,8 @@ class StateExtractor(BaseLocalAgent):
                 "items_removed": [],
                 "npcs_arrived": [],
                 "npcs_left": [],
-                "new_location_entered": None
+                "new_location_entered": None,
+                "scene_emotion": "bình thường"
             }
 
         return result
@@ -206,4 +207,29 @@ class MemoryExtractor(BaseLocalAgent):
             return {"atomic_memories": []}
 
 
+class MusicClassifier(BaseLocalAgent):
+    async def classify_emotion(self, atmosphere_text: str) -> str:
+        sys_prompt = (
+            "Role: Music Director. Language: Vietnamese.\n"
+            "Task: Classify the atmosphere or context into exactly ONE of the following moods: "
+            "\"bình thường\", \"căng thẳng\", \"buồn\", \"vui\", or \"sợ hãi\".\n"
+            "Rules:\n"
+            "1. Read the input text and understand the underlying semantic emotion.\n"
+            "2. Output STRICTLY JSON format. No explanations.\n"
+            "Format: {\"emotion\": \"chosen_mood\"}"
+        )
+        
+        user_prompt = f"Context: {atmosphere_text}"
+        
+        # Gọi Local LLM sinh JSON 
+        result = await self._generate_json(sys_prompt, user_prompt, max_tokens = 30)
+        
+        # Lấy kết quả, kiểm tra xem nó có đúng 1 trong 5 chữ không
+        if result and "emotion" in result:
+            emotion = str(result["emotion"]).lower().strip()
+            valid_emotions = ["bình thường", "căng thẳng", "buồn", "vui", "sợ hãi"]
+            
+            if emotion in valid_emotions:
+                return emotion
 
+        return "bình thường"

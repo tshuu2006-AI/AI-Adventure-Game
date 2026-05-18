@@ -119,13 +119,19 @@ class StateProcessor:
             new_npc_names = []
             current_npc_lowercased = {npc.name.lower() for npc in self.player_state.currentNPCs}
 
-            # Lọc trùng lặp so với trạng thái hiện tại
+            # Nhớ các tên đã duyệt qua trong npc_arrived
+            seen_in_turn = set()
+
             for npc_name in npcs_arrived:
                 if not npc_name or str(npc_name).strip() == "":
                     continue
                 name_clean = npc_name.strip()
-                if name_clean.lower() in current_npc_lowercased:
+                name_lower = name_clean.lower()
+
+                if name_lower in current_npc_lowercased or name_lower in seen_in_turn:
                     continue
+
+                seen_in_turn.add(name_lower)
                 game_logger.info(f" [+] Phát hiện nhân vật xuất hiện: {name_clean}")
                 new_npc_names.append(name_clean)
 
@@ -226,6 +232,7 @@ class StateProcessor:
         npcs_arrived = state_changes.get("npcs_arrived", [])
         npcs_left = state_changes.get("npcs_left", [])
         new_location_entered_name = state_changes.get("new_location_entered",  )
+        scene_emotion = state_changes.get("scene_emotion", "bình thường")
 
         game_logger.debug(f"[Profile] Background Tasks (State Extraction): {time.perf_counter() - start_bg:.3f}s")
 
@@ -242,4 +249,4 @@ class StateProcessor:
         ]
 
         await asyncio.gather(*update_tasks)
-        return atomic_memories
+        return atomic_memories, scene_emotion

@@ -1,5 +1,6 @@
 import os
 import json
+import sqlite3
 import aiosqlite
 from typing import List
 from world.Entity import *
@@ -44,10 +45,13 @@ class BaseManager:
         # 3. Ép kiểu JSON
         processed_params = [json.dumps(p, ensure_ascii=False) if isinstance(p, (list, dict)) else p for p in raw_params]
 
-        await self.conn.execute(insert_query, tuple(processed_params))
-        game_logger.debug(f"[{self.table_name}] Đã lưu thành công '{entity.name}'.")
-        return True
-
+        try:
+            await self.conn.execute(insert_query, tuple(processed_params))
+            game_logger.debug(f"[{self.table_name}] Đã lưu thành công '{entity.name}'.")
+            return True
+        except sqlite3.IntegrityError:
+            game_logger.warning(f"[{self.table_name}] Đã chặn lỗi chèn trùng lặp (UNIQUE constraint) với: '{entity.name}'")
+            return False
 
 class NPCManager(BaseManager):
     def __init__(self, db_path, connection):
