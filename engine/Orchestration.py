@@ -16,7 +16,7 @@ from engine.Subengine.StoryDirector import StoryDirector
 
 
 class GameOrchestrator:
-    def __init__(self, db_path, vector_model_path, groq_api_key):
+    def __init__(self, db_path, vector_model_path, groq_api_key, gemini_api_key):
         game_logger.info("Đang khởi tạo hệ thống Eldoria Game Engine...")
 
         self.pm = PromptManager('./static/prompts.yaml')
@@ -26,7 +26,7 @@ class GameOrchestrator:
         self.image_api = ImageAPI()
         self.image_manager = ImageManager(api=self.image_api)
         self.audio_manager = AudioManager()
-        self.music_classifier = MusicClassifier(pm = self.pm, model_name = "qwen2.5:1.5b")
+        self.music_classifier = MusicClassifier(pm = self.pm, gemini_api_key=gemini_api_key)
 
         # Khởi tạo các Subsystem (Phân chia rành mạch)
         self.memory_sys = MemoryProcessor(self.db,
@@ -36,12 +36,14 @@ class GameOrchestrator:
 
         self.action_sys = ActionProcessor(db=self.db,
                                         player_state=self.player_state,
-                                        pm=self.pm)
+                                        pm=self.pm,
+                                        gemini_api_key = gemini_api_key)
 
         self.state_sys = StateProcessor(db=self.db,
                                         player_state=self.player_state,
                                         image_manager=self.image_manager,
                                         groq_api_key=groq_api_key,
+                                        gemini_api_key=gemini_api_key,
                                         pm=self.pm)
 
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)

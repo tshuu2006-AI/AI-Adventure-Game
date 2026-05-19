@@ -7,10 +7,10 @@ from engine.Utils.logger import game_logger  # Thêm import logger
 
 
 class ActionProcessor:
-    def __init__(self, db, player_state, pm, yaml_path="static/action_directives.yaml"):
+    def __init__(self, db, player_state, pm, gemini_api_key, yaml_path="static/action_directives.yaml"):
         self.db = db
         self.player_state = player_state
-        self.intent_parser = IntentRouter(pm=pm, model_name="qwen2.5:1.5b")
+        self.intent_parser = IntentRouter(pm=pm, model_name="gemini-2.5-flash-lite")
         self.yaml_path = yaml_path
 
         # Xác suất Random Events (Sự kiện đột xuất)

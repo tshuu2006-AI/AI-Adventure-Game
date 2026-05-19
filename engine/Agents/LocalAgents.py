@@ -1,23 +1,37 @@
-
+import json
+import re
 import logging
 from typing import Dict, Any
-from openai import AsyncOpenAI
+
+# Sử dụng SDK mới của Google
+from google import genai
+from google.genai import types
+
 from engine.Utils.PromptManager import PromptManager
+from engine.Utils.logger import game_logger
+
 
 class BaseLocalAgent:
     """
-    Class Cha (Base Class) xử lý việc giao tiếp với Ollama chạy ở Local.
-    Tất cả các Agent chạy Local sẽ kế thừa từ class này.
+    Class Cha (Base Class) giữ nguyên tên cũ để tương thích với hệ thống.
+    Bên trong đã được nâng cấp sử dụng lõi Google Gemini API SDK MỚI.
     """
-    DEFAULT_MODEL = "qwen2.5:1.5b"
 
-    # Đã thêm PromptManager vào __init__
-    def __init__(self, pm: PromptManager, model_name: str = None):
-        self.client = AsyncOpenAI(
-            base_url="http://localhost:11434/v1",
-            api_key="ollama"
-        )
-        self.model = model_name or self.DEFAULT_MODEL
+    def __init__(self, pm: PromptManager, model_name: str = "gemini-2.5-flash-lite", gemini_api_key: str = None):
+        self.api_key = gemini_api_key
+
+        # Khởi tạo Client theo chuẩn SDK mới
+        try:
+            if self.api_key:
+                self.client = genai.Client(api_key=self.api_key)
+            else:
+                # Nếu không truyền key, SDK sẽ tự động tìm biến môi trường GEMINI_API_KEY
+                self.client = genai.Client()
+        except Exception as e:
+            game_logger.warning(f"[Gemini] Lỗi khởi tạo Client (Kiểm tra lại GEMINI_API_KEY trong .env): {e}")
+            self.client = None
+
+        self.model_name = model_name
         self.pm = pm
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -25,57 +39,67 @@ class BaseLocalAgent:
         """Ghi log lỗi chi tiết kèm theo Stack Trace."""
         self.logger.error(f"Lỗi tại {context}: {str(error)}", exc_info=True)
 
+    # Giữ nguyên tham số max_tokens để tương thích ngược với code cũ
     async def _generate_json(self, system_prompt: str, user_prompt: str, max_tokens: int = 200) -> Dict[str, Any]:
         """
-        Hàm dùng chung để ép LLM trả về JSON chuẩn xác và tối ưu RAM.
+        Hàm dùng chung để ép LLM trả về JSON chuẩn xác bằng Gemini SDK mới.
         """
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
+        if not self.client:
+            self.logger.error("Gemini Client chưa được khởi tạo. Không thể sinh nội dung.")
+            return {}
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=0.0,
-                response_format={"type": "json_object"},
-                extra_body={
-                    "options": {
-                        "num_ctx": 1024,
-                        "num_predict": max_tokens
-                    }
-                }
+            # Cấu hình System Prompt và Ép kiểu JSON bằng `types.GenerateContentConfig`
+            config = types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                response_mime_type="application/json",
+                temperature=0.0  # Giữ ở mức 0 để kết quả logic, ổn định
             )
 
-            raw_content = response.choices[0].message.content
-            return json.loads(raw_content)
+            # Gọi API bất đồng bộ (Lưu ý: SDK mới dùng client.aio cho async)
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=user_prompt,
+                config=config
+            )
 
-        except json.JSONDecodeError as e:
-            # Thay print bằng log
-            self._log_error("_generate_json (Lỗi parse JSON)", e)
-            return {}
+            raw_content = response.text
+
+            # Thử parse JSON trực tiếp
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                # Fallback: Phương án dự phòng dùng Regex
+                return self._parse_json_safely(raw_content)
+
         except Exception as e:
-            # Thay print bằng log
-            self._log_error("_generate_json (Lỗi kết nối Ollama)", e)
+            self._log_error("_generate_json (Lỗi kết nối hoặc thực thi API Gemini)", e)
+            return {}
+
+    def _parse_json_safely(self, text: str) -> dict:
+        """Phương án dự phòng: Tìm và trích xuất khối JSON."""
+        try:
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match:
+                return json.loads(match.group(0))
+            else:
+                self.logger.warning(f"[_parse_json_safely] Không tìm thấy JSON hợp lệ trong: {text[:100]}...")
+                return {}
+        except json.JSONDecodeError as e:
+            self._log_error(f"_parse_json_safely (Lỗi Regex JSON) | Text: {text[:100]}", e)
             return {}
 
 
 # ==========================================
 # CÁC CLASS CON (CHILD CLASSES)
 # ==========================================
+
 class IntentRouter(BaseLocalAgent):
     """
     Agent làm nhiệm vụ gác cổng: Phân tích hành động của người chơi.
     """
-    # Đã xóa __init__ thừa
 
-    # Chỉ nhận dữ liệu thô (player_input)
     async def parse_intent(self, player_input: str) -> Dict[str, Any]:
-        """
-        Phân loại câu nói của người chơi thành các Intent.
-        """
-        # Tự quản lý prompt
         sys_prompt = self.pm.get_prompt('IntentRouter', 'system')
         user_prompt = self.pm.get_prompt('IntentRouter', 'user', user_input=player_input)
 
@@ -87,34 +111,21 @@ class IntentRouter(BaseLocalAgent):
 
         if not result or "intent" not in result:
             return {"intent": "UNKNOWN", "target": None, "action_details": player_input}
+
         return result
 
 
 class StateExtractor(BaseLocalAgent):
     """
-    Agent Kế toán viên: Trích xuất sự thay đổi vật phẩm, NPC và địa điểm từ lịch sử trò chuyện.
-    Phiên bản Tối ưu (Slim Extraction) dành cho LLM 1.5B để tránh ảo giác và tăng tốc độ.
+    Agent Kế toán viên: Trích xuất sự thay đổi vật phẩm, NPC và địa điểm.
     """
+
     async def extract_state(self, player_input: str, story_response: str, player_state) -> Dict[str, Any]:
-        """
-        Đọc đoạn hội thoại và tìm sự thay đổi về danh sách vật phẩm, NPC và Khu vực.
-        """
-        # 1. Trích xuất ngữ cảnh (Context) từ PlayerState hiện tại
-        if player_state.inventory:
-            # Lấy danh sách tên các vật phẩm đang có trong túi
-            inventory_str = ", ".join(list(player_state.inventory.keys()))
-        else:
-            inventory_str = "Trống rỗng"
-
-        if player_state.currentNPCs:
-            # Lấy danh sách tên các NPC đang đứng cùng người chơi
-            npc_str = ", ".join([npc.name for npc in player_state.currentNPCs])
-        else:
-            npc_str = "Không có ai"
-
+        inventory_str = ", ".join(list(player_state.inventory.keys())) if player_state.inventory else "Trống rỗng"
+        npc_str = ", ".join(
+            [npc.name for npc in player_state.currentNPCs]) if player_state.currentNPCs else "Không có ai"
         location_str = player_state.currentLocation.name if player_state.currentLocation else "Chưa xác định"
 
-        # 2. Gọi PromptManager và nhồi dữ liệu
         sys_prompt = self.pm.get_prompt('StateExtractor', 'system')
         user_prompt = self.pm.get_prompt(
             'StateExtractor',
@@ -126,14 +137,12 @@ class StateExtractor(BaseLocalAgent):
             story_response=story_response
         )
 
-        # 3. Gọi API LLM Local
         result = await self._generate_json(
             system_prompt=sys_prompt,
             user_prompt=user_prompt,
-            max_tokens=220  # Giữ ở mức 200 là quá đủ cho các mảng chỉ chứa tên
+            max_tokens=220
         )
 
-        # 4. Fallback an toàn (Giá trị mặc định nếu API lỗi hoặc trả về JSON hỏng)
         if not result:
             self.logger.warning("[StateExtractor] Fallback kích hoạt do không nhận được JSON hợp lệ.")
             return {
@@ -148,23 +157,15 @@ class StateExtractor(BaseLocalAgent):
         return result
 
 
-import json
-import re
-from engine.Utils.logger import game_logger
-
-
 class MemoryExtractor(BaseLocalAgent):
-    def __init__(self, pm, model_name="qwen2.5:1.5b"):
-        super().__init__(pm=pm, model_name=model_name)
-        self.model_name = model_name
+    """
+    Agent Phân tích Ký ức: Bóc tách các sự kiện quan trọng.
+    """
 
     async def extract_memory(self, player_input: str, story_response: str) -> dict:
-        """Trích xuất Ký ức nguyên tử từ lượt chơi hiện tại."""
-
-        # 1. Lấy Prompt từ YAML
         sys_prompt = self.pm.get_prompt("MemoryExtractor", 'system')
-        few_shots = self.pm.get_prompt("MemoryExtractor", "FewShot_Examples")
 
+        few_shots = self.pm.yaml_data.get("MemoryExtractor", {}).get("FewShot_Examples", "")
         full_system_prompt = f"{sys_prompt}\n{few_shots}"
 
         user_prompt = self.pm.get_prompt(
@@ -174,40 +175,24 @@ class MemoryExtractor(BaseLocalAgent):
             story_response=story_response
         )
 
-        try:
-            # 2. Gọi Qwen 1.5b
-            raw_response = await self._generate_json(
-                system_prompt=full_system_prompt,
-                user_prompt=user_prompt,
-                max_tokens=200  # Giữ ở mức 200 là quá đủ cho các mảng chỉ chứa tên
-            )
+        result = await self._generate_json(
+            system_prompt=full_system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=200
+        )
 
-            # 3. LÀM SẠCH VÀ ÉP KIỂU JSON (Cực kỳ quan trọng)
-            if isinstance(raw_response, dict):
-                return raw_response
-            return self._parse_json_safely(raw_response)
-
-        except Exception as e:
-            game_logger.error(f"[MemoryExtractor] Lỗi trích xuất ký ức: {e}", exc_info=True)
+        if not result or "atomic_memories" not in result:
+            game_logger.warning("[MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.")
             return {"atomic_memories": []}
 
-    def _parse_json_safely(self, text: str) -> dict:
-        """Tìm và trích xuất khối JSON từ chuỗi văn bản hỗn loạn."""
-        try:
-            # Tìm đoạn text nằm giữa { và } (Bao gồm cả nhiều dòng)
-            match = re.search(r'\{.*\}', text, re.DOTALL)
-            if match:
-                json_str = match.group(0)
-                return json.loads(json_str)
-            else:
-                game_logger.warning(f"[MemoryExtractor] Không tìm thấy JSON hợp lệ trong chuỗi: {text[:50]}...")
-                return {"atomic_memories": []}
-        except json.JSONDecodeError as e:
-            game_logger.warning(f"[MemoryExtractor] Lỗi parse JSON: {e} | Text gốc: {text}")
-            return {"atomic_memories": []}
+        return result
 
 
 class MusicClassifier(BaseLocalAgent):
+    """
+    Agent phân tích cảm xúc phân cảnh để kích hoạt nhạc nền tương ứng.
+    """
+
     async def classify_emotion(self, atmosphere_text: str) -> str:
         sys_prompt = (
             "Role: Music Director. Language: Vietnamese.\n"
@@ -218,17 +203,15 @@ class MusicClassifier(BaseLocalAgent):
             "2. Output STRICTLY JSON format. No explanations.\n"
             "Format: {\"emotion\": \"chosen_mood\"}"
         )
-        
+
         user_prompt = f"Context: {atmosphere_text}"
-        
-        # Gọi Local LLM sinh JSON 
-        result = await self._generate_json(sys_prompt, user_prompt, max_tokens = 30)
-        
-        # Lấy kết quả, kiểm tra xem nó có đúng 1 trong 5 chữ không
+
+        result = await self._generate_json(sys_prompt, user_prompt, max_tokens=30)
+
         if result and "emotion" in result:
             emotion = str(result["emotion"]).lower().strip()
             valid_emotions = ["bình thường", "căng thẳng", "buồn", "vui", "sợ hãi"]
-            
+
             if emotion in valid_emotions:
                 return emotion
 

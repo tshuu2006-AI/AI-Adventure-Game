@@ -7,12 +7,12 @@ from engine.Agents.CloudAgents import LocationAgent, NPCAgent
 
 
 class StateProcessor:
-    def __init__(self, db, player_state, image_manager, groq_api_key, pm):
+    def __init__(self, db, player_state, image_manager, groq_api_key, gemini_api_key, pm):
         self.db = db
         self.player_state = player_state
         self.image_manager = image_manager
-        self.state_extractor = StateExtractor(pm = pm, model_name="qwen2.5:1.5b")
-        self.memory_extractor = MemoryExtractor(pm = pm, model_name="qwen2.5:1.5b")
+        self.state_extractor = StateExtractor(pm = pm, gemini_api_key=gemini_api_key)
+        self.memory_extractor = MemoryExtractor(pm = pm, gemini_api_key=gemini_api_key)
 
         self.location_agent = LocationAgent(api_key = groq_api_key,
                                             pm = pm,
