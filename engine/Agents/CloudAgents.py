@@ -18,19 +18,40 @@ class BaseCloudAgent:
     Lớp cơ sở (Base Class) cho tất cả các Agent chạy trên nền tảng Cloud (Groq).
     Quản lý việc kết nối API và cung cấp hàm gọi LLM dùng chung.
     """
+    _turn_token_registry: Dict[str, int] = {}
 
-    def __init__(self, api_key: str, pm: PromptManager, model_name: str = "openai/gpt-oss-120b"):
+    def __init__(self, api_key: str, pm: PromptManager, model_name):
         self.client = AsyncGroq(api_key=api_key)
         self.model = model_name
         self.pm = pm
 
         self.logger = logging.getLogger(self.__class__.__name__)
+        if self.__class__.__name__ not in BaseCloudAgent._turn_token_registry:
+            BaseCloudAgent._turn_token_registry[self.__class__.__name__] = 0
+
+    @classmethod
+    def get_and_reset_token_usage(cls) -> str:
+        """
+        [MỚI] Lấy báo cáo sử dụng token của tất cả Agent và reset về 0 cho lượt tiếp theo.
+        Gọi hàm này vào cuối mỗi game turn.
+        """
+        total = sum(cls._turn_token_registry.values())
+        if total == 0:
+            return ""
+
+        # Tạo chuỗi báo cáo định dạng đẹp (vd: StoryAgent: 1200 | QueryAgent: 150)
+        details = " | ".join([f"{name}: {count}" for name, count in cls._turn_token_registry.items() if count > 0])
+        report = f"[Groq Tokens] TỔNG CỘNG: {total} ({details})"
+
+        # Reset cho lượt mới
+        cls._turn_token_registry = {k: 0 for k in cls._turn_token_registry.keys()}
+        return report
 
 
     async def _chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, stream: bool = False,
                     response_format: Dict = None, n: int = 1):
         """Hàm bao bọc (wrapper) để gọi API Groq một cách bất đồng bộ."""
-        return await self.client.chat.completions.create(
+        response = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=temperature,
@@ -38,9 +59,13 @@ class BaseCloudAgent:
             response_format=response_format,
             n=n
         )
+        if not stream and hasattr(response, 'usage') and response.usage:
+            agent_name = self.__class__.__name__
+            BaseCloudAgent._turn_token_registry[agent_name] += response.usage.total_tokens
+        return response
 
     def _log_error(self, context: str, error: Exception):
-        self.logger.error(f"Lỗi tại {context}: {str(error)}", exc_info=True)
+        self.logger.error(f"Lỗi tại {context}w1: {str(error)}", exc_info=True)
 
     # ---------------------------------------------------------
     # HÀM MỚI: Gọi API ép xuất JSON, có cơ chế Retry và Validate
@@ -221,6 +246,7 @@ class StoryAgent(BaseCloudAgent):
         async for chunk in self._generate_stream(system_prompt=sys_prompt, user_prompt=user_prompt):
             yield chunk
 
+
     async def _generate_stream(self, system_prompt: str, user_prompt: str) -> AsyncGenerator[str, None]:
         try:
             messages = [
@@ -228,10 +254,19 @@ class StoryAgent(BaseCloudAgent):
                 {"role": "user", "content": user_prompt}
             ]
             stream = await self._chat(messages=messages, temperature=0.9, stream=True)
+
             async for chunk in stream:
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield content
+                # 1. Trả chữ về cho UI
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+
+                # 2. 📊 [THÊM ĐOẠN NÀY] BẮT THÔNG TIN TOKEN Ở CHUNK CUỐI CÙNG
+                if hasattr(chunk, 'x_groq') and chunk.x_groq is not None:
+                    if hasattr(chunk.x_groq, 'usage') and chunk.x_groq.usage:
+                        usage = chunk.x_groq.usage
+                        agent_name = self.__class__.__name__
+                        BaseCloudAgent._turn_token_registry[agent_name] += usage.total_tokens
+
         except Exception as e:
             self._log_error("generate_stream", e)
             yield "Có một sự xáo trộn trong không gian... (Lỗi kết nối cốt truyện)"

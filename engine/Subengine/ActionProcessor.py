@@ -4,13 +4,13 @@ import yaml
 from engine.Agents.LocalAgents import IntentRouter
 from static.config import RNG_WEIGHTS, Success_rate
 from engine.Utils.logger import game_logger  # Thêm import logger
-
+from static.config import INTENT_ROUTER_MODEL
 
 class ActionProcessor:
     def __init__(self, db, player_state, pm, gemini_api_key, yaml_path="static/action_directives.yaml"):
         self.db = db
         self.player_state = player_state
-        self.intent_parser = IntentRouter(pm=pm, model_name="gemini-3.1-flash-lite", gemini_api_key=gemini_api_key)
+        self.intent_parser = IntentRouter(pm=pm, model_name = INTENT_ROUTER_MODEL, gemini_api_key=gemini_api_key)
         self.yaml_path = yaml_path
 
         # Xác suất Random Events (Sự kiện đột xuất)

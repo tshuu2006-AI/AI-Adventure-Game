@@ -5,14 +5,16 @@ from engine.DataManager.MemoryManager import VectorMemory, ShortTermMemory
 from engine.Agents.CloudAgents import QueryAgent
 from world.Entity import Memory
 from engine.Utils.logger import game_logger  # Thêm import logger
+from static.config import QUERY_AGENT_MODEL
 
 
 class MemoryProcessor:
+    """Lớp quản lý Ký ức trong CSDL Vector và CONTEXT ngắn hạn"""
     def __init__(self, db, vector_model_path, groq_api_key, pm):
         self.db = db
         self.long_term_memory = VectorMemory(model_path=vector_model_path)
         self.short_term_memory = ShortTermMemory(prompt_manager=pm)
-        self.query_agent = QueryAgent(api_key=groq_api_key, pm=pm)
+        self.query_agent = QueryAgent(model_name = QUERY_AGENT_MODEL, api_key=groq_api_key, pm=pm)
         game_logger.debug("[MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.")
 
     def _rerank_memories(

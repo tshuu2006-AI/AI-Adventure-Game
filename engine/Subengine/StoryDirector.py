@@ -1,7 +1,7 @@
 import json
 from typing import AsyncGenerator
 from world.Entity import Location
-
+from static.config import STORY_AGENT_MODEL, CHOICE_AGENT_MODEL, LOCATION_AGENT_MODEL, WORLD_GENERATE_AGENT_MODEL
 from engine.Agents.CloudAgents import StoryAgent, ChoiceAgent, WorldGenerateAgent, LocationAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
 
@@ -18,12 +18,12 @@ class StoryDirector:
         # CHÚ Ý LỰA CHỌN MODEL ĐỂ TỐI ƯU CHI PHÍ & TỐC ĐỘ:
 
         # 1. StoryAgent: Dùng để văn phong mượt mà, tự nhiên nhất
-        self.story_agent = StoryAgent(api_key=groq_api_key, pm=self.pm, model_name="qwen/qwen3-32b")
+        self.story_agent = StoryAgent(api_key=groq_api_key, pm=self.pm, model_name=STORY_AGENT_MODEL)
 
         # 2. Các Agent xuất JSON: Dùng Qwen-32B để nhanh, rẻ và tuân thủ JSON tuyệt đối
-        self.choice_agent = ChoiceAgent(api_key=groq_api_key, pm=self.pm, model_name="qwen/qwen3-32b")
-        self.world_generator = WorldGenerateAgent(api_key=groq_api_key, pm=self.pm, model_name="qwen/qwen3-32b")
-        self.location_agent = LocationAgent(api_key=groq_api_key, pm=self.pm, model_name="qwen/qwen3-32b")
+        self.choice_agent = ChoiceAgent(api_key=groq_api_key, pm=self.pm, model_name=CHOICE_AGENT_MODEL)
+        self.world_generator = WorldGenerateAgent(api_key=groq_api_key, pm=self.pm, model_name=WORLD_GENERATE_AGENT_MODEL)
+        self.location_agent = LocationAgent(api_key=groq_api_key, pm=self.pm, model_name=LOCATION_AGENT_MODEL)
 
         game_logger.debug("[StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).")
 

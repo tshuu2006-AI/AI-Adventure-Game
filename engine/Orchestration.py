@@ -6,6 +6,7 @@ from engine.ImageAPI import ImageAPI
 from engine.DataManager.ImageManager import ImageManager
 from engine.Utils.logger import game_logger  # Thêm import logger
 from engine.Utils.AudioManager import AudioManager
+from engine.Agents.CloudAgents import BaseCloudAgent
 from engine.Agents.LocalAgents import MusicClassifier
 
 # Import các Subsystem đã được module hóa (Bao gồm cả Đạo diễn)
@@ -107,6 +108,10 @@ class GameOrchestrator:
         )
         self.last_choices = choices
         self._display_choices(choices)
+
+        token_report = BaseCloudAgent.get_and_reset_token_usage()
+        if token_report:
+            game_logger.info(token_report)
 
         game_logger.debug(f"[Profile] Tổng thời gian Turn: {time.perf_counter() - start_turn_time:.3f}s")
         return story_response, choices

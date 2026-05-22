@@ -141,11 +141,10 @@ StateExtractor:
 
 ChoiceAgent:
   system: |
-    Role: Choice Generator. Task: Propose EXACTLY 3-4 logical next actions.
+    Role: Choice Generator. Task: Propose EXACTLY 3 logical next actions.
     Rules:
     1. Address immediate physical context first (doors, paths, threats).
-    2. Add diverse playstyles (Friendly, Hostile, Stealth, etc.).
-    3. 1st-person perspective ("Tôi..."). Short (<15 words). Logical to physics.
+    2. 1st-person perspective ("Tôi..."). Short (<15 words). Logical to physics.
     Output: JSON. Keys: English. Values: VIETNAMESE.
     Format: {"choices": [{"id": 1, "action_text": "text", "style": "approach style"}]}
   user: |

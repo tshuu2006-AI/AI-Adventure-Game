@@ -5,6 +5,7 @@ from world.Entity import Location, NPC
 from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor
 from engine.Utils.logger import game_logger  # Thêm import logger
 from engine.Agents.CloudAgents import LocationAgent, NPCAgent
+from static.config import STATE_EXTRACTOR_MODEL, MEMORY_EXTRACTOR_MODEL, LOCATION_AGENT_MODEL, NPC_AGENT_MODEL
 
 
 class StateProcessor:
@@ -13,16 +14,16 @@ class StateProcessor:
         self.db = db
         self.player_state = player_state
         self.image_manager = image_manager
-        self.state_extractor = StateExtractor(pm = pm, gemini_api_key=gemini_api_key)
-        self.memory_extractor = MemoryExtractor(pm = pm, gemini_api_key=gemini_api_key)
+        self.state_extractor = StateExtractor(model_name = STATE_EXTRACTOR_MODEL, pm = pm, gemini_api_key=gemini_api_key)
+        self.memory_extractor = MemoryExtractor(model_name = MEMORY_EXTRACTOR_MODEL, pm = pm, gemini_api_key=gemini_api_key)
 
         self.location_agent = LocationAgent(api_key = groq_api_key,
                                             pm = pm,
-                                            model_name = "qwen/qwen3-32b")
+                                            model_name = LOCATION_AGENT_MODEL)
 
         self.npc_agent = NPCAgent(api_key = groq_api_key,
                                   pm = pm,
-                                  model_name = "qwen/qwen3-32b")
+                                  model_name = NPC_AGENT_MODEL)
 
     async def _generate_and_save_new_npc(self, context: str, npc_name: str) -> NPC:
         game_logger.info(f"[Cloud] Đang thiết kế chỉ số và cốt truyện nền cho: {npc_name}...")
