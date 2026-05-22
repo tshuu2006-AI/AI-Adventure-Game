@@ -173,6 +173,7 @@ class DatabaseManager:
 class PlayerState:
     """Đối tượng lưu trữ các trạng thái, vị trí và thông tin theo thời gian thực của người chơi."""
 
+
     def __init__(self):
         self.currentLocation = None
         self.currentTurn = 0
