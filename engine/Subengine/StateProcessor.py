@@ -58,21 +58,11 @@ class StateProcessor:
         Trả về đối tượng Location để sử dụng ở các bước tiếp theo.
         """
         # 1. Khởi tạo đối tượng Location từ dữ liệu JSON của LLM
-        new_loc_data = await self.location_agent.generate_location(
+        new_location = await self.location_agent.generate_location(
             current_location=self.player_state.currentLocation.name,
             target_location=new_location_entered_name,
             context=context
         )
-
-        if isinstance(new_loc_data, Location):
-            new_location = new_loc_data
-        else:
-            new_location = Location(
-                id=None,
-                name=new_loc_data.get('location_name') or new_loc_data.get('name', 'Vùng đất vô danh'),
-                description=new_loc_data.get('description', ''),
-                atmosphere=new_loc_data.get('atmosphere', 'Bình thường')
-            )
 
         game_logger.info(f">> [Hệ Thống] Phát hiện khu vực mới: {new_location.name}. Đang tải ảnh nền...")
 
@@ -159,7 +149,28 @@ class StateProcessor:
         else:
             self.player_state.current_npc_image = None
 
+    async def _update_affection_and_status(self, affection_changes: list):
+        if not affection_changes:
+            return
 
+        for change in affection_changes:
+            npc_name = change.get("npc_name", "").strip()
+            delta = change.get("delta", 0)
+            new_status = change.get("new_status")
+
+            if not npc_name or (delta == 0 and not new_status):
+                continue
+
+            await self.db.update_npc_state(npc_name, affection_change=delta, new_status=new_status)
+
+            # Đồng bộ lại object đang sống trong PlayerState
+            for npc in self.player_state.currentNPCs:
+                if npc.name.lower() == npc_name.lower():
+                    if delta != 0:
+                        npc.affectionate = max(-100, min(100, npc.affectionate + delta))
+                    if new_status:
+                        npc.status = new_status
+                    break
 
     async def _update_inventory(self, items_added: list, items_removed: list):
         """Hàm chuyên xử lý logic túi đồ và tạo/xóa ảnh vật phẩm."""
@@ -218,21 +229,21 @@ class StateProcessor:
         if isinstance(results[0], Exception):
             game_logger.error(f"[StateExtractor Lỗi] {results[0]}")
 
-        atomic_memories_data = results[1] if not isinstance(results[1], Exception) else {}
+        atomic_memories = results[1] if not isinstance(results[1], Exception) else {}
         if isinstance(results[1], Exception):
             game_logger.error(f"[MemoryExtractor Lỗi] {results[1]}")
 
         # Chuẩn hóa dữ liệu phòng trường hợp Dict rỗng
         if not isinstance(state_changes, dict): state_changes = {}
-        if not isinstance(atomic_memories_data, dict): atomic_memories_data = {}
+        if not isinstance(atomic_memories, dict): atomic_memories = {}
 
-        atomic_memories = atomic_memories_data.get("atomic_memories", [])
         items_added = state_changes.get("items_added", [])
         items_removed = state_changes.get("items_removed", [])
         npcs_arrived = state_changes.get("npcs_arrived", [])
         npcs_left = state_changes.get("npcs_left", [])
-        new_location_entered_name = state_changes.get("new_location_entered",  )
+        new_location_entered_name = state_changes.get("new_location_entered", "")
         scene_emotion = state_changes.get("scene_emotion", "bình thường")
+        affection_changes = state_changes.get("affection_changes", [])
 
         game_logger.debug(f"[Profile] Background Tasks (State Extraction): {time.perf_counter() - start_bg:.3f}s")
 
@@ -245,7 +256,8 @@ class StateProcessor:
                                    items_removed=items_removed),
             self._update_npcs(npcs_arrived = npcs_arrived,
                               npcs_left = npcs_left,
-                              context = context)
+                              context = context),
+            self._update_affection(affection_changes=affection_changes)
         ]
 
         await asyncio.gather(*update_tasks)

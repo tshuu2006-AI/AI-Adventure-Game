@@ -13,11 +13,10 @@ from engine.Utils.logger import game_logger
 
 class BaseLocalAgent:
     """
-    Class Cha (Base Class) giữ nguyên tên cũ để tương thích với hệ thống.
-    Bên trong đã được nâng cấp sử dụng lõi Google Gemini API SDK MỚI.
+    Class Cha (Base Class) chịu trách nhiệm gọi Google Gemini API SDK MỚI.
     """
 
-    def __init__(self, pm: PromptManager, model_name: str = "gemini-2.5-flash-lite", gemini_api_key: str = None):
+    def __init__(self, pm: PromptManager, model_name: str = "gemini-3.1-flash-lite", gemini_api_key: str = None, **kwargs):
         self.api_key = gemini_api_key
 
         # Khởi tạo Client theo chuẩn SDK mới
@@ -39,13 +38,13 @@ class BaseLocalAgent:
         """Ghi log lỗi chi tiết kèm theo Stack Trace."""
         self.logger.error(f"Lỗi tại {context}: {str(error)}", exc_info=True)
 
-    # Giữ nguyên tham số max_tokens để tương thích ngược với code cũ
+    # Giữ nguyên tham số max_tokens để tương thích ngược, dù Gemini có thể tự linh hoạt
     async def _generate_json(self, system_prompt: str, user_prompt: str, max_tokens: int = 200) -> Dict[str, Any]:
         """
         Hàm dùng chung để ép LLM trả về JSON chuẩn xác bằng Gemini SDK mới.
         """
         if not self.client:
-            self.logger.error("Gemini Client chưa được khởi tạo. Không thể sinh nội dung.")
+            self.logger.error("[Gemini] Client chưa được khởi tạo. Không thể sinh nội dung.")
             return {}
 
         try:
@@ -81,7 +80,7 @@ class BaseLocalAgent:
         try:
             match = re.search(r'\{.*\}', text, re.DOTALL)
             if match:
-                return json.loads(match.group(0))
+                return json.loads(match.group(0).replace('\n', ' ').replace('\r', ''))
             else:
                 self.logger.warning(f"[_parse_json_safely] Không tìm thấy JSON hợp lệ trong: {text[:100]}...")
                 return {}
@@ -151,7 +150,8 @@ class StateExtractor(BaseLocalAgent):
                 "npcs_arrived": [],
                 "npcs_left": [],
                 "new_location_entered": None,
-                "scene_emotion": "bình thường"
+                "scene_emotion": "bình thường",
+                "affection_changes": []
             }
 
         return result
@@ -165,7 +165,7 @@ class MemoryExtractor(BaseLocalAgent):
     async def extract_memory(self, player_input: str, story_response: str) -> dict:
         sys_prompt = self.pm.get_prompt("MemoryExtractor", 'system')
 
-        few_shots = self.pm.yaml_data.get("MemoryExtractor", {}).get("FewShot_Examples", "")
+        few_shots = self.pm.get_prompt("MemoryExtractor", {}).get("FewShot_Examples", "")
         full_system_prompt = f"{sys_prompt}\n{few_shots}"
 
         user_prompt = self.pm.get_prompt(

@@ -100,14 +100,10 @@ class WorldGenerateAgent(BaseCloudAgent):
         system_prompt = self.pm.get_prompt('WorldGenerateAgent', 'system')
         user_prompt = self.pm.get_prompt('WorldGenerateAgent', 'user', user_input=player_idea)
 
-        # Các khóa BẮT BUỘC LLM phải trả về
-        required_keys = ["world_name", "world_type", "theme_and_tone", "core_conflict", "world_mission",
-                         "dynamic_vocabulary"]
-
         return await self._generate_json_with_retry(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            required_keys=required_keys,
+            required_keys=[],
             temperature=0.4
         )
 

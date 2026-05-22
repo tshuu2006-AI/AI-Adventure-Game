@@ -84,7 +84,7 @@ class GameOrchestrator:
         print()
 
         # 3. CHẠY TÁC VỤ NỀN (Local LLM bẻ Chunk + Cập nhật State, UI)
-        atomic_memories, scene_emotion = await self.state_sys.process_background_tasks(player_input, story_response)
+        episode_data, scene_emotion = await self.state_sys.process_background_tasks(player_input, story_response)
         encountered_npc_names = [npc.name for npc in self.player_state.currentNPCs]
 
         # Gọi nhạc nền:
@@ -94,7 +94,7 @@ class GameOrchestrator:
         # 4. LƯU KÝ ỨC
         await self.memory_sys.save_turn(player_input=player_input,
                                         story_response=story_response,
-                                        atomic_memories=atomic_memories,
+                                        episode_data=episode_data,
                                         current_location_name=self.player_state.currentLocation.name,
                                         encountered_npc_names=encountered_npc_names)
 
@@ -192,7 +192,7 @@ class GameOrchestrator:
         await self.memory_sys.save_turn(
             player_input="[Bắt đầu trò chơi]",
             story_response=story_response,
-            atomic_memories=[f"Nhân vật chính thức tỉnh tại {starting_loc_obj.name}."],
+            episode_data={},
             current_location_name=starting_loc_obj.name,
             encountered_npc_names=[]
         )

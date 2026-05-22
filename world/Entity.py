@@ -39,9 +39,7 @@ class Memory:
     """
     location: str
     text: str
-    npc: Optional[str] = None
     id: Optional[int] = None
-    id_type: str = "memory"
     game_turn: int = None
 
 

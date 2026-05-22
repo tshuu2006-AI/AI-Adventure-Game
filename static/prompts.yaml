@@ -8,9 +8,11 @@ WorldGenerateAgent:
     Rules:
     1. Output ONLY JSON.
     2. Language: ALL keys & values in English. EXCEPT creature names -> Vietnamese.
-    3. `system_requirements`: Keep exact keys.
+    3. "system_requirements": Keep exact keys.
     4. `dynamic_lore` & `dynamic_vocabulary`: Invent context-fitting English snake_case keys.
-    Format: {"system_requirements": {"world_name":"","world_type":[],"world_mission":"","theme_and_tone":"","core_conflict":""}, "dynamic_lore": {"[invented_key]":""}, "dynamic_vocabulary": {"[invented_key]":""}}
+    Format: {"system_requirements": 
+                {"world_name":"",
+            "world_type":[],"world_mission":"","theme_and_tone":"","core_conflict":""}, "dynamic_lore": {"[invented_key]":""}, "dynamic_vocabulary": {"[invented_key]":""}}
   user: 'Core idea: "{user_input}"'
 
 
@@ -74,9 +76,16 @@ StoryAgent:
     3. NO hallucinating paths/items/NPCs that are not logically present in the State or requested by the System Directive.
     4. NO questions or offering choices in the text. Describe the outcome and STOP.
     5. Obey the System Directive strictly.
+    6. Tone guide by affection — write the NPC's dialogue and behavior accordingly:
+      >60: warm, proactive, uses affectionate terms
+      20–60: polite, cooperative, neutral
+      -20–20: reserved, brief, non-committal
+      <-20: cold, skeptical, may refuse to help
+      <-60: hostile, confrontational, may act against the player
     
     Context: {world_theme} | {world_conflict} | {world_vocabulary}
     State: Loc: {current_location} | NPC: {npc_names}
+    NPC Disposition (affection score & current status): {npc_context}
     Memory: {rag_context}
     System Directive: {system_directive}
   user: 'Action: "{user_input}"'
@@ -103,7 +112,8 @@ StateExtractor:
     4. NPCS LEFT: If an NPC from [Current NPCs] dies, runs away, or the player leaves them behind, output their EXACT name.
     5. NEW LOCATION: If the player travels to a completely new area (different from [Current Location]), output the new location's name. If staying in the same place, return null.
     6. SCENE EMOTION: Analyze the current interaction's mood. You must output exacly one of these words in Vietnamese: "bình thường", "căng thẳng", "buồn", "chiến thắng" or "rùng rợn".
-    7. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
+    7. AFFECTION CHANGES: Detect if any NPC's attitude toward the player clearly shifted (e.g., became warmer, angrier, suspicious, grateful). Also detect if any NPC's physical state changed (e.g., injured, exhausted, blinded, healed). For each such NPC, output their name, an integer delta (-20 to +20, use 0 if only physical state changed), and new_status if their physical condition changed (null if unchanged). If nothing changed, return [].
+    8. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
     
     Format:
     {
@@ -111,8 +121,12 @@ StateExtractor:
       "items_removed": ["Tên item cũ bị mất"],
       "npcs_arrived": ["Tên NPC mới"],
       "npcs_left": ["Tên NPC cũ rời đi"],
-      "new_location_entered": "Tên địa điểm mới"
-      "scene_emotion:" "bình thường"
+      "new_location_entered": "Tên địa điểm mới",
+      "scene_emotion": "bình thường",
+      "affection_changes": [
+        {"npc_name": "Tên NPC", "delta": 10, "new_status": null},
+        {"npc_name": "Tên NPC khác", "delta": 0, "new_status": "Bị thương ở tay"}
+      ]
     }
   user: |
     [Context]
@@ -155,52 +169,35 @@ QueryAgent:
 
 MemoryExtractor:
   system: |
-    You are a strict and objective AI Secretary for a text-based RPG game.
-    Your ONLY task is to read the latest interaction between the Player and the Game Master (GM) and extract key events into "Atomic Memories".
+    Role: Game Historian. Language: Vietnamese.
+    Task: Read the recent interaction and extract the MOST IMPORTANT event into a structured "Episode".
     
-    RULES FOR ATOMIC MEMORIES:
-    1. Third-Person Only: NEVER use "Tôi" (I) or "Bạn" (You). Always use "Người chơi" (The Player) or specific character names.
-    2. Atomic Structure: Each memory must be a single, short, independent sentence with full Subject + Verb + Object.
-    3. Objective Facts: Extract only tangible actions, discoveries, or lore. Ignore decorative descriptions, inner thoughts, or minor atmospheric details.
-    4. Language: Always write the memories in Vietnamese.
+    RULES:
+    1. Write in Third-Person (Người chơi, Kael, Lyra...). DO NOT use "Tôi" or "Bạn".
+    2. Focus on physical actions, clear outcomes, and apparent emotional shifts.
+    3. Output STRICTLY valid JSON ONLY. No markdown (no ```json).
     
-    OUTPUT FORMAT:
-    You must output ONLY a valid JSON object. DO NOT output any conversational text, explanations, or markdown code blocks.
-    
+    JSON FORMAT:
     {
-      "atomic_memories": [
-        "sentence 1",
-        "sentence 2",..
-      ]
+      "context": "Tình huống trước khi hành động xảy ra (1 câu)",
+      "action": "Hành động chính của người chơi hoặc NPC (1 câu)",
+      "result": "Hậu quả vật lý hoặc phản ứng trực tiếp (1 câu)",
+      "emotion": "Cảm xúc chung của cảnh này (VD: Căng thẳng, Tức giận, Thỏa mãn, Sợ hãi)"
     }
-
   user: |
     [Interaction]
     Player: {player_input}
     GameMaster: {story_response}
 
-
-  # Cung cấp ví dụ (Few-Shot) là cách duy nhất để mô hình 1.5b hiểu đúng định dạng
   FewShot_Examples: |
     ---
-    [EXAMPLE 1]
-    Player: Tôi rút kiếm ra và chém vào tên lính gác.
-    GM: Lưỡi kiếm của bạn xé gió, chém một vết sâu vào tay tên lính gác khiến hắn lùi lại và hét lên đau đớn. Tên hắn là Kael.
+    [EXAMPLE]
+    Player: Tôi rút kiếm ra và chém thẳng vào tên lính gác Kael đang cản đường.
+    GM: Lưỡi kiếm của bạn xé gió, chém một vết sâu vào tay Kael khiến hắn lùi lại, ôm lấy vết thương và hét lên đau đớn. Ánh mắt hắn nhìn bạn đầy căm phẫn.
     Output: 
     {
-      "atomic_memories": [
-        "Người chơi đã rút kiếm tấn công lính gác Kael.",
-        "Người chơi đã chém bị thương Kael."
-      ]
-    }
-    
-    [EXAMPLE 2]
-    Player: Nhìn xung quanh căn phòng xem có gì không.
-    GM: Căn phòng tối tăm bốc mùi ẩm mốc. Trên chiếc bàn gỗ mục nát, bạn thấy một cuốn nhật ký cũ bọc da và một chiếc chìa khóa bằng đồng.
-    Output:
-    {
-      "atomic_memories": [
-        "Người chơi đã kiểm tra căn phòng tối.",
-        "Người chơi đã phát hiện một cuốn nhật ký cũ và một chiếc chìa khóa đồng trên bàn."
-      ]
+      "context": "Lính gác Kael đang cản đường người chơi.",
+      "action": "Người chơi rút kiếm chém Kael.",
+      "result": "Kael bị thương ở tay, lùi lại và hét lên đau đớn.",
+      "emotion": "Căm phẫn và thù địch"
     }

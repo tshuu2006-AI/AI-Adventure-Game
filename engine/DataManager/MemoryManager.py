@@ -1,7 +1,8 @@
+"""Lớp quản lý memory ngắn hạn và csdl vector"""
 import faiss
 import numpy as np
 import os
-from typing import Optional
+from typing import Optional, Tuple, List, Dict
 import pickle
 from sentence_transformers import SentenceTransformer
 from engine.Utils.PromptManager import PromptManager
@@ -14,26 +15,26 @@ class VectorMemory:
     Phục vụ cho tính năng RAG (Retrieval-Augmented Generation) của Game Engine.
     """
 
-    def __init__(self, model_path: str, db_dir='./data/'):
+    def __init__(self, model_path: str, db_dir: str = './data/') -> None:
         # Tải mô hình nhúng (embedding model) từ Local
         game_logger.info(f"[VectorDB] Đang khởi tạo Embedding Model từ: {model_path}...")
-        self.encoder = SentenceTransformer(model_path)
-        self.dimension = self.encoder.get_sentence_embedding_dimension()
-        self.num_memory = 0
-        self.game_turn = 0
+        self.encoder: SentenceTransformer = SentenceTransformer(model_path)
+        self.dimension: int|None = self.encoder.get_sentence_embedding_dimension()
+        self.num_memory: int = 0
+        self.game_turn: int = 0
 
         # Đường dẫn lưu trữ vật lý
-        self.index_path = os.path.join(db_dir, 'vector_index.bin')
-        self.meta_path = os.path.join(db_dir, 'vector_meta.pkl')
+        self.index_path: str = os.path.join(db_dir, 'vector_index.bin')
+        self.meta_path: str = os.path.join(db_dir, 'vector_meta.pkl')
 
         # Khởi tạo không gian FAISS có hỗ trợ lưu trữ ID tùy chỉnh (IDMap)
-        self.index = faiss.IndexIDMap(faiss.IndexFlatIP(self.dimension))
-        self.metadata = {}
+        self.index: faiss.IndexIDMap = faiss.IndexIDMap(faiss.IndexFlatIP(self.dimension))
+        self.metadata: Dict[int, str] = {}
 
         # KHÔI PHỤC DỮ LIỆU TỪ Ổ CỨNG LÊN (Nếu có)
         self._load_db()
 
-    def reset_vector_db(self):
+    def reset_vector_db(self) -> None:
         """Xóa trắng FAISS index, metadata và reset bộ đếm, đưa bộ nhớ về trạng thái ban đầu."""
         try:
             # 1. Khởi tạo lại Index mới với cùng số chiều (dimension) ban đầu
@@ -53,7 +54,14 @@ class VectorMemory:
         except Exception as e:
             game_logger.error(f"[VectorDB] Lỗi khi reset dữ liệu FAISS: {e}", exc_info=True)
 
-    def get_rag_context(self, memory_ids, memories, npc_rows, location_rows) -> str:
+    def get_rag_context(
+        self,
+        memory_ids: List[int],
+        memories: List,
+        npc_rows: List,
+        location_rows: List
+    ) -> str:
+        """Format prompt"""
         # Chuẩn hóa RAG context thành 3 khối để prompt dễ đọc và dễ kiểm tra log.
         memory_block = "\n".join(
             [f"- [memory:{item.id}] ({item.location}) {item.text}" for item in memories]
@@ -86,7 +94,7 @@ class VectorMemory:
 
         return rag_context
 
-    def _load_db(self):
+    def _load_db(self) -> None:
         """Đọc vector và metadata từ ổ cứng khi bật game."""
         try:
             if os.path.exists(self.index_path) and os.path.exists(self.meta_path):
@@ -99,7 +107,7 @@ class VectorMemory:
         except Exception as e:
             game_logger.error(f"[VectorDB Lỗi] Không thể khôi phục dữ liệu FAISS: {e}", exc_info=True)
 
-    def _save_db(self):
+    def _save_db(self) -> None:
         """Lưu vector và metadata xuống ổ cứng."""
         try:
             faiss.write_index(self.index, self.index_path)
@@ -110,17 +118,17 @@ class VectorMemory:
         except Exception as e:
             game_logger.error(f"[VectorDB Lỗi] Không thể ghi dữ liệu FAISS xuống ổ cứng: {e}", exc_info=True)
 
-    def add_memory_to_vector(self, text: str, memory_id: Optional[int] = None):
+    def add_memory_to_vector(self, text: str, memory_id: Optional[int] = None) -> None:
         """Mã hóa văn bản thành vector và lưu trữ vào FAISS với ID ổn định."""
         try:
             # Chuyển đổi văn bản thành vector NumPy chuẩn float32
-            vector = self.encoder.encode([text]).astype('float32')
+            vector: np.ndarray = self.encoder.encode([text]).astype('float32')
 
             faiss.normalize_L2(vector)
 
             # Nếu caller truyền ID từ SQL, dùng trực tiếp để đồng bộ hai hệ.
             # Nếu không, fallback sang bộ đếm nội bộ để tương thích mã cũ.
-            vector_id = int(memory_id) if memory_id is not None else int(self.num_memory)
+            vector_id: int = int(memory_id) if memory_id is not None else int(self.num_memory)
 
             # Đảm bảo ID đã tồn tại sẽ được cập nhật bằng vector mới.
             self.index.remove_ids(np.array([vector_id]).astype('int64'))
@@ -136,7 +144,7 @@ class VectorMemory:
         except Exception as e:
             game_logger.error(f"[VectorDB Lỗi] Sự cố khi nhúng/lưu vector (Memory ID: {memory_id}): {e}", exc_info=True)
 
-    def search(self, query: str, top_k: int = 15) -> list:
+    def search(self, query: str, top_k: int = 15) -> Tuple[List[int], List[float]]:
         """Tìm kiếm top_k ký ức và trả về Tuple(ID, Vector_Score)."""
         # Bỏ qua nếu database chưa có ký ức nào
         if self.index.ntotal == 0:
@@ -144,19 +152,19 @@ class VectorMemory:
 
         try:
             # Mã hóa câu hỏi của người chơi thành vector
-            query_vector = self.encoder.encode([query]).astype('float32')
+            query_vector: np.ndarray = self.encoder.encode([query]).astype('float32')
             faiss.normalize_L2(query_vector)
 
             # D: Khoảng cách (similarity score), I: Danh sách ID trả về
             distances, indices = self.index.search(query_vector, top_k)  # type: ignore
 
-            normalized_distances = []
-            result_ids = []
+            normalized_distances: List[float] = []
+            result_ids: List[int] = []
 
             for similarity_score, idx in zip(distances[0], indices[0]):
                 if idx != -1:  # Lọc bỏ các ID rác do FAISS tự điền thiếu
                     # Chặn dưới ở mức 0.0 để tránh số âm phá hỏng thuật toán Reranking
-                    normalized_score = max(0.0, float(similarity_score))
+                    normalized_score: float = max(0.0, float(similarity_score))
 
                     normalized_distances.append(normalized_score)
                     result_ids.append(idx)
@@ -167,19 +175,27 @@ class VectorMemory:
             game_logger.error(f"[VectorDB Lỗi] Không thể thực thi truy vấn tìm kiếm FAISS: {e}", exc_info=True)
             return [], []
 
-    def update_game_turn(self):
+    def update_game_turn(self) -> None:
+        """Cập nhật game turn sau mỗi lượt chơi"""
         self.game_turn += 1
 
 
 class ShortTermMemory:
+    """Memory ngắn hạn"""
 
-    def __init__(self, prompt_manager: PromptManager, window_size=4):
-        self.window_size = window_size
-        self.context_window = []
-        self.pm = prompt_manager
-        self.current_atomic_memories = None
+    def __init__(self, prompt_manager: PromptManager, window_size: int = 4) -> None:
+        self.window_size: int = window_size
+        self.context_window: List[str] = []
+        self.pm: PromptManager = prompt_manager
+        self.current_structured_memory: Optional[str] = None
 
-    def add_memory(self, player_input, story_response, atomic_memories):
+    def add_memory(
+        self,
+        player_input: str,
+        story_response: str,
+        structured_memory: str
+    ) -> None:
+        """Thêm memory vào short-term-memory"""
         self.context_window.append(f"player: {player_input}\nGameMaster: {story_response}")
 
         # Cơ chế sliding window (cửa sổ trượt)
@@ -187,10 +203,11 @@ class ShortTermMemory:
             self.context_window.pop(0)
 
         if len(self.context_window) > 1:
-            self.context_window[1] = self.current_atomic_memories
+            self.context_window[1] = self.current_structured_memory
 
-        self.current_atomic_memories = atomic_memories
+        self.current_structured_memory = structured_memory
         game_logger.debug(f"[ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: {len(self.context_window)}).")
 
-    def get_memory(self):
+    def get_memory(self) -> List[str]:
+        """Lấy memory gần"""
         return self.context_window
