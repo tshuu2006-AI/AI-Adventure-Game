@@ -84,8 +84,8 @@ StoryAgent:
       <-60: hostile, confrontational, may act against the player
     
     Context: {world_theme} | {world_conflict} | {world_vocabulary}
-    State: Loc: {current_location} | NPC: {npc_names}
-    NPC Disposition (affection score & current status): {npc_context}
+    State: Loc: {current_location} | 
+    NPC_context: {npc_context}
     Memory: {rag_context}
     System Directive: {system_directive}
   user: 'Action: "{user_input}"'

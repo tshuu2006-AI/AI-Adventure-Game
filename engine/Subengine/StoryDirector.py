@@ -17,8 +17,8 @@ class StoryDirector:
 
         # CHÚ Ý LỰA CHỌN MODEL ĐỂ TỐI ƯU CHI PHÍ & TỐC ĐỘ:
 
-        # 1. StoryAgent: Dùng Llama-3.3-70B để văn phong mượt mà, tự nhiên nhất
-        self.story_agent = StoryAgent(api_key=groq_api_key, pm=self.pm, model_name="llama-3.3-70b-versatile")
+        # 1. StoryAgent: Dùng để văn phong mượt mà, tự nhiên nhất
+        self.story_agent = StoryAgent(api_key=groq_api_key, pm=self.pm, model_name="qwen/qwen3-32b")
 
         # 2. Các Agent xuất JSON: Dùng Qwen-32B để nhanh, rẻ và tuân thủ JSON tuyệt đối
         self.choice_agent = ChoiceAgent(api_key=groq_api_key, pm=self.pm, model_name="qwen/qwen3-32b")
@@ -39,7 +39,13 @@ class StoryDirector:
         """
         full_user_input = f"[Context]:\n{hybrid_rag_context}\n\n[Player action]: {player_input}"
 
-        npc_names = [npc.name for npc in npcs_context] if npcs_context else ["Không có"]
+        if npcs_context:
+            npc_context_str = "\n".join(
+                [f"- {npc.name}: Thiện cảm {npc.affectionate}/100, Thể trạng: {npc.status}"
+                 for npc in npcs_context]
+            )
+        else:
+            npc_context_str = "Nobody is near"
 
         game_logger.debug(
             f"[StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: '{player_input[:50]}...'")
@@ -50,7 +56,7 @@ class StoryDirector:
             world_conflict=world_state.core_conflict,
             world_vocabulary=world_state.dynamic_vocabulary,
             current_location=player_state.currentLocation.name,
-            npc_names=npc_names,
+            npc_context = npc_context_str,
             rag_context=hybrid_rag_context,  # Đã bao gồm cả FAISS và Cửa sổ trượt 4 lượt
             system_directive=system_directive,
             user_input=full_user_input

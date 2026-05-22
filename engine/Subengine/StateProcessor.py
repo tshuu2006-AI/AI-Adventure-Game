@@ -1,3 +1,4 @@
+"""Module điều phối việc cập nhật thông tin, trạng thái của trò chơi trong csdl"""
 import asyncio
 import time
 from world.Entity import Location, NPC
@@ -7,6 +8,7 @@ from engine.Agents.CloudAgents import LocationAgent, NPCAgent
 
 
 class StateProcessor:
+    """Lớp quản lý việc tạo sinh NPC, interface để cập nhật các thông tin trong cơ sở dữ liệu"""
     def __init__(self, db, player_state, image_manager, groq_api_key, gemini_api_key, pm):
         self.db = db
         self.player_state = player_state
@@ -257,7 +259,7 @@ class StateProcessor:
             self._update_npcs(npcs_arrived = npcs_arrived,
                               npcs_left = npcs_left,
                               context = context),
-            self._update_affection(affection_changes=affection_changes)
+            self._update_affection_and_status(affection_changes=affection_changes)
         ]
 
         await asyncio.gather(*update_tasks)

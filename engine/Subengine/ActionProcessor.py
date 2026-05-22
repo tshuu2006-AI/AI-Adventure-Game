@@ -10,7 +10,7 @@ class ActionProcessor:
     def __init__(self, db, player_state, pm, gemini_api_key, yaml_path="static/action_directives.yaml"):
         self.db = db
         self.player_state = player_state
-        self.intent_parser = IntentRouter(pm=pm, model_name="gemini-2.5-flash-lite")
+        self.intent_parser = IntentRouter(pm=pm, model_name="gemini-3.1-flash-lite", gemini_api_key=gemini_api_key)
         self.yaml_path = yaml_path
 
         # Xác suất Random Events (Sự kiện đột xuất)

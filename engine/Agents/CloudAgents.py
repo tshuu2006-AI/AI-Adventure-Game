@@ -26,6 +26,7 @@ class BaseCloudAgent:
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
+
     async def _chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, stream: bool = False,
                     response_format: Dict = None, n: int = 1):
         """Hàm bao bọc (wrapper) để gọi API Groq một cách bất đồng bộ."""
@@ -207,12 +208,12 @@ class StoryAgent(BaseCloudAgent):
             yield chunk
 
     async def generate_story(self, world_theme: str, world_conflict: str, world_vocabulary: dict,
-                             current_location: str, npc_names: list, rag_context: str,
+                             current_location: str, npc_context:str, rag_context: str,
                              system_directive: str, user_input: str) -> AsyncGenerator[str, None]:
         sys_prompt = self.pm.get_prompt(
             'StoryAgent', 'system',
             world_theme=world_theme, world_conflict=world_conflict, world_vocabulary=world_vocabulary,
-            current_location=current_location, npc_names=npc_names, npc_personality=None,
+            current_location=current_location, npc_context=npc_context,
             rag_context=rag_context, valid_paths_from_sql=None, system_directive=system_directive
         )
         user_prompt = self.pm.get_prompt('StoryAgent', 'user', user_input=user_input)
