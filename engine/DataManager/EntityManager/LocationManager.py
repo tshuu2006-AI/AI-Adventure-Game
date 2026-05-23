@@ -22,3 +22,14 @@ class LocationManager(BaseManager):
         query_template = "SELECT location_id, name, description, atmosphere, image_path FROM Locations WHERE LOWER(name) IN ({placeholders}) LIMIT ?"
         location_rows = await self._fetch_records_by_names(query_template, location_names, limit)
         return [Location(id=r[0], name=r[1], description=r[2], atmosphere=r[3], image_path=r[4]) for r in location_rows]
+    
+    async def get_all(self):
+        """Lấy toàn bộ danh sách Địa điểm từ Database (Dùng cho Sổ tay)"""
+        try:
+            async with self.conn.execute("SELECT location_id, name, description, atmosphere, image_path FROM Locations") as cursor:
+                rows = await cursor.fetchall()
+                from world.Entity import Location
+                return [Location(id=row[0], name=row[1], description=row[2], atmosphere=row[3], image_path=row[4]) for row in rows]
+        except Exception as e:
+            print(f"Lỗi khi get_all Locations: {e}")
+            return []

@@ -165,8 +165,8 @@ class MemoryExtractor(BaseLocalAgent):
     async def extract_memory(self, player_input: str, story_response: str) -> dict:
         sys_prompt = self.pm.get_prompt("MemoryExtractor", 'system')
 
-        few_shots = self.pm.get_prompt("MemoryExtractor", {}).get("FewShot_Examples", "")
-        full_system_prompt = f"{sys_prompt}\n{few_shots}"
+        # few_shots = self.pm.get_prompt("MemoryExtractor", {}).get("FewShot_Examples", "")
+        # full_system_prompt = f"{sys_prompt}\n{few_shots}"
 
         user_prompt = self.pm.get_prompt(
             'MemoryExtractor',
@@ -176,7 +176,7 @@ class MemoryExtractor(BaseLocalAgent):
         )
 
         result = await self._generate_json(
-            system_prompt=full_system_prompt,
+            system_prompt=sys_prompt,
             user_prompt=user_prompt,
             max_tokens=200
         )

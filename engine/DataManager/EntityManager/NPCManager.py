@@ -72,3 +72,15 @@ class NPCManager(BaseManager):
         except Exception as e:
             game_logger.error(f"[NPCManager Lỗi] Không thể cập nhật trạng thái cho {npc_name}: {e}", exc_info=True)
             return False
+        
+    async def get_all(self):
+        """Lấy toàn bộ danh sách NPC từ Database (Dùng cho Sổ tay)"""
+        try:
+            # SỬA 'affectionLevel' thành 'affectionate'
+            async with self.conn.execute("SELECT npc_id, name, personality, description, affectionate, location, currentStatus, image_path FROM NPCs") as cursor:
+                rows = await cursor.fetchall()
+                from world.Entity import NPC
+                return [NPC(id=row[0], name=row[1], personality=row[2], description=row[3], affectionate=row[4], location=row[5], status=row[6], image_path=row[7]) for row in rows]
+        except Exception as e:
+            print(f"Lỗi khi get_all NPCs: {e}")
+            return []

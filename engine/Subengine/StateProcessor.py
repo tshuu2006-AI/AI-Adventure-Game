@@ -1,7 +1,7 @@
 """Module điều phối việc cập nhật thông tin, trạng thái của trò chơi trong csdl"""
 import asyncio
 import time
-from world.Entity import Location, NPC
+from world.Entity import Location, NPC, Item
 from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor
 from engine.Utils.logger import game_logger  # Thêm import logger
 from engine.Agents.CloudAgents import LocationAgent, NPCAgent
@@ -170,7 +170,7 @@ class StateProcessor:
             for npc in self.player_state.currentNPCs:
                 if npc.name.lower() == npc_name.lower():
                     if delta != 0:
-                        npc.affectionate = max(-100, min(100, npc.affectionate + delta))
+                        npc.affectionate = max(-100, min(100, int(npc.affectionate) + delta))
                     if new_status:
                         npc.status = new_status
                     break
@@ -179,34 +179,52 @@ class StateProcessor:
         """Hàm chuyên xử lý logic túi đồ và tạo/xóa ảnh vật phẩm."""
         if items_added or items_removed:
             game_logger.info("[Hệ Thống] ---> THAY ĐỔI TÚI ĐỒ <---")
+            
+            # Danh sách các từ khóa rác do LLM sinh ra khi không có đồ
+            invalid_items = ["không", "không có", "none", "trống", "nothing", "không có gì", "null", "n/a"]
 
             # 1. Thêm Item mới -> Vẽ ảnh
             if isinstance(items_added, list):
-                for item in items_added:
+                for item_name in items_added:
+                    # Lọc bỏ chuỗi rỗng và các từ khóa rác
+                    if not item_name or str(item_name).strip().lower() in invalid_items:
+                        continue
+                        
+                    item_name = str(item_name).strip()
+                    
                     # Kiểm tra item chưa có trong keys của Dictionary
-                    if item and item not in self.player_state.inventory:
+                    if item_name not in self.player_state.inventory:
                         # Gọi Kaggle vẽ ảnh
-                        img_path = await self.image_manager.get_or_create_item_image(item)
+                        img_path = await self.image_manager.get_or_create_item_image(item_name)
 
-                        # Lưu vào Dict
-                        self.player_state.inventory[item] = img_path
-                        game_logger.info(f" [+] Nhận được: {item}")
+                        # Khởi tạo Object Item chuẩn thay vì chỉ lưu đường dẫn
+                        new_item = Item(id=None, name=item_name, description=f"Vật phẩm '{item_name}' nhặt được trong hành trình.")
+                        new_item.image_path = img_path
+                        new_item.quote = "Biết đâu sau này sẽ cần dùng tới."
+                        
+                        # Lưu Object vào Dict
+                        self.player_state.inventory[item_name] = new_item
+                        game_logger.info(f" [+] Nhận được: {item_name}")
 
             # 2. Mất Item cũ -> Xóa ảnh và gỡ khỏi Dict
             if isinstance(items_removed, list):
-                for item in items_removed:
-                    if item and item in self.player_state.inventory:
-                        # Lấy đường dẫn ảnh bằng pop() (vừa lấy vừa xóa khỏi Dict)
-                        img_path = self.player_state.inventory.pop(item)
+                for item_name in items_removed:
+                    if not item_name or str(item_name).strip().lower() in invalid_items:
+                        continue
+                        
+                    item_name = str(item_name).strip()
+                    
+                    if item_name in self.player_state.inventory:
+                        # Lấy và xóa đối tượng Item khỏi Dict bằng pop()
+                        removed_item = self.player_state.inventory.pop(item_name)
 
                         # Xóa file vật lý
-                        if img_path:
-                            self.image_manager.delete_image(img_path)
-                        game_logger.info(f" [-] Bị mất: {item}")
+                        if hasattr(removed_item, 'image_path') and removed_item.image_path:
+                            self.image_manager.delete_image(removed_item.image_path)
+                        game_logger.info(f" [-] Bị mất: {item_name}")
 
-            # Lấy danh sách chìa khóa (Tên items) để in ra console
-            inventory_status = ", ".join(
-                self.player_state.inventory.keys()) if self.player_state.inventory else "Trống rỗng"
+            # In ra console
+            inventory_status = ", ".join(self.player_state.inventory.keys()) if self.player_state.inventory else "Trống rỗng"
             game_logger.info(f" [Balo hiện tại]: {inventory_status}")
 
 
