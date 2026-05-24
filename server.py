@@ -10,8 +10,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from engine.Orchestration import GameOrchestrator
 from engine.Utils.logger import game_logger
 
+import asyncio
+import httpx
+from groq import Groq
+from google import genai
+
 app = FastAPI()
 load_dotenv()
+
+current_config = {
+    "mode": "default",       # "default" hoặc "custom"
+    "cloud_provider": "groq",# Hoặc "custom_key"
+    "cloud_key": "",
+    "local_provider": "gemini", 
+    "local_model_or_key": ""
+}
 
 app.add_middleware(
     CORSMiddleware,
@@ -87,6 +100,42 @@ def parse_story_into_segments(full_text):
 # ==========================================
 # BACKGROUND TASKS (CHẠY NGẦM KHÔNG BLOCK UI)
 # ==========================================
+async def verify_groq_key(api_key: str) -> bool:
+    try:
+        # Chạy trong luồng riêng để tránh block async loop nếu thư viện đồng bộ
+        def test():
+            client = Groq(api_key=api_key)
+            client.models.list() # Gọi thử danh sách model để test key
+            return True
+        return await asyncio.to_thread(test)
+    except Exception:
+        return False
+
+async def verify_gemini_key(api_key: str) -> bool:
+    try:
+        def test():
+            client = genai.Client(api_key=api_key)
+            client.models.list()
+            return True
+        return await asyncio.to_thread(test)
+    except Exception:
+        return False
+
+async def verify_ollama_model(model_name: str) -> bool:
+    try:
+        async with httpx.AsyncClient() as client:
+            # Gửi yêu cầu tới API mặc định của Ollama chạy trên máy cục bộ
+            response = await client.get("http://localhost:11434/api/tags", timeout=3.0)
+            if response.status_code == 200:
+                available_models = response.json().get("models", [])
+                # Kiểm tra xem tên model người dùng nhập có khớp với máy không
+                names = [m.get("name") for m in available_models]
+                # Hỗ trợ check cả khi người dùng nhập thiếu :latest
+                return any(model_name.lower() in name.lower() for name in names)
+    except Exception:
+        return False
+    return False
+
 async def background_post_turn_processing(player_input, story_response):
     """(Req 1) Hàm này sẽ chạy ngầm sau khi Text đã được ném về Unity"""
     try:
@@ -114,6 +163,8 @@ async def background_post_turn_processing(player_input, story_response):
 async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = BackgroundTasks()):
     """Khởi tạo Game Loop mới giống hệt run() trong Orchestration"""
     try:
+        orchestrator.player_state.inventory = {}
+        orchestrator.player_state.currentNPCs = []
         # 1. Dọn dẹp Database
         await orchestrator.db.connect()
         await orchestrator.db.reset_database()
@@ -249,6 +300,71 @@ async def get_progress():
         "message": getattr(orchestrator, "progress_msg", "Đang xử lý..."),
         "percent": getattr(orchestrator, "progress_percent", 0.5)
     })
+
+@app.post("/api/check_config")
+async def check_config(
+    cloud_key: str = Form(""),
+    local_model_or_key: str = Form(""),
+    is_ollama: str = Form("false") # "true" nếu local agent dùng Ollama
+):
+    """Endpoint xử lý nút Check cấu hình từ Unity"""
+    if not cloud_key.strip() or not local_model_or_key.strip():
+        return JSONResponse(content={"success": False, "message": "Vui lòng nhập đầy đủ cả 2 trường thông tin!"})
+
+    # 1. Kiểm tra Cloud Key (Groq)
+    cloud_ok = await verify_groq_key(cloud_key.strip())
+    if not cloud_ok:
+        return JSONResponse(content={"success": False, "message": "❌ Cloud API Key (Groq) không hợp lệ hoặc không kết nối được!"})
+
+    # 2. Kiểm tra Local Agent (Gemini Key hoặc Mô hình Ollama)
+    if is_ollama.lower() == "true":
+        local_ok = await verify_ollama_model(local_model_or_key.strip())
+        if not local_ok:
+            return JSONResponse(content={"success": False, "message": "❌ Không tìm thấy mô hình Ollama này trên máy cục bộ!"})
+    else:
+        local_ok = await verify_gemini_key(local_model_or_key.strip())
+        if not local_ok:
+            return JSONResponse(content={"success": False, "message": "❌ Local API Key (Gemini) không hợp lệ hoặc không kết nối được!"})
+
+    return JSONResponse(content={"success": True, "message": "💚 Tuyệt vời! Cả hai cấu hình đều hợp lệ và sẵn sàng sử dụng."})
+
+
+@app.post("/api/settings")
+async def update_settings(
+    mode: str = Form(...),                  # "default" hoặc "custom"
+    cloud_key: str = Form(""),
+    local_model_or_key: str = Form(""),
+    is_ollama: str = Form("false")
+):
+    """Lưu và áp dụng cấu hình cài đặt"""
+    global current_config
+    current_config["mode"] = mode
+    current_config["cloud_key"] = cloud_key.strip()
+    current_config["local_model_or_key"] = local_model_or_key.strip()
+    current_config["local_provider"] = "ollama" if is_ollama.lower() == "true" else "gemini"
+
+    # Tiến hành tiêm (inject) động các Key này vào các Subengine nếu mode là custom
+    if mode == "custom":
+        # Cập nhật Cloud Agent cho StoryDirector và StateProcessor
+        orchestrator.story_director.story_agent.client = Groq(api_key=current_config["cloud_key"])
+        # Cập nhật Local Agent cho StateExtractor/MemoryExtractor
+        if current_config["local_provider"] == "gemini":
+            orchestrator.state_sys.state_extractor.client = genai.Client(api_key=current_config["local_model_or_key"])
+            orchestrator.state_sys.memory_extractor.client = genai.Client(api_key=current_config["local_model_or_key"])
+        else:
+            # Nếu dùng Ollama, bạn có thể chuyển hướng đổi base_url của client hoặc đổi model_name tùy kiến trúc Agent của bạn
+            orchestrator.state_sys.state_extractor.model_name = current_config["local_model_or_key"]
+            # Ví dụ: orchestrator.state_sys.state_extractor.set_ollama_mode()
+            pass
+            
+        print("⚙️ Đã áp dụng cấu hình Custom của người dùng thành công.")
+    else:
+        # Khôi phục lại key gốc từ file .env
+        orchestrator.story_director.story_agent.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        orchestrator.state_sys.state_extractor.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        print("⚙️ Đã khôi phục về hệ thống cấu hình Mặc định (Default).")
+
+    return JSONResponse(content={"success": True, "message": "Đã lưu và áp dụng cài đặt hệ thống!"})
 
 if __name__ == "__main__":
     import uvicorn

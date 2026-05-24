@@ -2194,3 +2194,253 @@ AssertionError
 2026-05-24 01:11:47 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 15.
 2026-05-24 01:11:47 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
 2026-05-24 01:11:47 | INFO     | server:105 | Hoàn tất xử lý ngầm (State & Memory)!
+2026-05-24 09:20:52 | INFO     | Orchestration:21 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-05-24 09:20:52 | DEBUG    | ImageManager:22 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-05-24 09:20:54 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-05-24 09:21:01 | INFO     | MemoryManager:104 | [VectorDB] Khôi phục thành công 13 ký ức từ ổ cứng.
+2026-05-24 09:21:02 | DEBUG    | MemoryProcessor:18 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-05-24 09:21:09 | DEBUG    | StoryDirector:28 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-05-24 09:21:09 | INFO     | Orchestration:53 | Hệ thống đã sẵn sàng!
+2026-05-24 09:21:26 | INFO     | Orchestration:21 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-05-24 09:21:26 | DEBUG    | ImageManager:22 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-05-24 09:21:27 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-05-24 09:21:34 | INFO     | MemoryManager:104 | [VectorDB] Khôi phục thành công 13 ký ức từ ổ cứng.
+2026-05-24 09:21:34 | DEBUG    | MemoryProcessor:18 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-05-24 09:21:41 | DEBUG    | StoryDirector:28 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-05-24 09:21:41 | INFO     | Orchestration:53 | Hệ thống đã sẵn sàng!
+2026-05-24 09:21:41 | INFO     | Orchestration:21 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-05-24 09:21:41 | DEBUG    | ImageManager:22 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-05-24 09:21:42 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-05-24 09:21:48 | INFO     | MemoryManager:104 | [VectorDB] Khôi phục thành công 13 ký ức từ ổ cứng.
+2026-05-24 09:21:48 | DEBUG    | MemoryProcessor:18 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-05-24 09:21:56 | DEBUG    | StoryDirector:28 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-05-24 09:21:56 | INFO     | Orchestration:53 | Hệ thống đã sẵn sàng!
+2026-05-24 09:25:54 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới data/eldoria.db
+2026-05-24 09:25:54 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-05-24 09:25:54 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-05-24 09:25:54 | INFO     | ImageManager:112 | [ImageManager] Bắt đầu dọn dẹp thư mục ảnh cũ cho Game mới...
+2026-05-24 09:25:54 | INFO     | ImageManager:123 | [ImageManager] Dọn dẹp thư mục ảnh hoàn tất.
+2026-05-24 09:25:54 | INFO     | StoryDirector:91 | [StoryDirector] Đang tạo World Bible từ ý tưởng người chơi...
+2026-05-24 09:25:57 | DEBUG    | StoryDirector:97 | [StoryDirector] Đã lưu World Bible xuống file: ./data/world_bible.json
+2026-05-24 09:25:57 | INFO     | StoryDirector:105 | [StoryDirector] Đang khởi tạo địa điểm xuất phát cho thế giới 'Holy Blade Chronicles'...
+2026-05-24 09:25:58 | DEBUG    | BaseManager:75 | [Locations] Đã lưu thành công 'Vùng Ruins Cổ Xưa'.
+2026-05-24 09:25:58 | INFO     | StoryDirector:130 | [StoryDirector] Bắt đầu sinh phân đoạn truyện mở đầu tại 'Vùng Ruins Cổ Xưa'...
+2026-05-24 09:26:00 | INFO     | StoryDirector:74 | [StoryDirector] Đang tính toán các lựa chọn tiếp theo...
+2026-05-24 09:26:02 | DEBUG    | StoryDirector:85 | [StoryDirector] Đã tạo thành công 3 lựa chọn khả thi.
+2026-05-24 09:26:03 | WARNING  | LocalAgents:185 | [MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.
+2026-05-24 09:26:12 | DEBUG    | StateProcessor:269 | [Profile] Background Tasks (State Extraction): 10.360s
+2026-05-24 09:26:12 | INFO     | StateProcessor:128 |  [+] Phát hiện nhân vật xuất hiện: Bóng tối
+2026-05-24 09:26:12 | INFO     | StateProcessor:29 | [Cloud] Đang thiết kế chỉ số và cốt truyện nền cho: Bóng tối...
+2026-05-24 09:26:15 | INFO     | ImageManager:73 | [ImageManager] Đang vẽ NPC mới: 'Bóng tối'...
+2026-05-24 09:26:15 | WARNING  | ImageManager:83 | [ImageManager] Tạo ảnh NPC 'Bóng tối' thất bại.
+2026-05-24 09:26:15 | DEBUG    | BaseManager:75 | [NPCs] Đã lưu thành công 'Bóng tối'.
+2026-05-24 09:26:15 | DEBUG    | MemoryManager:209 | [ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: 1).
+2026-05-24 09:26:15 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 0.
+2026-05-24 09:26:16 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
+2026-05-24 09:26:16 | INFO     | server:105 | Hoàn tất xử lý ngầm (State & Memory)!
+2026-05-24 09:26:27 | DEBUG    | ActionProcessor:32 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-05-24 09:26:27 | DEBUG    | MemoryProcessor:130 | [MemoryProcessor] Truy vấn FAISS: 'Rút kiếm bước về phía Bóng tối'
+2026-05-24 09:26:27 | DEBUG    | MemoryManager:172 | [VectorDB Search] 'Rút kiếm bước về phía Bóng tối' -> Trả về 10 kết quả.
+2026-05-24 09:26:27 | DEBUG    | MemoryProcessor:144 | [Deduplication] Bỏ qua ký ức #1 từ FAISS vì đã có trong Lịch sử NPC.
+2026-05-24 09:26:27 | DEBUG    | MemoryProcessor:184 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.519s
+2026-05-24 09:26:27 | DEBUG    | StoryDirector:50 | [StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: 'Tôi rút kiếm ra và bước về phía bóng tối....'
+2026-05-24 09:26:29 | INFO     | StoryDirector:74 | [StoryDirector] Đang tính toán các lựa chọn tiếp theo...
+2026-05-24 09:26:31 | DEBUG    | StoryDirector:85 | [StoryDirector] Đã tạo thành công 3 lựa chọn khả thi.
+2026-05-24 09:26:37 | WARNING  | LocalAgents:185 | [MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.
+2026-05-24 09:26:38 | DEBUG    | StateProcessor:269 | [Profile] Background Tasks (State Extraction): 6.921s
+2026-05-24 09:26:38 | INFO     | StateProcessor:108 |  [-] NPC đã rời khỏi phân cảnh: bóng tối
+2026-05-24 09:26:38 | INFO     | StateProcessor:128 |  [+] Phát hiện nhân vật xuất hiện: Cựu chiến binh
+2026-05-24 09:26:38 | INFO     | StateProcessor:29 | [Cloud] Đang thiết kế chỉ số và cốt truyện nền cho: Cựu chiến binh...
+2026-05-24 09:26:39 | INFO     | ImageManager:73 | [ImageManager] Đang vẽ NPC mới: 'Cựu chiến binh'...
+2026-05-24 09:26:39 | WARNING  | ImageManager:83 | [ImageManager] Tạo ảnh NPC 'Cựu chiến binh' thất bại.
+2026-05-24 09:26:39 | DEBUG    | BaseManager:75 | [NPCs] Đã lưu thành công 'Cựu chiến binh'.
+2026-05-24 09:26:39 | DEBUG    | MemoryManager:209 | [ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: 2).
+2026-05-24 09:26:39 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 1.
+2026-05-24 09:26:39 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
+2026-05-24 09:26:39 | INFO     | server:105 | Hoàn tất xử lý ngầm (State & Memory)!
+2026-05-24 09:27:23 | DEBUG    | ActionProcessor:32 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-05-24 09:27:23 | DEBUG    | MemoryProcessor:130 | [MemoryProcessor] Truy vấn FAISS: 'Tấn công Cựu chiến binh ở Vùng Ruins Cổ Xưa'
+2026-05-24 09:27:23 | DEBUG    | MemoryManager:172 | [VectorDB Search] 'Tấn công Cựu chiến binh ở Vùng Ruins Cổ Xưa' -> Trả về 10 kết quả.
+2026-05-24 09:27:23 | DEBUG    | MemoryProcessor:144 | [Deduplication] Bỏ qua ký ức #2 từ FAISS vì đã có trong Lịch sử NPC.
+2026-05-24 09:27:23 | DEBUG    | MemoryProcessor:184 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.552s
+2026-05-24 09:27:23 | DEBUG    | StoryDirector:50 | [StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: 'Tôi giả vờ lui về phía sau để dụ đối phương tấn cô...'
+2026-05-24 09:27:25 | INFO     | StoryDirector:74 | [StoryDirector] Đang tính toán các lựa chọn tiếp theo...
+2026-05-24 09:27:27 | DEBUG    | StoryDirector:85 | [StoryDirector] Đã tạo thành công 3 lựa chọn khả thi.
+2026-05-24 09:27:29 | WARNING  | LocalAgents:185 | [MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.
+2026-05-24 09:27:31 | DEBUG    | StateProcessor:269 | [Profile] Background Tasks (State Extraction): 3.784s
+2026-05-24 09:27:31 | INFO     | StateProcessor:128 |  [+] Phát hiện nhân vật xuất hiện: Bóng tối
+2026-05-24 09:27:31 | DEBUG    | MemoryManager:209 | [ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: 3).
+2026-05-24 09:27:31 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-05-24 09:27:31 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
+2026-05-24 09:27:31 | INFO     | server:105 | Hoàn tất xử lý ngầm (State & Memory)!
+2026-05-24 09:28:47 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới data/eldoria.db
+2026-05-24 09:28:47 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-05-24 09:28:47 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-05-24 09:28:47 | INFO     | ImageManager:112 | [ImageManager] Bắt đầu dọn dẹp thư mục ảnh cũ cho Game mới...
+2026-05-24 09:28:47 | INFO     | ImageManager:123 | [ImageManager] Dọn dẹp thư mục ảnh hoàn tất.
+2026-05-24 09:28:47 | INFO     | StoryDirector:91 | [StoryDirector] Đang tạo World Bible từ ý tưởng người chơi...
+2026-05-24 09:28:51 | DEBUG    | StoryDirector:97 | [StoryDirector] Đã lưu World Bible xuống file: ./data/world_bible.json
+2026-05-24 09:28:51 | INFO     | StoryDirector:105 | [StoryDirector] Đang khởi tạo địa điểm xuất phát cho thế giới 'The Sacred Blade Chronicles'...
+2026-05-24 09:28:52 | DEBUG    | BaseManager:75 | [Locations] Đã lưu thành công 'Lăng Mộ Hoàng Gia Tàn Tích'.
+2026-05-24 09:28:52 | INFO     | StoryDirector:130 | [StoryDirector] Bắt đầu sinh phân đoạn truyện mở đầu tại 'Lăng Mộ Hoàng Gia Tàn Tích'...
+2026-05-24 09:28:54 | INFO     | StoryDirector:74 | [StoryDirector] Đang tính toán các lựa chọn tiếp theo...
+2026-05-24 09:28:56 | DEBUG    | StoryDirector:85 | [StoryDirector] Đã tạo thành công 3 lựa chọn khả thi.
+2026-05-24 09:28:58 | WARNING  | LocalAgents:185 | [MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.
+2026-05-24 09:29:14 | DEBUG    | ActionProcessor:32 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-05-24 09:29:15 | DEBUG    | MemoryProcessor:130 | [MemoryProcessor] Truy vấn FAISS: 'Lăng Mộ Hoàng Gia Tàn Tích Cựu chiến binh Bóng tối'
+2026-05-24 09:29:15 | DEBUG    | MemoryManager:172 | [VectorDB Search] 'Lăng Mộ Hoàng Gia Tàn Tích Cựu chiến binh Bóng tối' -> Trả về 10 kết quả.
+2026-05-24 09:29:15 | DEBUG    | MemoryProcessor:184 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.647s
+2026-05-24 09:29:15 | DEBUG    | StoryDirector:50 | [StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: 'Tôi nhặt lưỡi kiếm linh thiêng lên để chống lại sứ...'
+2026-05-24 09:29:16 | DEBUG    | StateProcessor:269 | [Profile] Background Tasks (State Extraction): 19.538s
+2026-05-24 09:29:16 | INFO     | StateProcessor:181 | [Hệ Thống] ---> THAY ĐỔI TÚI ĐỒ <---
+2026-05-24 09:29:16 | INFO     | ImageManager:95 | [ImageManager] Đang vẽ vật phẩm mới: 'holy_blade'...
+2026-05-24 09:29:16 | INFO     | StateProcessor:128 |  [+] Phát hiện nhân vật xuất hiện: Hình ảnh mờ ảo
+2026-05-24 09:29:16 | INFO     | StateProcessor:29 | [Cloud] Đang thiết kế chỉ số và cốt truyện nền cho: Hình ảnh mờ ảo...
+2026-05-24 09:29:16 | WARNING  | ImageManager:107 | [ImageManager] Tạo ảnh vật phẩm 'holy_blade' thất bại.
+2026-05-24 09:29:16 | INFO     | StateProcessor:207 |  [+] Nhận được: holy_blade
+2026-05-24 09:29:16 | INFO     | StateProcessor:228 |  [Balo hiện tại]: holy_blade
+2026-05-24 09:29:16 | INFO     | StoryDirector:74 | [StoryDirector] Đang tính toán các lựa chọn tiếp theo...
+2026-05-24 09:29:19 | INFO     | ImageManager:73 | [ImageManager] Đang vẽ NPC mới: 'Hình ảnh mờ ảo'...
+2026-05-24 09:29:19 | WARNING  | ImageManager:83 | [ImageManager] Tạo ảnh NPC 'Hình ảnh mờ ảo' thất bại.
+2026-05-24 09:29:19 | DEBUG    | BaseManager:75 | [NPCs] Đã lưu thành công 'Hình ảnh mờ ảo'.
+2026-05-24 09:29:19 | DEBUG    | MemoryManager:209 | [ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: 4).
+2026-05-24 09:29:19 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 3.
+2026-05-24 09:29:19 | WARNING  | DatabaseManager:132 | [Database] Không tìm thấy NPC 'Cựu chiến binh' để link với memory #1
+2026-05-24 09:29:19 | WARNING  | DatabaseManager:132 | [Database] Không tìm thấy NPC 'Bóng tối' để link với memory #1
+2026-05-24 09:29:19 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
+2026-05-24 09:29:19 | INFO     | server:105 | Hoàn tất xử lý ngầm (State & Memory)!
+2026-05-24 09:29:19 | DEBUG    | StoryDirector:85 | [StoryDirector] Đã tạo thành công 3 lựa chọn khả thi.
+2026-05-24 09:29:21 | WARNING  | LocalAgents:185 | [MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.
+2026-05-24 09:29:26 | DEBUG    | StateProcessor:269 | [Profile] Background Tasks (State Extraction): 7.146s
+2026-05-24 09:29:26 | DEBUG    | MemoryManager:209 | [ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: 4).
+2026-05-24 09:29:26 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 4.
+2026-05-24 09:29:27 | WARNING  | DatabaseManager:132 | [Database] Không tìm thấy NPC 'Cựu chiến binh' để link với memory #2
+2026-05-24 09:29:27 | WARNING  | DatabaseManager:132 | [Database] Không tìm thấy NPC 'Bóng tối' để link với memory #2
+2026-05-24 09:29:27 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
+2026-05-24 09:29:27 | INFO     | server:105 | Hoàn tất xử lý ngầm (State & Memory)!
+2026-05-24 09:29:52 | DEBUG    | ActionProcessor:32 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-05-24 09:29:53 | DEBUG    | MemoryProcessor:130 | [MemoryProcessor] Truy vấn FAISS: 'Tìm kiếm thanh sắt gần đó để tạo hàng rào phòng thủ'
+2026-05-24 09:29:53 | DEBUG    | MemoryManager:172 | [VectorDB Search] 'Tìm kiếm thanh sắt gần đó để tạo hàng rào phòng thủ' -> Trả về 10 kết quả.
+2026-05-24 09:29:53 | DEBUG    | MemoryProcessor:144 | [Deduplication] Bỏ qua ký ức #1 từ FAISS vì đã có trong Lịch sử NPC.
+2026-05-24 09:29:53 | DEBUG    | MemoryProcessor:144 | [Deduplication] Bỏ qua ký ức #2 từ FAISS vì đã có trong Lịch sử NPC.
+2026-05-24 09:29:53 | DEBUG    | MemoryProcessor:184 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.439s
+2026-05-24 09:29:53 | DEBUG    | StoryDirector:50 | [StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: 'Tôi rút thanh sắt ở gần đó để tạo hàng rào phòng t...'
+2026-05-24 09:29:54 | INFO     | StoryDirector:74 | [StoryDirector] Đang tính toán các lựa chọn tiếp theo...
+2026-05-24 09:29:56 | DEBUG    | StoryDirector:85 | [StoryDirector] Đã tạo thành công 3 lựa chọn khả thi.
+2026-05-24 09:30:01 | WARNING  | LocalAgents:185 | [MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.
+2026-05-24 09:30:01 | DEBUG    | StateProcessor:269 | [Profile] Background Tasks (State Extraction): 5.352s
+2026-05-24 09:30:01 | DEBUG    | MemoryManager:209 | [ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: 4).
+2026-05-24 09:30:01 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 5.
+2026-05-24 09:30:01 | WARNING  | DatabaseManager:132 | [Database] Không tìm thấy NPC 'Cựu chiến binh' để link với memory #3
+2026-05-24 09:30:01 | WARNING  | DatabaseManager:132 | [Database] Không tìm thấy NPC 'Bóng tối' để link với memory #3
+2026-05-24 09:30:01 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
+2026-05-24 09:30:01 | INFO     | server:105 | Hoàn tất xử lý ngầm (State & Memory)!
+2026-05-24 09:30:39 | DEBUG    | ActionProcessor:32 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-05-24 09:30:39 | DEBUG    | MemoryProcessor:130 | [MemoryProcessor] Truy vấn FAISS: 'Cắt dây leo xanh quanh thanh sắt bằng kiếm'
+2026-05-24 09:30:40 | DEBUG    | MemoryManager:172 | [VectorDB Search] 'Cắt dây leo xanh quanh thanh sắt bằng kiếm' -> Trả về 10 kết quả.
+2026-05-24 09:30:40 | DEBUG    | MemoryProcessor:144 | [Deduplication] Bỏ qua ký ức #3 từ FAISS vì đã có trong Lịch sử NPC.
+2026-05-24 09:30:40 | DEBUG    | MemoryProcessor:144 | [Deduplication] Bỏ qua ký ức #2 từ FAISS vì đã có trong Lịch sử NPC.
+2026-05-24 09:30:40 | DEBUG    | MemoryProcessor:184 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.457s
+2026-05-24 09:30:40 | DEBUG    | StoryDirector:50 | [StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: 'Tôi dùng kiếm để cắt đứt dây leo xanh đang quấn qu...'
+2026-05-24 09:30:41 | INFO     | StoryDirector:74 | [StoryDirector] Đang tính toán các lựa chọn tiếp theo...
+2026-05-24 09:30:45 | DEBUG    | StoryDirector:85 | [StoryDirector] Đã tạo thành công 3 lựa chọn khả thi.
+2026-05-24 09:30:57 | WARNING  | LocalAgents:185 | [MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.
+2026-05-24 09:30:57 | DEBUG    | StateProcessor:269 | [Profile] Background Tasks (State Extraction): 11.974s
+2026-05-24 09:30:57 | DEBUG    | MemoryManager:209 | [ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: 4).
+2026-05-24 09:30:57 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 6.
+2026-05-24 09:30:57 | WARNING  | DatabaseManager:132 | [Database] Không tìm thấy NPC 'Cựu chiến binh' để link với memory #4
+2026-05-24 09:30:57 | WARNING  | DatabaseManager:132 | [Database] Không tìm thấy NPC 'Bóng tối' để link với memory #4
+2026-05-24 09:30:57 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
+2026-05-24 09:30:57 | INFO     | server:105 | Hoàn tất xử lý ngầm (State & Memory)!
+2026-05-24 09:31:55 | DEBUG    | ActionProcessor:32 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-05-24 09:31:55 | INFO     | ActionProcessor:91 | [ActionManager] 🎲 Sự kiện NPC xuất hiện (Xí ngầu: 19/26)
+2026-05-24 09:31:55 | DEBUG    | MemoryProcessor:130 | [MemoryProcessor] Truy vấn FAISS: 'dùng cán kiếm đập dây leo'
+2026-05-24 09:31:55 | DEBUG    | MemoryManager:172 | [VectorDB Search] 'dùng cán kiếm đập dây leo' -> Trả về 10 kết quả.
+2026-05-24 09:31:55 | DEBUG    | MemoryProcessor:144 | [Deduplication] Bỏ qua ký ức #4 từ FAISS vì đã có trong Lịch sử NPC.
+2026-05-24 09:31:55 | DEBUG    | MemoryProcessor:144 | [Deduplication] Bỏ qua ký ức #3 từ FAISS vì đã có trong Lịch sử NPC.
+2026-05-24 09:31:55 | DEBUG    | MemoryProcessor:144 | [Deduplication] Bỏ qua ký ức #2 từ FAISS vì đã có trong Lịch sử NPC.
+2026-05-24 09:31:55 | DEBUG    | MemoryProcessor:184 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.441s
+2026-05-24 09:31:55 | DEBUG    | StoryDirector:50 | [StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: 'Tôi dùng cán kiếm đập mạnh vào dây leo để phá....'
+2026-05-24 09:31:57 | INFO     | StoryDirector:74 | [StoryDirector] Đang tính toán các lựa chọn tiếp theo...
+2026-05-24 09:31:59 | DEBUG    | StoryDirector:85 | [StoryDirector] Đã tạo thành công 3 lựa chọn khả thi.
+2026-05-24 09:32:00 | WARNING  | LocalAgents:185 | [MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.
+2026-05-24 09:32:00 | DEBUG    | StateProcessor:269 | [Profile] Background Tasks (State Extraction): 1.283s
+2026-05-24 09:32:00 | INFO     | StateProcessor:181 | [Hệ Thống] ---> THAY ĐỔI TÚI ĐỒ <---
+2026-05-24 09:32:00 | INFO     | ImageManager:95 | [ImageManager] Đang vẽ vật phẩm mới: 'thanh sắt'...
+2026-05-24 09:32:01 | WARNING  | ImageManager:107 | [ImageManager] Tạo ảnh vật phẩm 'thanh sắt' thất bại.
+2026-05-24 09:32:01 | INFO     | StateProcessor:207 |  [+] Nhận được: thanh sắt
+2026-05-24 09:32:01 | INFO     | StateProcessor:228 |  [Balo hiện tại]: holy_blade, thanh sắt
+2026-05-24 09:32:01 | DEBUG    | MemoryManager:209 | [ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: 4).
+2026-05-24 09:32:01 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 7.
+2026-05-24 09:32:01 | WARNING  | DatabaseManager:132 | [Database] Không tìm thấy NPC 'Cựu chiến binh' để link với memory #5
+2026-05-24 09:32:01 | WARNING  | DatabaseManager:132 | [Database] Không tìm thấy NPC 'Bóng tối' để link với memory #5
+2026-05-24 09:32:01 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
+2026-05-24 09:32:01 | INFO     | server:105 | Hoàn tất xử lý ngầm (State & Memory)!
+2026-05-24 11:14:04 | INFO     | Orchestration:21 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-05-24 11:14:04 | DEBUG    | ImageManager:22 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-05-24 11:14:05 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-05-24 11:14:11 | DEBUG    | MemoryManager:106 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-05-24 11:14:12 | DEBUG    | MemoryProcessor:18 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-05-24 11:14:17 | DEBUG    | StoryDirector:28 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-05-24 11:14:17 | INFO     | Orchestration:53 | Hệ thống đã sẵn sàng!
+2026-05-24 11:14:28 | INFO     | Orchestration:21 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-05-24 11:14:28 | DEBUG    | ImageManager:22 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-05-24 11:14:30 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-05-24 11:14:36 | DEBUG    | MemoryManager:106 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-05-24 11:14:36 | DEBUG    | MemoryProcessor:18 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-05-24 11:14:42 | DEBUG    | StoryDirector:28 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-05-24 11:14:42 | INFO     | Orchestration:53 | Hệ thống đã sẵn sàng!
+2026-05-24 11:14:42 | INFO     | Orchestration:21 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-05-24 11:14:42 | DEBUG    | ImageManager:22 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-05-24 11:14:43 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-05-24 11:14:49 | DEBUG    | MemoryManager:106 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-05-24 11:14:49 | DEBUG    | MemoryProcessor:18 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-05-24 11:14:55 | DEBUG    | StoryDirector:28 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-05-24 11:14:55 | INFO     | Orchestration:53 | Hệ thống đã sẵn sàng!
+2026-05-24 11:16:33 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới data/eldoria.db
+2026-05-24 11:16:33 | DEBUG    | DatabaseManager:75 | [Database] Bảng 'MEMORY_NPC' chưa tồn tại, bỏ qua bước dọn dẹp.
+2026-05-24 11:16:33 | DEBUG    | DatabaseManager:75 | [Database] Bảng 'Memory' chưa tồn tại, bỏ qua bước dọn dẹp.
+2026-05-24 11:16:33 | DEBUG    | DatabaseManager:75 | [Database] Bảng 'NPCs' chưa tồn tại, bỏ qua bước dọn dẹp.
+2026-05-24 11:16:33 | DEBUG    | DatabaseManager:75 | [Database] Bảng 'Locations' chưa tồn tại, bỏ qua bước dọn dẹp.
+2026-05-24 11:16:33 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-05-24 11:16:33 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-05-24 11:16:33 | INFO     | ImageManager:112 | [ImageManager] Bắt đầu dọn dẹp thư mục ảnh cũ cho Game mới...
+2026-05-24 11:16:33 | INFO     | ImageManager:123 | [ImageManager] Dọn dẹp thư mục ảnh hoàn tất.
+2026-05-24 11:16:33 | INFO     | StoryDirector:91 | [StoryDirector] Đang tạo World Bible từ ý tưởng người chơi...
+2026-05-24 11:16:36 | DEBUG    | StoryDirector:97 | [StoryDirector] Đã lưu World Bible xuống file: ./data/world_bible.json
+2026-05-24 11:16:36 | INFO     | StoryDirector:105 | [StoryDirector] Đang khởi tạo địa điểm xuất phát cho thế giới 'Eldoria: Realm of the Celestial Blade'...
+2026-05-24 11:16:38 | DEBUG    | BaseManager:75 | [Locations] Đã lưu thành công 'Thung lũng Bóng Đổ'.
+2026-05-24 11:16:38 | INFO     | StoryDirector:130 | [StoryDirector] Bắt đầu sinh phân đoạn truyện mở đầu tại 'Thung lũng Bóng Đổ'...
+2026-05-24 11:16:40 | INFO     | StoryDirector:74 | [StoryDirector] Đang tính toán các lựa chọn tiếp theo...
+2026-05-24 11:16:41 | DEBUG    | StoryDirector:85 | [StoryDirector] Đã tạo thành công 3 lựa chọn khả thi.
+2026-05-24 11:17:02 | WARNING  | LocalAgents:185 | [MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.
+2026-05-24 11:17:02 | DEBUG    | StateProcessor:269 | [Profile] Background Tasks (State Extraction): 21.237s
+2026-05-24 11:17:02 | INFO     | StateProcessor:128 |  [+] Phát hiện nhân vật xuất hiện: Bóng tối
+2026-05-24 11:17:02 | INFO     | StateProcessor:29 | [Cloud] Đang thiết kế chỉ số và cốt truyện nền cho: Bóng tối...
+2026-05-24 11:17:05 | INFO     | ImageManager:73 | [ImageManager] Đang vẽ NPC mới: 'Bóng tối'...
+2026-05-24 11:17:05 | WARNING  | ImageManager:83 | [ImageManager] Tạo ảnh NPC 'Bóng tối' thất bại.
+2026-05-24 11:17:05 | DEBUG    | BaseManager:75 | [NPCs] Đã lưu thành công 'Bóng tối'.
+2026-05-24 11:17:05 | DEBUG    | MemoryManager:209 | [ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: 1).
+2026-05-24 11:17:05 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 0.
+2026-05-24 11:17:06 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
+2026-05-24 11:17:06 | INFO     | server:154 | Hoàn tất xử lý ngầm (State & Memory)!
+2026-05-24 11:17:07 | DEBUG    | ActionProcessor:32 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-05-24 11:17:08 | DEBUG    | MemoryProcessor:130 | [MemoryProcessor] Truy vấn FAISS: 'Đánh bại Bóng tối ở Thung lũng Bóng Đổ'
+2026-05-24 11:17:08 | DEBUG    | MemoryManager:172 | [VectorDB Search] 'Đánh bại Bóng tối ở Thung lũng Bóng Đổ' -> Trả về 1 kết quả.
+2026-05-24 11:17:08 | DEBUG    | MemoryProcessor:144 | [Deduplication] Bỏ qua ký ức #1 từ FAISS vì đã có trong Lịch sử NPC.
+2026-05-24 11:17:08 | DEBUG    | MemoryProcessor:184 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.435s
+2026-05-24 11:17:08 | DEBUG    | StoryDirector:50 | [StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: 'Tôi giơ kiếm ra chiến đấu với bóng tối...'
+2026-05-24 11:17:10 | INFO     | StoryDirector:74 | [StoryDirector] Đang tính toán các lựa chọn tiếp theo...
+2026-05-24 11:17:11 | DEBUG    | StoryDirector:85 | [StoryDirector] Đã tạo thành công 3 lựa chọn khả thi.
+2026-05-24 11:17:23 | WARNING  | LocalAgents:185 | [MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.
+2026-05-24 11:17:23 | DEBUG    | StateProcessor:269 | [Profile] Background Tasks (State Extraction): 11.845s
+2026-05-24 11:17:23 | INFO     | StateProcessor:181 | [Hệ Thống] ---> THAY ĐỔI TÚI ĐỒ <---
+2026-05-24 11:17:23 | INFO     | ImageManager:95 | [ImageManager] Đang vẽ vật phẩm mới: 'Thanh kiếm khổng lồ'...
+2026-05-24 11:17:23 | INFO     | StateProcessor:108 |  [-] NPC đã rời khỏi phân cảnh: bóng tối
+2026-05-24 11:17:23 | WARNING  | ImageManager:107 | [ImageManager] Tạo ảnh vật phẩm 'Thanh kiếm khổng lồ' thất bại.
+2026-05-24 11:17:23 | INFO     | StateProcessor:207 |  [+] Nhận được: Thanh kiếm khổng lồ
+2026-05-24 11:17:23 | INFO     | StateProcessor:228 |  [Balo hiện tại]: Thanh kiếm khổng lồ
+2026-05-24 11:17:23 | DEBUG    | MemoryManager:209 | [ShortTermMemory] Đã cập nhật Context Window hiện tại (Size: 2).
+2026-05-24 11:17:23 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 1.
+2026-05-24 11:17:23 | DEBUG    | MemoryProcessor:231 | [MemoryProcessor] Đã lưu 1 Episode Ký ức vào CSDL và VectorDB.
+2026-05-24 11:17:23 | INFO     | server:154 | Hoàn tất xử lý ngầm (State & Memory)!
