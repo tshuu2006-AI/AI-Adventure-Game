@@ -1,5 +1,8 @@
 import os
-import uvicorn
+import sys
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 import base64
 import re
 from dotenv import load_dotenv
@@ -16,16 +19,25 @@ import httpx
 from groq import Groq
 from google import genai
 
+# ==========================================
+# 1. CỐ ĐỊNH THƯ MỤC GỐC (Tránh lỗi Path khi Unity gọi ngầm)
+# ==========================================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 app = FastAPI()
-load_dotenv()
-groq_api_key = os.getenv("GROQ_API_KEY")
-gemini_api_key = os.getenv("GEMINI_API_KEY")
+
+# Nạp .env nếu có (Không báo lỗi nếu người chơi tải từ GitHub về chưa có file này)
+env_path = os.path.join(BASE_DIR, '.env')
+if os.path.exists(env_path):
+    load_dotenv(dotenv_path=env_path)
+else:
+    load_dotenv()
 
 current_config = {
     "mode": "default",       # "default" hoặc "custom"
     "cloud_provider": "groq",# Hoặc "custom_key"
     "cloud_key": "",
-    "local_provider": "gemini",
+    "local_provider": "gemini", 
     "local_model_or_key": ""
 }
 
@@ -37,25 +49,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Khởi tạo Bộ não trung tâm
+# Đảm bảo các thư mục cần thiết luôn tồn tại trước khi khởi tạo
+os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
+os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
+
+# Khởi tạo Bộ não trung tâm (Sử dụng đường dẫn tuyệt đối)
 orchestrator = GameOrchestrator(
-    groq_api_key=groq_api_key,
-    gemini_api_key=gemini_api_key,
-    db_path="data/eldoria.db",
-    vector_model_path="all-MiniLM-L6-v2", # Chỉnh lại đường dẫn nếu cần
+    db_path=os.path.join(BASE_DIR, "data", "eldoria.db"),
+    vector_model_path="all-MiniLM-L6-v2",
+    groq_api_key=os.getenv("GROQ_API_KEY", ""),
+    gemini_api_key=os.getenv("GEMINI_API_KEY", "")
 )
+
 # ==========================================
 # CÁC HÀM TIỆN ÍCH (HELPER)
 # ==========================================
 
 def image_to_base64_with_default(image_path, is_item=False):
-    """(Req 4) Chuyển ảnh sang Base64, nếu không có sẽ lấy ảnh mặc định"""
-    if image_path and os.path.exists(image_path):
-        with open(image_path, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
+    """(Req 4) Chuyển ảnh sang Base64, tự động bọc đường dẫn tuyệt đối"""
+    if image_path:
+        if not os.path.isabs(image_path):
+            image_path = os.path.join(BASE_DIR, image_path)
 
+        if os.path.exists(image_path):
+            with open(image_path, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
+    
     if is_item:
-        default_item_path = "static/default_item.png" # Nhớ tạo 1 ảnh này trong thư mục static
+        default_item_path = os.path.join(BASE_DIR, "static", "default_item.png")
         if os.path.exists(default_item_path):
             with open(default_item_path, "rb") as f:
                 return base64.b64encode(f.read()).decode("utf-8")
@@ -64,9 +85,8 @@ def image_to_base64_with_default(image_path, is_item=False):
 def build_inventory_payload():
     """Lấy túi đồ mới nhất trực tiếp từ RAM"""
     try:
-        inv_dict = orchestrator.player_state.inventory
+        inv_dict = orchestrator.player_state.inventory 
         payload = []
-        # SỬA Ở ĐÂY: Thêm .values() để lấy trực tiếp object Item
         for item in inv_dict.values():
             payload.append({
                 "name": getattr(item, 'name', 'Vật phẩm'),
@@ -82,18 +102,16 @@ def build_inventory_payload():
 def parse_story_into_segments(full_text):
     """(Req 2) Cắt text dựa trên \n và Ngoặc kép ("")"""
     segments = []
-    # Tách theo \n trước
     paragraphs = [p.strip() for p in full_text.split('\n') if p.strip()]
 
     for p in paragraphs:
-        # Tách mảng dựa trên ngoặc kép. Các phần tử chẵn là ngoài ngoặc (Master), lẻ là trong ngoặc (NPC)
         parts = re.split(r'(".*?")', p)
         for part in parts:
             part = part.strip()
             if not part: continue
-
+            
             if part.startswith('"') and part.endswith('"'):
-                dialogue = part[1:-1].strip() # Bỏ ngoặc kép
+                dialogue = part[1:-1].strip()
                 if dialogue:
                     segments.append({"speaker": "NPC", "text": f'"{dialogue}"'})
             else:
@@ -101,14 +119,13 @@ def parse_story_into_segments(full_text):
     return segments
 
 # ==========================================
-# BACKGROUND TASKS (CHẠY NGẦM KHÔNG BLOCK UI)
+# BACKGROUND TASKS & UTILS
 # ==========================================
 async def verify_groq_key(api_key: str) -> bool:
     try:
-        # Chạy trong luồng riêng để tránh block async loop nếu thư viện đồng bộ
         def test():
             client = Groq(api_key=api_key)
-            client.models.list() # Gọi thử danh sách model để test key
+            client.models.list()
             return True
         return await asyncio.to_thread(test)
     except Exception:
@@ -127,13 +144,10 @@ async def verify_gemini_key(api_key: str) -> bool:
 async def verify_ollama_model(model_name: str) -> bool:
     try:
         async with httpx.AsyncClient() as client:
-            # Gửi yêu cầu tới API mặc định của Ollama chạy trên máy cục bộ
             response = await client.get("http://localhost:11434/api/tags", timeout=3.0)
             if response.status_code == 200:
                 available_models = response.json().get("models", [])
-                # Kiểm tra xem tên model người dùng nhập có khớp với máy không
                 names = [m.get("name") for m in available_models]
-                # Hỗ trợ check cả khi người dùng nhập thiếu :latest
                 return any(model_name.lower() in name.lower() for name in names)
     except Exception:
         return False
@@ -142,10 +156,8 @@ async def verify_ollama_model(model_name: str) -> bool:
 async def background_post_turn_processing(player_input, story_response):
     """(Req 1) Hàm này sẽ chạy ngầm sau khi Text đã được ném về Unity"""
     try:
-        # 1. Trích xuất State (Items, Locations, NPCs mới) & Sinh ảnh
         ep_data, scene_emotion = await orchestrator.state_sys.process_background_tasks(player_input, story_response)
 
-        # 2. Lưu Ký ức
         encountered = [n.name for n in orchestrator.player_state.currentNPCs]
         await orchestrator.memory_sys.save_turn(
             player_input=player_input,
@@ -159,7 +171,20 @@ async def background_post_turn_processing(player_input, story_response):
         game_logger.error(f"Lỗi chạy ngầm: {e}")
 
 # ==========================================
-# API ENDPOINTS
+# UNITY SYSTEM ENDPOINTS
+# ==========================================
+@app.get("/api/ping")
+async def ping():
+    """Unity sẽ gọi hàm này liên tục để xem Server đã khởi động xong chưa"""
+    return JSONResponse(content={"status": "ok", "message": "Server is ready"})
+
+@app.post("/api/shutdown")
+async def shutdown():
+    """Tắt Server an toàn khi Unity đóng"""
+    os._exit(0)
+
+# ==========================================
+# API ENDPOINTS CHÍNH
 # ==========================================
 
 @app.post("/api/new_game")
@@ -168,47 +193,40 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
     try:
         orchestrator.player_state.inventory = {}
         orchestrator.player_state.currentNPCs = []
-        # 1. Dọn dẹp Database
+
         await orchestrator.db.connect()
         await orchestrator.db.reset_database()
         await orchestrator.db.create_tables()
         orchestrator.image_manager.clear_image_folders()
 
-        # 2. Sinh World & Location
         world_bible = await orchestrator.story_director.create_world_bible(idea)
         reqs = world_bible.get("system_requirements", {})
         orchestrator.world_state.name = reqs.get("world_name", "Vùng đất vô danh")
-
+        
         starting_loc = await orchestrator.story_director.create_starting_location(
             orchestrator.world_state.name, "Fantasy", "Tối tăm"
         )
         orchestrator.player_state.currentLocation = starting_loc
         await orchestrator.db.add_location_to_db(starting_loc)
 
-        # (Lưu ý: Tạm thời không await sinh ảnh ở đây để trả Text nhanh nhất, ảnh sẽ load qua API poll)
-
-        # 3. Kể chuyện (Prologue)
         story_response = ""
         async for chunk in orchestrator.story_director.initialize_story(starting_loc):
             story_response += chunk
 
-        # 4. Phân rã Text thành Segments (Master & NPC)
         segments = parse_story_into_segments(story_response)
 
-        # 5. Sinh Lựa chọn
         choices = await orchestrator.story_director.generate_player_choices(
             current_location_name=starting_loc.name, encountered_npc_name=[], recent_story_text=story_response
         )
         orchestrator.last_choices = choices
         choice_texts = [c["action_text"] for c in choices]
 
-        # 6. Đẩy việc Lưu DB vào chạy ngầm
         bg_tasks.add_task(background_post_turn_processing, "[Bắt đầu trò chơi]", story_response)
 
         return JSONResponse(content={
             "segments": segments,
             "choices": choice_texts,
-            "bg_image_b64": "", # Sẽ rỗng lúc đầu, Unity sẽ call API phụ để kéo ảnh lên sau
+            "bg_image_b64": "",
             "char_image_b64": "",
             "inventory": []
         })
@@ -220,19 +238,16 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
 async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = BackgroundTasks()):
     """Xử lý lượt đi (Giống _process_game_turn)"""
     try:
-        # 1. Lấy context
         directive = await orchestrator.action_sys.get_system_directive(action)
         hybrid_ctx, npcs_ctx = await orchestrator.memory_sys.get_hybrid_context(action, orchestrator.player_state)
 
-        # 2. Sinh Story
         story_response = ""
         async for chunk in orchestrator.story_director.narrate_turn(
                 action, orchestrator.world_state, orchestrator.player_state, npcs_ctx, hybrid_ctx, directive):
             story_response += chunk
-
+        
         segments = parse_story_into_segments(story_response)
 
-        # 3. Sinh Choice (Phải sinh ngay để Unity có data giấu sẵn chờ bật nút)
         choices = await orchestrator.story_director.generate_player_choices(
             current_location_name=orchestrator.player_state.currentLocation.name,
             encountered_npc_name=[n.name for n in orchestrator.player_state.currentNPCs],
@@ -241,15 +256,14 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
         orchestrator.last_choices = choices
         choice_texts = [c["action_text"] for c in choices]
 
-        # 4. Chạy StateProcessor (Tính túi đồ, Update DB, Sinh Ảnh) NGẦM!
         bg_tasks.add_task(background_post_turn_processing, action, story_response)
 
         return JSONResponse(content={
             "segments": segments,
             "choices": choice_texts,
-            "bg_image_b64": "",
+            "bg_image_b64": "", 
             "char_image_b64": "",
-            "inventory": [] # Không trả inventory ngay, bắt Unity poll sau
+            "inventory": []
         })
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -261,13 +275,13 @@ async def poll_updates():
     try:
         curr_loc = orchestrator.player_state.currentLocation
         bg_img = image_to_base64_with_default(curr_loc.image_path if curr_loc else None)
-
+        
         char_img = ""
         if orchestrator.player_state.currentNPCs:
             char_img = image_to_base64_with_default(orchestrator.player_state.currentNPCs[0].image_path)
-
-        inv_payload = build_inventory_payload() # Đã bỏ chữ await
-
+            
+        inv_payload = build_inventory_payload()
+            
         return JSONResponse(content={
             "bg_image_b64": bg_img,
             "char_image_b64": char_img,
@@ -295,7 +309,7 @@ async def get_diary():
     except Exception as e:
         print(f"❌ Lỗi tải Diary: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
-
+    
 @app.get("/api/progress")
 async def get_progress():
     """API để Unity lấy tiến trình Loading (Thanh Progress bar)"""
@@ -308,18 +322,16 @@ async def get_progress():
 async def check_config(
     cloud_key: str = Form(""),
     local_model_or_key: str = Form(""),
-    is_ollama: str = Form("false") # "true" nếu local agent dùng Ollama
+    is_ollama: str = Form("false")
 ):
     """Endpoint xử lý nút Check cấu hình từ Unity"""
     if not cloud_key.strip() or not local_model_or_key.strip():
         return JSONResponse(content={"success": False, "message": "Vui lòng nhập đầy đủ cả 2 trường thông tin!"})
 
-    # 1. Kiểm tra Cloud Key (Groq)
     cloud_ok = await verify_groq_key(cloud_key.strip())
     if not cloud_ok:
         return JSONResponse(content={"success": False, "message": "❌ Cloud API Key (Groq) không hợp lệ hoặc không kết nối được!"})
 
-    # 2. Kiểm tra Local Agent (Gemini Key hoặc Mô hình Ollama)
     if is_ollama.lower() == "true":
         local_ok = await verify_ollama_model(local_model_or_key.strip())
         if not local_ok:
@@ -334,7 +346,7 @@ async def check_config(
 
 @app.post("/api/settings")
 async def update_settings(
-    mode: str = Form(...),                  # "default" hoặc "custom"
+    mode: str = Form(...),
     cloud_key: str = Form(""),
     local_model_or_key: str = Form(""),
     is_ollama: str = Form("false")
@@ -346,28 +358,24 @@ async def update_settings(
     current_config["local_model_or_key"] = local_model_or_key.strip()
     current_config["local_provider"] = "ollama" if is_ollama.lower() == "true" else "gemini"
 
-    # Tiến hành tiêm (inject) động các Key này vào các Subengine nếu mode là custom
     if mode == "custom":
-        # Cập nhật Cloud Agent cho StoryDirector và StateProcessor
         orchestrator.story_director.story_agent.client = Groq(api_key=current_config["cloud_key"])
-        # Cập nhật Local Agent cho StateExtractor/MemoryExtractor
         if current_config["local_provider"] == "gemini":
             orchestrator.state_sys.state_extractor.client = genai.Client(api_key=current_config["local_model_or_key"])
             orchestrator.state_sys.memory_extractor.client = genai.Client(api_key=current_config["local_model_or_key"])
         else:
-            # Nếu dùng Ollama, bạn có thể chuyển hướng đổi base_url của client hoặc đổi model_name tùy kiến trúc Agent của bạn
             orchestrator.state_sys.state_extractor.model_name = current_config["local_model_or_key"]
-            # Ví dụ: orchestrator.state_sys.state_extractor.set_ollama_mode()
             pass
-
+            
         print("⚙️ Đã áp dụng cấu hình Custom của người dùng thành công.")
     else:
-        # Khôi phục lại key gốc từ file .env
-        orchestrator.story_director.story_agent.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        orchestrator.state_sys.state_extractor.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        orchestrator.story_director.story_agent.client = Groq(api_key=os.getenv("GROQ_API_KEY", ""))
+        orchestrator.state_sys.state_extractor.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
         print("⚙️ Đã khôi phục về hệ thống cấu hình Mặc định (Default).")
 
     return JSONResponse(content={"success": True, "message": "Đã lưu và áp dụng cài đặt hệ thống!"})
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    import uvicorn
+    # QUAN TRỌNG: Phải set reload=False khi đóng gói hoặc chạy qua Unity để tránh lỗi vòng lặp tiến trình
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False, log_level="warning")
