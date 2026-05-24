@@ -1,5 +1,5 @@
 import time
-
+from world.Entity import NPC
 from engine.DataManager.DatabaseManager import DatabaseManager, PlayerState, WorldState
 from engine.Utils.PromptManager import PromptManager
 from engine.ImageAPI import ImageAPI
@@ -166,9 +166,30 @@ class GameOrchestrator:
             self.world_state.name, self.world_state.type, self.world_state.theme_and_tone
         )
 
+        starting_npcs = await self.story_director.initialize_key_npcs(
+            world_name=self.world_state.name,
+            world_type=self.world_state.type,
+            world_theme=self.world_state.theme_and_tone,
+            world_conflict = self.world_state.core_conflict,
+            world_mission = self.world_state.mission
+        )
+
         # Lưu vào State và Database
         self.player_state.currentLocation = starting_loc_obj
         await self.db.add_location_to_db(starting_loc_obj)
+
+        for starting_npc in starting_npcs:
+            print(starting_npc)
+            npc_obj = NPC(
+                    id=None,
+                    name=starting_npc.get("name", "Vô danh"),
+                    personality=starting_npc.get("personality", "Bí ẩn"),
+                    description=starting_npc.get("description", "Không rõ"),
+                    affectionate=starting_npc.get("affectionate", 0),
+                    location=starting_npc.get("location", "Không biết"),
+                    status=starting_npc.get("status", "Bình thường")
+            )
+            await self.db.add_npc_to_db(npc_obj)
 
         # Tải ảnh nền cho điểm xuất phát
         await self.image_manager.get_or_create_location_image(

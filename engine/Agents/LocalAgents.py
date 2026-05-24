@@ -163,11 +163,10 @@ class MemoryExtractor(BaseLocalAgent):
     """
 
     async def extract_memory(self, player_input: str, story_response: str) -> dict:
+        # 1. Lấy thẳng System Prompt (Đã bao gồm sẵn luật và ví dụ trong file yaml)
         sys_prompt = self.pm.get_prompt("MemoryExtractor", 'system')
 
-        # few_shots = self.pm.get_prompt("MemoryExtractor", {}).get("FewShot_Examples", "")
-        # full_system_prompt = f"{sys_prompt}\n{few_shots}"
-
+        # 2. Lấy User Prompt
         user_prompt = self.pm.get_prompt(
             'MemoryExtractor',
             'user',
@@ -175,14 +174,16 @@ class MemoryExtractor(BaseLocalAgent):
             story_response=story_response
         )
 
+        # 3. Gọi API Gemini
         result = await self._generate_json(
             system_prompt=sys_prompt,
             user_prompt=user_prompt,
             max_tokens=200
         )
 
+        # 4. Trả về an toàn
         if not result or "atomic_memories" not in result:
-            game_logger.warning("[MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.")
+            self.logger.warning("[MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.")
             return {"atomic_memories": []}
 
         return result

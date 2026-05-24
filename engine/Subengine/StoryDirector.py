@@ -1,8 +1,8 @@
 import json
 from typing import AsyncGenerator
 from world.Entity import Location
-from static.config import STORY_AGENT_MODEL, CHOICE_AGENT_MODEL, LOCATION_AGENT_MODEL, WORLD_GENERATE_AGENT_MODEL
-from engine.Agents.CloudAgents import StoryAgent, ChoiceAgent, WorldGenerateAgent, LocationAgent
+from static.config import STORY_AGENT_MODEL, CHOICE_AGENT_MODEL, LOCATION_AGENT_MODEL, WORLD_GENERATE_AGENT_MODEL, NPC_AGENT_MODEL
+from engine.Agents.CloudAgents import StoryAgent, ChoiceAgent, WorldGenerateAgent, LocationAgent, NPCAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
 
 
@@ -19,11 +19,12 @@ class StoryDirector:
 
         # 1. StoryAgent: Dùng để văn phong mượt mà, tự nhiên nhất
         self.story_agent = StoryAgent(api_key=groq_api_key, pm=self.pm, model_name=STORY_AGENT_MODEL)
+        self.location_agent = LocationAgent(api_key=groq_api_key, pm=self.pm, model_name=LOCATION_AGENT_MODEL)
+        self.npc_agent = NPCAgent(api_key=groq_api_key, pm=self.pm, model_name=NPC_AGENT_MODEL)
 
         # 2. Các Agent xuất JSON: Dùng Qwen-32B để nhanh, rẻ và tuân thủ JSON tuyệt đối
         self.choice_agent = ChoiceAgent(api_key=groq_api_key, pm=self.pm, model_name=CHOICE_AGENT_MODEL)
         self.world_generator = WorldGenerateAgent(api_key=groq_api_key, pm=self.pm, model_name=WORLD_GENERATE_AGENT_MODEL)
-        self.location_agent = LocationAgent(api_key=groq_api_key, pm=self.pm, model_name=LOCATION_AGENT_MODEL)
 
         game_logger.debug("[StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).")
 
@@ -105,6 +106,14 @@ class StoryDirector:
         game_logger.info(f"[StoryDirector] Đang khởi tạo địa điểm xuất phát cho thế giới '{world_name}'...")
         return await self.location_agent.initialize_location(world_name, world_type, theme)
 
+
+    async def initialize_key_npcs(self, world_name, world_type, world_theme, world_conflict, world_mission):
+        game_logger.info(f"[StoryDirector] Đang khởi tạo các npc quan trọng cho thế giới '{world_name}'...")
+        return await self.npc_agent.initialize_npcs(world_name = world_name,
+                                                    world_type = world_type,
+                                                    world_theme = world_theme,
+                                                    world_conflict=world_conflict,
+                                                    world_mission = world_mission)
 
     async def initialize_story(self, starting_location: Location):
         try:

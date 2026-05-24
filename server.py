@@ -1,4 +1,5 @@
 import os
+import uvicorn
 import base64
 import re
 from dotenv import load_dotenv
@@ -17,12 +18,14 @@ from google import genai
 
 app = FastAPI()
 load_dotenv()
+groq_api_key = os.getenv("GROQ_API_KEY")
+gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 current_config = {
     "mode": "default",       # "default" hoặc "custom"
     "cloud_provider": "groq",# Hoặc "custom_key"
     "cloud_key": "",
-    "local_provider": "gemini", 
+    "local_provider": "gemini",
     "local_model_or_key": ""
 }
 
@@ -36,10 +39,10 @@ app.add_middleware(
 
 # Khởi tạo Bộ não trung tâm
 orchestrator = GameOrchestrator(
-    db_path="data/eldoria.db", 
+    groq_api_key=groq_api_key,
+    gemini_api_key=gemini_api_key,
+    db_path="data/eldoria.db",
     vector_model_path="all-MiniLM-L6-v2", # Chỉnh lại đường dẫn nếu cần
-    groq_api_key=os.getenv("GROQ_API_KEY"), 
-    gemini_api_key=os.getenv("GEMINI_API_KEY")
 )
 # ==========================================
 # CÁC HÀM TIỆN ÍCH (HELPER)
@@ -50,7 +53,7 @@ def image_to_base64_with_default(image_path, is_item=False):
     if image_path and os.path.exists(image_path):
         with open(image_path, "rb") as f:
             return base64.b64encode(f.read()).decode("utf-8")
-    
+
     if is_item:
         default_item_path = "static/default_item.png" # Nhớ tạo 1 ảnh này trong thư mục static
         if os.path.exists(default_item_path):
@@ -61,7 +64,7 @@ def image_to_base64_with_default(image_path, is_item=False):
 def build_inventory_payload():
     """Lấy túi đồ mới nhất trực tiếp từ RAM"""
     try:
-        inv_dict = orchestrator.player_state.inventory 
+        inv_dict = orchestrator.player_state.inventory
         payload = []
         # SỬA Ở ĐÂY: Thêm .values() để lấy trực tiếp object Item
         for item in inv_dict.values():
@@ -88,7 +91,7 @@ def parse_story_into_segments(full_text):
         for part in parts:
             part = part.strip()
             if not part: continue
-            
+
             if part.startswith('"') and part.endswith('"'):
                 dialogue = part[1:-1].strip() # Bỏ ngoặc kép
                 if dialogue:
@@ -141,7 +144,7 @@ async def background_post_turn_processing(player_input, story_response):
     try:
         # 1. Trích xuất State (Items, Locations, NPCs mới) & Sinh ảnh
         ep_data, scene_emotion = await orchestrator.state_sys.process_background_tasks(player_input, story_response)
-        
+
         # 2. Lưu Ký ức
         encountered = [n.name for n in orchestrator.player_state.currentNPCs]
         await orchestrator.memory_sys.save_turn(
@@ -175,7 +178,7 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
         world_bible = await orchestrator.story_director.create_world_bible(idea)
         reqs = world_bible.get("system_requirements", {})
         orchestrator.world_state.name = reqs.get("world_name", "Vùng đất vô danh")
-        
+
         starting_loc = await orchestrator.story_director.create_starting_location(
             orchestrator.world_state.name, "Fantasy", "Tối tăm"
         )
@@ -183,15 +186,15 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
         await orchestrator.db.add_location_to_db(starting_loc)
 
         # (Lưu ý: Tạm thời không await sinh ảnh ở đây để trả Text nhanh nhất, ảnh sẽ load qua API poll)
-        
+
         # 3. Kể chuyện (Prologue)
         story_response = ""
         async for chunk in orchestrator.story_director.initialize_story(starting_loc):
             story_response += chunk
-        
+
         # 4. Phân rã Text thành Segments (Master & NPC)
         segments = parse_story_into_segments(story_response)
-        
+
         # 5. Sinh Lựa chọn
         choices = await orchestrator.story_director.generate_player_choices(
             current_location_name=starting_loc.name, encountered_npc_name=[], recent_story_text=story_response
@@ -226,7 +229,7 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
         async for chunk in orchestrator.story_director.narrate_turn(
                 action, orchestrator.world_state, orchestrator.player_state, npcs_ctx, hybrid_ctx, directive):
             story_response += chunk
-        
+
         segments = parse_story_into_segments(story_response)
 
         # 3. Sinh Choice (Phải sinh ngay để Unity có data giấu sẵn chờ bật nút)
@@ -244,7 +247,7 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
         return JSONResponse(content={
             "segments": segments,
             "choices": choice_texts,
-            "bg_image_b64": "", 
+            "bg_image_b64": "",
             "char_image_b64": "",
             "inventory": [] # Không trả inventory ngay, bắt Unity poll sau
         })
@@ -258,13 +261,13 @@ async def poll_updates():
     try:
         curr_loc = orchestrator.player_state.currentLocation
         bg_img = image_to_base64_with_default(curr_loc.image_path if curr_loc else None)
-        
+
         char_img = ""
         if orchestrator.player_state.currentNPCs:
             char_img = image_to_base64_with_default(orchestrator.player_state.currentNPCs[0].image_path)
-            
+
         inv_payload = build_inventory_payload() # Đã bỏ chữ await
-            
+
         return JSONResponse(content={
             "bg_image_b64": bg_img,
             "char_image_b64": char_img,
@@ -292,7 +295,7 @@ async def get_diary():
     except Exception as e:
         print(f"❌ Lỗi tải Diary: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
-    
+
 @app.get("/api/progress")
 async def get_progress():
     """API để Unity lấy tiến trình Loading (Thanh Progress bar)"""
@@ -356,7 +359,7 @@ async def update_settings(
             orchestrator.state_sys.state_extractor.model_name = current_config["local_model_or_key"]
             # Ví dụ: orchestrator.state_sys.state_extractor.set_ollama_mode()
             pass
-            
+
         print("⚙️ Đã áp dụng cấu hình Custom của người dùng thành công.")
     else:
         # Khôi phục lại key gốc từ file .env
@@ -367,5 +370,4 @@ async def update_settings(
     return JSONResponse(content={"success": True, "message": "Đã lưu và áp dụng cài đặt hệ thống!"})
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)

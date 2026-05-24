@@ -13,6 +13,9 @@ logging.basicConfig(
 )
 
 
+
+
+
 class BaseCloudAgent:
     """
     Lớp cơ sở (Base Class) cho tất cả các Agent chạy trên nền tảng Cloud (Groq).
@@ -137,12 +140,28 @@ class WorldGenerateAgent(BaseCloudAgent):
 class NPCAgent(BaseCloudAgent):
     """Agent chịu trách nhiệm thiết kế và sinh ra thông tin NPC ở dạng JSON."""
 
-    async def generate_npc(self, npc_name, context):
+    async def generate_npcs(self, npc_names: list, context: str) -> List[dict]:
         sys_prompt = self.pm.get_prompt('NPCAgent', 'system')
-        user_prompt = self.pm.get_prompt('NPCAgent', 'user', context=context, npc_name=npc_name)
+        names_str = ", ".join(npc_names)
+        user_prompt = self.pm.get_prompt('NPCAgent', 'user', context=context, npc_names=names_str)
 
-        required_keys = ["name", "personality", "description", "affectionate", "status"]
+        return await self._generate_npcs(sys_prompt=sys_prompt, user_prompt=user_prompt, fallback_names=npc_names)
 
+    # Khởi tạo World NPC thì có thể truyền fallback mặc định
+    async def initialize_npcs(self, world_name, world_type, world_theme, world_conflict, world_mission) -> dict:
+        sys_init = self.pm.get_prompt('NPCAgent', 'systemInit')
+        user_init = self.pm.get_prompt('NPCAgent', 'userInit',
+                                       world_name=world_name,
+                                       world_type=world_type,
+                                       world_theme=world_theme,
+                                       world_conflict = world_conflict,
+                                       world_mission = world_mission)
+
+        return await self._generate_npcs(sys_prompt=sys_init, user_prompt=user_init, fallback_names=["Nhân vật bí ẩn"])
+
+    # Sửa hàm xử lý chung:
+    async def _generate_npcs(self, sys_prompt: str, user_prompt: str, fallback_names: list) -> dict:
+        required_keys = ["npcs"]
         result = await self._generate_json_with_retry(
             system_prompt=sys_prompt,
             user_prompt=user_prompt,
@@ -150,11 +169,20 @@ class NPCAgent(BaseCloudAgent):
             temperature=0.8
         )
 
-        if not result:
-            # Fallback an toàn nếu thử 3 lần đều xịt
-            return {"name": npc_name, "personality": "Bí ẩn", "description": "Một bóng người không rõ mặt",
-                    "affectionate": 0, "status": "Bình thường"}
-        return result
+        # Fallback an toàn: Tự động tạo NPC mặc định cho TẤT CẢ các tên được yêu cầu
+        if not result or "npcs" not in result:
+            fallback_npcs = []
+            for name in fallback_names:
+                fallback_npcs.append({
+                    "name": name,
+                    "personality": "Bí ẩn",
+                    "description": "Một bóng người không rõ mặt",
+                    "affectionate": 0,
+                    "status": "Bình thường"
+                })
+            return fallback_npcs
+
+        return result.get("npcs")
 
 
 class LocationAgent(BaseCloudAgent):

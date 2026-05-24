@@ -25,34 +25,6 @@ class StateProcessor:
                                   pm = pm,
                                   model_name = NPC_AGENT_MODEL)
 
-    async def _generate_and_save_new_npc(self, context: str, npc_name: str) -> NPC:
-        game_logger.info(f"[Cloud] Đang thiết kế chỉ số và cốt truyện nền cho: {npc_name}...")
-
-        # Gọi LLM sinh thuộc tính nhân vật
-        npc_json = await self.npc_agent.generate_npc(context=context, npc_name=npc_name)
-
-        npc_obj = NPC(
-            id=None,
-            name=npc_json.get('name', npc_name),
-            personality=npc_json.get('personality', 'Bí ẩn'),
-            description=npc_json.get('description', 'Một bóng người vừa mới xuất hiện.'),
-            affectionate=npc_json.get('affectionate', 0),
-            location=self.player_state.currentLocation.name,
-            status=npc_json.get('status', 'Bình thường')
-        )
-
-        # Vẽ ảnh bằng Stable Diffusion (Chạy bất đồng bộ)
-        img_path = await self.image_manager.get_or_create_npc_image(
-            npc_name=npc_obj.name,
-            description=npc_obj.description
-        )
-        if img_path:
-            npc_obj.image_path = img_path
-
-        # Lưu vào DB trước khi trả về
-        await self.db.add_npc_to_db(npc_obj)
-        return npc_obj
-
 
     async def _update_location(self, new_location_entered_name: str, context: str) -> Location:
         """
@@ -88,7 +60,6 @@ class StateProcessor:
 
         return new_location
 
-
     async def _update_npcs(self, npcs_arrived: list, npcs_left: list, context: str):
         """
         Quản lý danh sách các NPC đang tương tác trong PlayerState dựa trên dữ liệu chuỗi tinh gọn.
@@ -104,53 +75,67 @@ class StateProcessor:
                 npc for npc in self.player_state.currentNPCs
                 if npc.name.lower() not in left_names_set
             ]
-            for name in left_names_set:
-                game_logger.info(f" [-] NPC đã rời khỏi phân cảnh: {name}")
+            # Ghi log bằng mảng gốc để giữ nguyên viết hoa/thường cho đẹp
+            for name in npcs_left:
+                if name.strip().lower() in left_names_set:
+                    game_logger.info(f" [-] NPC đã rời khỏi phân cảnh: {name}")
 
-        # 2. XỬ LÝ CÁC NPC MỚI XUẤT HIỆN (npcs_arrived)
-        if npcs_arrived:
-            new_npc_names = []
-            current_npc_lowercased = {npc.name.lower() for npc in self.player_state.currentNPCs}
+        # Dùng Set để tra cứu tốc độ cao O(1) thay vì List O(N)
+        current_npc_names = {npc.name.lower() for npc in self.player_state.currentNPCs}
 
-            # Nhớ các tên đã duyệt qua trong npc_arrived
-            seen_in_turn = set()
+        # Chỉ lấy những cái tên hợp lệ (không rỗng) và chưa có trong cảnh
+        real_new_npcs = [
+            name.strip() for name in npcs_arrived
+            if name and str(name).strip() and name.strip().lower() not in current_npc_names
+        ]
 
-            for npc_name in npcs_arrived:
-                if not npc_name or str(npc_name).strip() == "":
-                    continue
-                name_clean = npc_name.strip()
-                name_lower = name_clean.lower()
+        if not real_new_npcs:
+            return
 
-                if name_lower in current_npc_lowercased or name_lower in seen_in_turn:
-                    continue
+        # 2. KIỂM TRA DATABASE 1 LẦN DUY NHẤT CHO TOÀN BỘ NPC MỚI (Khắc phục N+1 Query)
+        existing_npcs = await self.db.get_npc_by_names(real_new_npcs, limit=len(real_new_npcs))
 
-                seen_in_turn.add(name_lower)
-                game_logger.info(f" [+] Phát hiện nhân vật xuất hiện: {name_clean}")
-                new_npc_names.append(name_clean)
+        # Tạo mapping để dễ truy xuất
+        existing_npcs_map = {npc.name.lower(): npc for npc in existing_npcs}
+        completely_new_names = []
 
-            if new_npc_names:
-                # Bước 2.1: Truy vấn CSDL hàng loạt (Batch Query)
-                db_npcs = await self.db.get_npc_by_names(new_npc_names, limit=len(new_npc_names))
-                self.player_state.currentNPCs.extend(db_npcs)
+        # 3. Phân loại: Ai đã có trong Database, ai hoàn toàn mới?
+        for npc_name in real_new_npcs:
+            npc_lower = npc_name.lower()
+            if npc_lower in existing_npcs_map:
+                game_logger.debug(f"[State] Đưa NPC cũ '{npc_name}' vào cảnh.")
+                self.player_state.currentNPCs.append(existing_npcs_map[npc_lower])
+            else:
+                completely_new_names.append(npc_name)
 
-                # Giải quyết Bug 1 & 2: Ép kiểu lower cho set để tìm kiếm O(1) chính xác
-                db_npc_names_lower = {npc.name.lower() for npc in db_npcs}
+        # 4. GỌI API MỘT LẦN DUY NHẤT CHO TOÀN BỘ NPC MỚI
+        if completely_new_names:
+            game_logger.info(f"[Cloud] Đang tạo hàng loạt NPC mới: {completely_new_names}...")
 
-                # Lọc ra danh sách những cái tên thực sự chưa có trong CSDL
-                missing_names = [name for name in new_npc_names if name.lower() not in db_npc_names_lower]
+            results = await self.npc_agent.generate_npcs(completely_new_names, context)
+
+            loc_name = self.player_state.currentLocation.name if self.player_state.currentLocation else "Unknown"
+
+            # 5. Lưu vào Database (Bảo vệ an toàn dữ liệu trả về)
+            if isinstance(results, list):
+                for npc_dict in results:
+                    # Khởi tạo an toàn bằng Keyword Arguments
+                    new_npc = NPC(
+                        id=None,
+                        name=npc_dict.get("name", "Vô danh"),
+                        personality=npc_dict.get("personality", "Bí ẩn"),
+                        description=npc_dict.get("description", "Không rõ"),
+                        affectionate=npc_dict.get("affectionate", 0),
+                        location=loc_name,
+                        status=npc_dict.get("status", "Bình thường")
+                    )
+
+                    await self.db.add_npc_to_db(new_npc)
+                    self.player_state.currentNPCs.append(new_npc)
+            else:
+                game_logger.error(f"[Cloud Lỗi] Định dạng trả về bulk_npcs không hợp lệ: {results}")
 
 
-
-                if missing_names:
-                    tasks = [self._generate_and_save_new_npc(context, name) for name in missing_names]
-                    generated_npcs = await asyncio.gather(*tasks)  # Kích nổ song song!
-                    self.player_state.currentNPCs.extend(generated_npcs)
-
-        # 3. ĐỒNG BỘ ẢNH HIỂN THỊ LÊN GIAO DIỆN (UI)
-        if self.player_state.currentNPCs:
-            self.player_state.current_npc_image = self.player_state.currentNPCs[-1].image_path
-        else:
-            self.player_state.current_npc_image = None
 
     async def _update_affection_and_status(self, affection_changes: list):
         if not affection_changes:
