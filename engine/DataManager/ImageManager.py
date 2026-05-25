@@ -9,7 +9,7 @@ class ImageManager:
     Quản lý bộ nhớ đệm (cache) hình ảnh. Tránh việc gọi API tạo lại ảnh đã có.
     """
 
-    def __init__(self, api: ImageAPI, base_folder="./data"):
+    def __init__(self, api: ImageAPI, base_folder: str):
         self.api = api
         self.npc_folder = os.path.join(base_folder, "npc_images")
         self.loc_folder = os.path.join(base_folder, "location_images")

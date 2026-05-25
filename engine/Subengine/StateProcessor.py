@@ -161,55 +161,57 @@ class StateProcessor:
                     break
 
     async def _update_inventory(self, items_added: list, items_removed: list):
-        """Hàm chuyên xử lý logic túi đồ và tạo/xóa ảnh vật phẩm."""
+        """Hàm chuyên xử lý logic túi đồ dưới dạng List[Item] và quản lý tài nguyên ảnh."""
         if items_added or items_removed:
             game_logger.info("[Hệ Thống] ---> THAY ĐỔI TÚI ĐỒ <---")
-            
-            # Danh sách các từ khóa rác do LLM sinh ra khi không có đồ
             invalid_items = ["không", "không có", "none", "trống", "nothing", "không có gì", "null", "n/a"]
 
-            # 1. Thêm Item mới -> Vẽ ảnh
+            # 1. Thêm Item mới vào Danh sách
             if isinstance(items_added, list):
                 for item_name in items_added:
-                    # Lọc bỏ chuỗi rỗng và các từ khóa rác
                     if not item_name or str(item_name).strip().lower() in invalid_items:
                         continue
-                        
+
                     item_name = str(item_name).strip()
-                    
-                    # Kiểm tra item chưa có trong keys của Dictionary
-                    if item_name not in self.player_state.inventory:
+
+                    # 🌟 KIỂM TRA: Nếu vật phẩm chưa có trong danh sách mảng Object
+                    if not any(item.name.lower() == item_name.lower() for item in self.player_state.inventory):
                         # Gọi Kaggle vẽ ảnh
                         img_path = await self.image_manager.get_or_create_item_image(item_name)
 
-                        # Khởi tạo Object Item chuẩn thay vì chỉ lưu đường dẫn
-                        new_item = Item(id=None, name=item_name, description=f"Vật phẩm '{item_name}' nhặt được trong hành trình.")
+                        # Khởi tạo Object Item chuẩn
+                        new_item = Item(id=None, name=item_name,
+                                        description=f"Vật phẩm '{item_name}' nhặt được trong hành trình.")
                         new_item.image_path = img_path
-                        new_item.quote = "Biết đâu sau này sẽ cần dùng tới."
-                        
-                        # Lưu Object vào Dict
-                        self.player_state.inventory[item_name] = new_item
+
+                        # 🌟 THÊM VÀO MẢNG (APPEND):
+                        self.player_state.inventory.append(new_item)
                         game_logger.info(f" [+] Nhận được: {item_name}")
 
-            # 2. Mất Item cũ -> Xóa ảnh và gỡ khỏi Dict
+            # 2. Mất Item cũ khỏi Danh sách
             if isinstance(items_removed, list):
                 for item_name in items_removed:
                     if not item_name or str(item_name).strip().lower() in invalid_items:
                         continue
-                        
+
                     item_name = str(item_name).strip()
-                    
-                    if item_name in self.player_state.inventory:
-                        # Lấy và xóa đối tượng Item khỏi Dict bằng pop()
-                        removed_item = self.player_state.inventory.pop(item_name)
+
+                    # 🌟 TÌM OBJECT TRONG MẢNG:
+                    target_item = next(
+                        (item for item in self.player_state.inventory if item.name.lower() == item_name.lower()), None)
+
+                    if target_item:
+                        # 🌟 XÓA KHỎI MẢNG (REMOVE):
+                        self.player_state.inventory.remove(target_item)
 
                         # Xóa file vật lý
-                        if hasattr(removed_item, 'image_path') and removed_item.image_path:
-                            self.image_manager.delete_image(removed_item.image_path)
+                        if hasattr(target_item, 'image_path') and target_item.image_path:
+                            self.image_manager.delete_image(target_item.image_path)
                         game_logger.info(f" [-] Bị mất: {item_name}")
 
-            # In ra console
-            inventory_status = ", ".join(self.player_state.inventory.keys()) if self.player_state.inventory else "Trống rỗng"
+            # In nhật ký balo ra màn hình điều khiển
+            inventory_status = ", ".join(
+                [item.name for item in self.player_state.inventory]) if self.player_state.inventory else "Trống rỗng"
             game_logger.info(f" [Balo hiện tại]: {inventory_status}")
 
 

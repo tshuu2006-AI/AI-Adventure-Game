@@ -12,7 +12,7 @@ from engine.DataManager.EntityManager.LocationManager import LocationManager
 
 class DatabaseManager:
     """Lớp quản lý cơ sở dữ liệu"""
-    def __init__(self, db_path='./data/World.db', db_folder='./data'):
+    def __init__(self, db_path : str, db_folder : str):
         self.db_path = db_path
         self.db_folder = db_folder
         self.conn = None
@@ -178,7 +178,7 @@ class PlayerState:
         self.currentLocation = None
         self.currentTurn = 0
         self.currentNPCs = []
-        self.inventory = {}
+        self.inventory = []
 
 
 class WorldState:

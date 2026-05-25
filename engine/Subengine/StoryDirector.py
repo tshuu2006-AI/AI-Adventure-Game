@@ -115,9 +115,9 @@ class StoryDirector:
                                                     world_conflict=world_conflict,
                                                     world_mission = world_mission)
 
-    async def initialize_story(self, starting_location: Location):
+    async def initialize_story(self, starting_location: Location, world_bible_dir: str):
         try:
-            with open("./data/world_bible.json", "r", encoding='utf-8') as file:
+            with open(world_bible_dir, "r", encoding='utf-8') as file:
                 world_bible = json.load(file)
         except Exception as e:
             game_logger.error(f"[StoryDirector Lỗi] Không thể đọc file world_bible.json: {e}", exc_info=True)

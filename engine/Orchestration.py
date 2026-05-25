@@ -1,5 +1,6 @@
 import time
 from world.Entity import NPC
+import os
 from engine.DataManager.DatabaseManager import DatabaseManager, PlayerState, WorldState
 from engine.Utils.PromptManager import PromptManager
 from engine.ImageAPI import ImageAPI
@@ -17,15 +18,15 @@ from engine.Subengine.StoryDirector import StoryDirector
 
 
 class GameOrchestrator:
-    def __init__(self, db_path, vector_model_path, groq_api_key, gemini_api_key):
+    def __init__(self, db_path, db_folder, vector_model_path, groq_api_key, gemini_api_key):
         game_logger.info("Đang khởi tạo hệ thống Eldoria Game Engine...")
 
         self.pm = PromptManager('./static/prompts.yaml')
-        self.db = DatabaseManager(db_path=db_path)
+        self.db = DatabaseManager(db_path=db_path, db_folder = db_folder)
         self.player_state = PlayerState()
         self.world_state = WorldState()
         self.image_api = ImageAPI()
-        self.image_manager = ImageManager(api=self.image_api)
+        self.image_manager = ImageManager(api=self.image_api, base_folder=db_folder)
         self.audio_manager = AudioManager()
         self.music_classifier = MusicClassifier(pm = self.pm, gemini_api_key=gemini_api_key)
 
@@ -205,9 +206,9 @@ class GameOrchestrator:
         print("\n" + "=" * 50)
         print("PROLOGUE".center(50))
         print("=" * 50 + "\n")
-
+        world_bible_dir = os.path.join(self.db.db_folder, "world_bible.json")
         story_response = ""
-        async for chunk in self.story_director.initialize_story(starting_loc_obj):
+        async for chunk in self.story_director.initialize_story(starting_loc_obj, world_bible_dir= world_bible_dir):
             print(chunk, end="", flush=True)
             story_response += chunk
 

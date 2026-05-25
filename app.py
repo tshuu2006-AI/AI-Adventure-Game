@@ -8,6 +8,7 @@ if __name__ == "__main__":
     groq_api_key = os.getenv("GROQ_API_KEY")
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     orchestrator = GameOrchestrator(db_path="./data/World.db",
+                                    db_folder = "./data",
                                     vector_model_path="bkai-foundation-models/vietnamese-bi-encoder",
                                     groq_api_key=groq_api_key,
                                     gemini_api_key = gemini_api_key)

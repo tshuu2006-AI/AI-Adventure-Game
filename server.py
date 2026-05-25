@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-
 # Import Orchestrator từ cấu trúc mới
 from engine.Orchestration import GameOrchestrator
 from engine.Utils.logger import game_logger
@@ -59,12 +58,14 @@ orchestrator = GameOrchestrator(
     db_path=os.path.join(BASE_DIR, "data", "eldoria.db"),
     vector_model_path="all-MiniLM-L6-v2",
     groq_api_key=os.getenv("GROQ_API_KEY", ""),
-    gemini_api_key=os.getenv("GEMINI_API_KEY", "")
+    gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
+    db_folder=os.path.join(BASE_DIR, "data")
 )
 
 # ==========================================
 # CÁC HÀM TIỆN ÍCH (HELPER)
 # ==========================================
+# Gom cụm logic xuất dữ liệu runtime để ghi thành file JSON
 
 def image_to_base64_with_default(image_path, is_item=False):
     """(Req 4) Chuyển ảnh sang Base64, tự động bọc đường dẫn tuyệt đối"""
@@ -86,9 +87,10 @@ def image_to_base64_with_default(image_path, is_item=False):
 def build_inventory_payload():
     """Lấy túi đồ mới nhất trực tiếp từ RAM"""
     try:
-        inv_dict = orchestrator.player_state.inventory 
+        inv_list = orchestrator.player_state.inventory
         payload = []
-        for item in inv_dict.values():
+        # ✅ Duyệt trực tiếp qua từng Item object trong List
+        for item in inv_list:
             payload.append({
                 "name": getattr(item, 'name', 'Vật phẩm'),
                 "description": getattr(item, 'description', 'Vật phẩm bí ẩn.'),
@@ -100,17 +102,62 @@ def build_inventory_payload():
         print(f"Lỗi tải túi đồ: {e}")
         return []
 
+
 def parse_story_into_segments(full_text):
-    """(Req 2) Cắt text dựa trên \n và Ngoặc kép ("")"""
+    """(Req 2) Cắt text dựa trên tag [NPC_TALK: Tên] và [PLAYER_TALK] từ LLM"""
+    segments = []
+
+    # Regex tìm kiếm các khối tag thoại. Hỗ trợ quét qua nhiều dòng (re.DOTALL)
+    # Group 1: Loại Tag (NPC_TALK hoặc PLAYER_TALK)
+    # Group 2: Tên người nói (Nếu có)
+    # Group 3: Nội dung câu thoại
+    pattern = r'\[(NPC_TALK|PLAYER_TALK)(?::\s*([^\]]*))?\](.*?)\[/\1\]'
+
+    last_end = 0
+    for match in re.finditer(pattern, full_text, flags=re.DOTALL):
+        # 1. Lấy phần LỜI DẪN CHUYỆN (Master) nằm TRƯỚC đoạn thoại
+        narration = full_text[last_end:match.start()].strip()
+        if narration:
+            segments.append({"speaker": "Master", "text": narration})
+
+        # 2. Lấy phần THOẠI NHÂN VẬT
+        tag_type = match.group(1)
+        speaker_name = match.group(2).strip() if match.group(2) else ""
+        dialogue = match.group(3).strip()
+
+        if dialogue:
+            if tag_type == "NPC_TALK":
+                # Đưa đúng tên NPC vào để Unity hiển thị trên NameTag
+                final_speaker = speaker_name if speaker_name else "NPC"
+                segments.append({"speaker": final_speaker, "text": f'"{dialogue}"'})
+            elif tag_type == "PLAYER_TALK":
+                segments.append({"speaker": "Player", "text": f'"{dialogue}"'})
+
+        last_end = match.end()
+
+    # 3. Lấy phần LỜI DẪN CHUYỆN còn sót lại ở cuối đoạn (nếu có)
+    remaining_narration = full_text[last_end:].strip()
+    if remaining_narration:
+        segments.append({"speaker": "Master", "text": remaining_narration})
+
+    # 4. FALLBACK: Đề phòng LLM "cãi lệnh" không dùng tag mà chỉ dùng ngoặc kép ""
+    # Nếu regex không tìm thấy tag nào nhưng văn bản có chứa ngoặc kép -> Chuyển về cách parse cũ
+    if len(segments) == 1 and segments[0]["speaker"] == "Master" and '"' in full_text:
+        return parse_story_fallback(full_text)
+
+    return segments
+
+
+def parse_story_fallback(full_text):
+    """Fallback an toàn: Cắt text dựa trên ngoặc kép như phiên bản cũ"""
     segments = []
     paragraphs = [p.strip() for p in full_text.split('\n') if p.strip()]
-
     for p in paragraphs:
         parts = re.split(r'(".*?")', p)
         for part in parts:
             part = part.strip()
             if not part: continue
-            
+
             if part.startswith('"') and part.endswith('"'):
                 dialogue = part[1:-1].strip()
                 if dialogue:
@@ -192,7 +239,7 @@ async def shutdown():
 async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = BackgroundTasks()):
     """Khởi tạo Game Loop mới giống hệt run() trong Orchestration"""
     try:
-        orchestrator.player_state.inventory = {}
+        orchestrator.player_state.inventory = []
         orchestrator.player_state.currentNPCs = []
 
         await orchestrator.db.connect()
@@ -367,7 +414,8 @@ async def update_settings(
             db_path=os.path.join(BASE_DIR, "data", "eldoria.db"),
             vector_model_path="all-MiniLM-L6-v2",
             groq_api_key=current_config["cloud_key"],
-            gemini_api_key=current_config["local_model_or_key"]
+            gemini_api_key=current_config["local_model_or_key"],
+            db_folder=os.path.join(BASE_DIR, "data")
         )
         game_logger.info("⚙️ Đã áp dụng cấu hình Custom của người dùng và khởi động lại Engine.")
     else:
@@ -375,7 +423,8 @@ async def update_settings(
             db_path=os.path.join(BASE_DIR, "data", "eldoria.db"),
             vector_model_path="all-MiniLM-L6-v2",
             groq_api_key=os.getenv("GROQ_API_KEY", ""),
-            gemini_api_key=os.getenv("GEMINI_API_KEY", "")
+            gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
+            db_folder=os.path.join(BASE_DIR, "data")
         )
         game_logger.info("⚙️ Đã khôi phục về hệ thống cấu hình Mặc định (Default).")
 

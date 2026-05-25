@@ -15,7 +15,7 @@ class VectorMemory:
     Phục vụ cho tính năng RAG (Retrieval-Augmented Generation) của Game Engine.
     """
 
-    def __init__(self, model_path: str, db_dir: str = './data/') -> None:
+    def __init__(self, model_path: str, db_dir: str) -> None:
         # Tải mô hình nhúng (embedding model) từ Local
         game_logger.info(f"[VectorDB] Đang khởi tạo Embedding Model từ: {model_path}...")
         self.encoder: SentenceTransformer = SentenceTransformer(model_path)
@@ -107,7 +107,7 @@ class VectorMemory:
         except Exception as e:
             game_logger.error(f"[VectorDB Lỗi] Không thể khôi phục dữ liệu FAISS: {e}", exc_info=True)
 
-    def _save_db(self) -> None:
+    def save_db(self) -> None:
         """Lưu vector và metadata xuống ổ cứng."""
         try:
             faiss.write_index(self.index, self.index_path)
@@ -140,7 +140,7 @@ class VectorMemory:
             if memory_id is None:
                 self.num_memory += 1
 
-            self._save_db()
+            self.save_db()
         except Exception as e:
             game_logger.error(f"[VectorDB Lỗi] Sự cố khi nhúng/lưu vector (Memory ID: {memory_id}): {e}", exc_info=True)
 

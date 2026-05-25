@@ -120,7 +120,7 @@ class StateExtractor(BaseLocalAgent):
     """
 
     async def extract_state(self, player_input: str, story_response: str, player_state) -> Dict[str, Any]:
-        inventory_str = ", ".join(list(player_state.inventory.keys())) if player_state.inventory else "Trống rỗng"
+        inventory_str = ", ".join([item.name for item in player_state.inventory]) if player_state.inventory else "Trống rỗng"
         npc_str = ", ".join(
             [npc.name for npc in player_state.currentNPCs]) if player_state.currentNPCs else "Không có ai"
         location_str = player_state.currentLocation.name if player_state.currentLocation else "Chưa xác định"
