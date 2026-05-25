@@ -14,7 +14,11 @@ import base64
 import re
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=os.path.join(SAVE_DIR, '.env'))
+env_path = os.path.join(SAVE_DIR, '.env')
+if os.path.exists(env_path):
+    load_dotenv(dotenv_path=env_path, override=True)
+else:
+    load_dotenv()
 
 from fastapi import FastAPI, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -104,30 +108,30 @@ def build_inventory_payload():
 
 
 def parse_story_into_segments(full_text):
-    """(Req 2) Cắt text dựa trên tag [NPC_TALK: Tên] và [PLAYER_TALK] từ LLM"""
-    segments = []
-
-    # Regex tìm kiếm các khối tag thoại. Hỗ trợ quét qua nhiều dòng (re.DOTALL)
-    # Group 1: Loại Tag (NPC_TALK hoặc PLAYER_TALK)
-    # Group 2: Tên người nói (Nếu có)
-    # Group 3: Nội dung câu thoại
+    """Cắt text dựa trên tag [NPC_TALK: Tên] và [PLAYER_TALK] từ LLM"""
     pattern = r'\[(NPC_TALK|PLAYER_TALK)(?::\s*([^\]]*))?\](.*?)\[/\1\]'
 
+    # 🌟 1. NẾU LLM KHÔNG DÙNG TAG NÀO (VD: Prologue), GỌI FALLBACK NGAY LẬP TỨC
+    if not re.search(pattern, full_text):
+        return parse_story_fallback(full_text)
+
+    segments = []
     last_end = 0
     for match in re.finditer(pattern, full_text, flags=re.DOTALL):
-        # 1. Lấy phần LỜI DẪN CHUYỆN (Master) nằm TRƯỚC đoạn thoại
+        # 2. XỬ LÝ LỜI DẪN CHUYỆN: Cắt nhỏ theo đoạn văn (\n) để Unity bắt click chuột
         narration = full_text[last_end:match.start()].strip()
         if narration:
-            segments.append({"speaker": "Master", "text": narration})
+            for p in narration.split('\n'):
+                if p.strip():
+                    segments.append({"speaker": "Master", "text": p.strip()})
 
-        # 2. Lấy phần THOẠI NHÂN VẬT
+        # 3. XỬ LÝ THOẠI NHÂN VẬT (Giữ nguyên logic cũ)
         tag_type = match.group(1)
         speaker_name = match.group(2).strip() if match.group(2) else ""
         dialogue = match.group(3).strip()
 
         if dialogue:
             if tag_type == "NPC_TALK":
-                # Đưa đúng tên NPC vào để Unity hiển thị trên NameTag
                 final_speaker = speaker_name if speaker_name else "NPC"
                 segments.append({"speaker": final_speaker, "text": f'"{dialogue}"'})
             elif tag_type == "PLAYER_TALK":
@@ -135,15 +139,12 @@ def parse_story_into_segments(full_text):
 
         last_end = match.end()
 
-    # 3. Lấy phần LỜI DẪN CHUYỆN còn sót lại ở cuối đoạn (nếu có)
+    # 4. LỜI DẪN CHUYỆN CÒN SÓT Ở CUỐI: Vẫn cắt nhỏ theo đoạn văn
     remaining_narration = full_text[last_end:].strip()
     if remaining_narration:
-        segments.append({"speaker": "Master", "text": remaining_narration})
-
-    # 4. FALLBACK: Đề phòng LLM "cãi lệnh" không dùng tag mà chỉ dùng ngoặc kép ""
-    # Nếu regex không tìm thấy tag nào nhưng văn bản có chứa ngoặc kép -> Chuyển về cách parse cũ
-    if len(segments) == 1 and segments[0]["speaker"] == "Master" and '"' in full_text:
-        return parse_story_fallback(full_text)
+        for p in remaining_narration.split('\n'):
+            if p.strip():
+                segments.append({"speaker": "Master", "text": p.strip()})
 
     return segments
 
@@ -257,8 +258,12 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
         orchestrator.player_state.currentLocation = starting_loc
         await orchestrator.db.add_location_to_db(starting_loc)
 
+        # 🌟 Lấy đường dẫn tới file world_bible.json trong thư mục an toàn
+        world_bible_dir = os.path.join(orchestrator.db.db_folder, "world_bible.json")
+        
         story_response = ""
-        async for chunk in orchestrator.story_director.initialize_story(starting_loc):
+        # 🌟 Truyền thêm tham số world_bible_dir vào đây:
+        async for chunk in orchestrator.story_director.initialize_story(starting_loc, world_bible_dir=world_bible_dir):
             story_response += chunk
 
         segments = parse_story_into_segments(story_response)
@@ -279,6 +284,7 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
             "inventory": []
         })
     except Exception as e:
+        game_logger.error("❌ LỖI CRASH KHI TẠO NEW GAME:", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -314,6 +320,7 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
             "inventory": []
         })
     except Exception as e:
+        game_logger.error("❌ LỖI CRASH KHI TẠO NEW GAME:", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
