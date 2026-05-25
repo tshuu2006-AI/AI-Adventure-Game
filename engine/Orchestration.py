@@ -13,6 +13,7 @@ from engine.Agents.LocalAgents import MusicClassifier
 # Import các Subsystem đã được module hóa (Bao gồm cả Đạo diễn)
 from engine.Subengine.ActionProcessor import ActionProcessor
 from engine.Subengine.MemoryProcessor import MemoryProcessor
+from engine.Subengine.SaveManager import SaveManager
 from engine.Subengine.StateProcessor import StateProcessor
 from engine.Subengine.StoryDirector import StoryDirector
 
@@ -49,6 +50,7 @@ class GameOrchestrator:
                                         pm=self.pm)
 
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)
+        self.save_manager = SaveManager()
         self.last_choices = []
 
         game_logger.info("Hệ thống đã sẵn sàng!")

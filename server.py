@@ -4,9 +4,18 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 os.chdir(BASE_DIR)
+
+GAME_ROOT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
+SAVE_DIR = os.path.join(GAME_ROOT_DIR, "SaveData")
+os.makedirs(SAVE_DIR, exist_ok=True)
+os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
+
 import base64
 import re
 from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=os.path.join(SAVE_DIR, '.env'))
+
 from fastapi import FastAPI, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,19 +28,10 @@ import httpx
 from groq import Groq
 from google import genai
 
-# ==========================================
-# 1. CỐ ĐỊNH THƯ MỤC GỐC (Tránh lỗi Path khi Unity gọi ngầm)
-# ==========================================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+def safe_key(key: str) -> str:
+    return key if key and key.strip() else "DUMMY_KEY_TO_PREVENT_BUG"
 
 app = FastAPI()
-
-# Nạp .env nếu có (Không báo lỗi nếu người chơi tải từ GitHub về chưa có file này)
-env_path = os.path.join(BASE_DIR, '.env')
-if os.path.exists(env_path):
-    load_dotenv(dotenv_path=env_path)
-else:
-    load_dotenv()
 
 current_config = {
     "mode": "default",       # "default" hoặc "custom"
@@ -54,12 +54,12 @@ os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
 
 # Khởi tạo Bộ não trung tâm (Sử dụng đường dẫn tuyệt đối)
+# Khởi tạo Bộ não trung tâm
 orchestrator = GameOrchestrator(
-    db_path=os.path.join(BASE_DIR, "data", "eldoria.db"),
-    vector_model_path="all-MiniLM-L6-v2",
-    groq_api_key=os.getenv("GROQ_API_KEY", ""),
-    gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
-    db_folder=os.path.join(BASE_DIR, "data")
+    db_path=os.path.join(SAVE_DIR, "eldoria.db"), # 🌟 Trỏ DB về thư mục SaveData
+    vector_model_path="all-MiniLM-L6-v2", 
+    groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")), 
+    gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
 )
 
 # ==========================================
@@ -407,29 +407,48 @@ async def update_settings(
     current_config["cloud_key"] = cloud_key.strip()
     current_config["local_model_or_key"] = local_model_or_key.strip()
     current_config["local_provider"] = "ollama" if is_ollama.lower() == "true" else "gemini"
-
-    # Tái khởi tạo toàn bộ Bộ não trung tâm để Key mới được nạp vào TẤT CẢ các module
+# ... (Bên trong hàm update_settings) ...
     if mode == "custom":
         orchestrator = GameOrchestrator(
-            db_path=os.path.join(BASE_DIR, "data", "eldoria.db"),
+            db_path=os.path.join(SAVE_DIR, "eldoria.db"), # 🌟 Sửa dòng này
             vector_model_path="all-MiniLM-L6-v2",
-            groq_api_key=current_config["cloud_key"],
-            gemini_api_key=current_config["local_model_or_key"],
-            db_folder=os.path.join(BASE_DIR, "data")
+            groq_api_key=safe_key(current_config["cloud_key"]),
+            gemini_api_key=safe_key(current_config["local_model_or_key"])
         )
         game_logger.info("⚙️ Đã áp dụng cấu hình Custom của người dùng và khởi động lại Engine.")
     else:
         orchestrator = GameOrchestrator(
-            db_path=os.path.join(BASE_DIR, "data", "eldoria.db"),
+            db_path=os.path.join(SAVE_DIR, "eldoria.db"), # 🌟 Sửa dòng này
             vector_model_path="all-MiniLM-L6-v2",
-            groq_api_key=os.getenv("GROQ_API_KEY", ""),
-            gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
-            db_folder=os.path.join(BASE_DIR, "data")
+            groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
+            gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
         )
         game_logger.info("⚙️ Đã khôi phục về hệ thống cấu hình Mặc định (Default).")
 
     return JSONResponse(content={"success": True, "message": "Đã lưu và áp dụng cài đặt hệ thống!"})
 
+@app.post("/api/save_game")
+async def save_game(slot: str = Form(...)):
+    """API lưu toàn bộ Database và Memory xuống ổ cứng"""
+    try:
+        await orchestrator.save_manager.save_game(orchestrator, slot_name=slot)
+        return JSONResponse(content={"success": True, "message": f"Đã đồng bộ AI vào {slot}"})
+    except Exception as e:
+        game_logger.error(f"Lỗi Save API: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/load_game")
+async def load_game(slot: str = Form(...)):
+    """API ghi đè Database và Memory từ file save lên hệ thống"""
+    try:
+        success, msg = await orchestrator.save_manager.load_game(orchestrator, slot_name=slot)
+        if success:
+            return JSONResponse(content={"success": True, "message": msg})
+        else:
+            return JSONResponse(status_code=400, content={"error": msg})
+    except Exception as e:
+        game_logger.error(f"Lỗi Load API: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 if __name__ == "__main__":
     import uvicorn

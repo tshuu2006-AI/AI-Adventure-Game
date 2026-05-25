@@ -28,7 +28,8 @@ class SaveManager():
         }
 
     async def save_game(self, orchestrator, slot_name: str):
-        slot_dir = f"./saves/{slot_name}"
+        save_dir_base = os.path.dirname(orchestrator.db.db_path)
+        slot_dir = os.path.join(save_dir_base, slot_name)
         os.makedirs(slot_dir, exist_ok=True)
 
         # 1. Ép SQLite và FAISS dump hết dữ liệu từ RAM xuống đĩa cứng hiện tại
@@ -53,7 +54,8 @@ class SaveManager():
         Nhận vào slot_name, tiến hành giải phóng các kết nối đang mở
         và ghi đè toàn bộ tệp tin của slot đó vào db_path cùng hệ thống VectorDB.
         """
-        slot_dir = f"./data/saves/{slot_name}"
+        save_dir_base = os.path.dirname(orchestrator.db.db_path)
+        slot_dir = os.path.join(save_dir_base, slot_name)
 
         # 1. Kiểm tra sự tồn tại của thư mục lưu trữ slot
         if not os.path.exists(slot_dir):
