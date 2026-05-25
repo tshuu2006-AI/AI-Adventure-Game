@@ -3,6 +3,7 @@ import sys
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
+os.chdir(BASE_DIR)
 import base64
 import re
 from dotenv import load_dotenv
@@ -351,29 +352,35 @@ async def update_settings(
     local_model_or_key: str = Form(""),
     is_ollama: str = Form("false")
 ):
-    """Lưu và áp dụng cấu hình cài đặt"""
+    """Lưu và áp dụng cấu hình cài đặt bằng cách tái khởi tạo toàn bộ Engine"""
     global current_config
+    global orchestrator # 🌟 Bắt buộc phải có dòng này để báo cho Python biết ta sẽ sửa biến toàn cục
+
     current_config["mode"] = mode
     current_config["cloud_key"] = cloud_key.strip()
     current_config["local_model_or_key"] = local_model_or_key.strip()
     current_config["local_provider"] = "ollama" if is_ollama.lower() == "true" else "gemini"
 
+    # Tái khởi tạo toàn bộ Bộ não trung tâm để Key mới được nạp vào TẤT CẢ các module
     if mode == "custom":
-        orchestrator.story_director.story_agent.client = Groq(api_key=current_config["cloud_key"])
-        if current_config["local_provider"] == "gemini":
-            orchestrator.state_sys.state_extractor.client = genai.Client(api_key=current_config["local_model_or_key"])
-            orchestrator.state_sys.memory_extractor.client = genai.Client(api_key=current_config["local_model_or_key"])
-        else:
-            orchestrator.state_sys.state_extractor.model_name = current_config["local_model_or_key"]
-            pass
-            
-        print("⚙️ Đã áp dụng cấu hình Custom của người dùng thành công.")
+        orchestrator = GameOrchestrator(
+            db_path=os.path.join(BASE_DIR, "data", "eldoria.db"),
+            vector_model_path="all-MiniLM-L6-v2",
+            groq_api_key=current_config["cloud_key"],
+            gemini_api_key=current_config["local_model_or_key"]
+        )
+        game_logger.info("⚙️ Đã áp dụng cấu hình Custom của người dùng và khởi động lại Engine.")
     else:
-        orchestrator.story_director.story_agent.client = Groq(api_key=os.getenv("GROQ_API_KEY", ""))
-        orchestrator.state_sys.state_extractor.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
-        print("⚙️ Đã khôi phục về hệ thống cấu hình Mặc định (Default).")
+        orchestrator = GameOrchestrator(
+            db_path=os.path.join(BASE_DIR, "data", "eldoria.db"),
+            vector_model_path="all-MiniLM-L6-v2",
+            groq_api_key=os.getenv("GROQ_API_KEY", ""),
+            gemini_api_key=os.getenv("GEMINI_API_KEY", "")
+        )
+        game_logger.info("⚙️ Đã khôi phục về hệ thống cấu hình Mặc định (Default).")
 
     return JSONResponse(content={"success": True, "message": "Đã lưu và áp dụng cài đặt hệ thống!"})
+
 
 if __name__ == "__main__":
     import uvicorn
