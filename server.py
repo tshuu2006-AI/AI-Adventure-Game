@@ -53,10 +53,10 @@ app.add_middleware(
 os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
 
-# Khởi tạo Bộ não trung tâm (Sử dụng đường dẫn tuyệt đối)
 # Khởi tạo Bộ não trung tâm
 orchestrator = GameOrchestrator(
-    db_path=os.path.join(SAVE_DIR, "eldoria.db"), # 🌟 Trỏ DB về thư mục SaveData
+    db_path=os.path.join(SAVE_DIR, "eldoria.db"),
+    db_folder=SAVE_DIR,
     vector_model_path="all-MiniLM-L6-v2", 
     groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")), 
     gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
@@ -407,10 +407,11 @@ async def update_settings(
     current_config["cloud_key"] = cloud_key.strip()
     current_config["local_model_or_key"] = local_model_or_key.strip()
     current_config["local_provider"] = "ollama" if is_ollama.lower() == "true" else "gemini"
-# ... (Bên trong hàm update_settings) ...
+
     if mode == "custom":
         orchestrator = GameOrchestrator(
-            db_path=os.path.join(SAVE_DIR, "eldoria.db"), # 🌟 Sửa dòng này
+            db_path=os.path.join(SAVE_DIR, "eldoria.db"),
+            db_folder=SAVE_DIR,  # 🌟 THÊM DÒNG NÀY
             vector_model_path="all-MiniLM-L6-v2",
             groq_api_key=safe_key(current_config["cloud_key"]),
             gemini_api_key=safe_key(current_config["local_model_or_key"])
@@ -418,7 +419,8 @@ async def update_settings(
         game_logger.info("⚙️ Đã áp dụng cấu hình Custom của người dùng và khởi động lại Engine.")
     else:
         orchestrator = GameOrchestrator(
-            db_path=os.path.join(SAVE_DIR, "eldoria.db"), # 🌟 Sửa dòng này
+            db_path=os.path.join(SAVE_DIR, "eldoria.db"),
+            db_folder=SAVE_DIR,  # 🌟 THÊM DÒNG NÀY
             vector_model_path="all-MiniLM-L6-v2",
             groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
             gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
