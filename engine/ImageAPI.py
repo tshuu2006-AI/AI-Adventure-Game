@@ -8,8 +8,8 @@ class ImageAPI:
     def __init__(self, base_url: str = "https://unspelt-nonbrutally-eleanore.ngrok-free.dev"):
         # URL này lấy từ file Kaggle ngrok public_url của bạn
         self.api_url = f"{base_url}/api/image"
-        self.enable_image = os.getenv("ENABLE_IMAGE", "False").lower() == "true"
-        self.quality = os.getenv("IMAGE_QUALITY", "medium").lower()
+        self.enable_image = "true"
+        self.quality = "medium"
 
     async def generate_image(self, prompt: str, image_type: str = "background") -> bytes:
         if not self.enable_image:

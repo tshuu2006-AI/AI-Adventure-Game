@@ -220,6 +220,8 @@ async def background_post_turn_processing(player_input, story_response):
         game_logger.info("Hoàn tất xử lý ngầm (State & Memory)!")
     except Exception as e:
         game_logger.error(f"Lỗi chạy ngầm: {e}")
+    finally:
+        orchestrator.is_processing_bg = False
 
 # ==========================================
 # UNITY SYSTEM ENDPOINTS
@@ -242,6 +244,7 @@ async def shutdown():
 async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = BackgroundTasks()):
     """Khởi tạo Game Loop mới giống hệt run() trong Orchestration"""
     try:
+        orchestrator.is_processing_bg = True
         orchestrator.player_state.inventory = []
         orchestrator.player_state.currentNPCs = []
 
@@ -293,6 +296,7 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
 async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = BackgroundTasks()):
     """Xử lý lượt đi (Giống _process_game_turn)"""
     try:
+        orchestrator.is_processing_bg = True
         directive = await orchestrator.action_sys.get_system_directive(action)
         hybrid_ctx, npcs_ctx = await orchestrator.memory_sys.get_hybrid_context(action, orchestrator.player_state)
 
@@ -343,7 +347,8 @@ async def poll_updates():
             "bg_image_b64": bg_img,
             "char_image_b64": char_img,
             "inventory": inv_payload,
-            "emotion": emotion
+            "emotion": emotion,
+            "is_processing_bg": getattr(orchestrator, "is_processing_bg", False)
         })
     except Exception as e:
         print(f"Lỗi poll_updates: {e}")
@@ -404,40 +409,67 @@ async def check_config(
 
 @app.post("/api/settings")
 async def update_settings(
-    mode: str = Form(...),
-    cloud_key: str = Form(""),
-    local_model_or_key: str = Form(""),
-    is_ollama: str = Form("false")
+    mode: str = Form(None),             # Đổi Form(...) thành Form(None) để làm tham số tùy chọn
+    cloud_key: str = Form(None),
+    local_model_or_key: str = Form(None),
+    is_ollama: str = Form(None),
+    enable_image: str = Form(None),     # Bổ sung nhận lệnh bật/tắt ảnh từ Unity
+    quality: str = Form(None)           # Bổ sung nhận lệnh chất lượng ảnh từ Unity
 ):
-    """Lưu và áp dụng cấu hình cài đặt bằng cách tái khởi tạo toàn bộ Engine"""
+    """Lưu và áp dụng cấu hình cài đặt từ Unity"""
     global current_config
-    global orchestrator # 🌟 Bắt buộc phải có dòng này để báo cho Python biết ta sẽ sửa biến toàn cục
+    global orchestrator
 
-    current_config["mode"] = mode
-    current_config["cloud_key"] = cloud_key.strip()
-    current_config["local_model_or_key"] = local_model_or_key.strip()
-    current_config["local_provider"] = "ollama" if is_ollama.lower() == "true" else "gemini"
+    # 1. NẾU UNITY CHỈ GỬI LỆNH ĐỔI CHẤT LƯỢNG ẢNH
+    if quality is not None:
+        orchestrator.image_manager.api.quality = quality.lower()
+        game_logger.info(f"⚙️ Đã cập nhật chất lượng Ảnh thành: {quality.upper()}")
+        return JSONResponse(content={"success": True, "message": "Đã đổi chất lượng Hình ảnh!"})
 
-    if mode == "custom":
-        orchestrator = GameOrchestrator(
-            db_path=os.path.join(SAVE_DIR, "eldoria.db"),
-            db_folder=SAVE_DIR,  # 🌟 THÊM DÒNG NÀY
-            vector_model_path="all-MiniLM-L6-v2",
-            groq_api_key=safe_key(current_config["cloud_key"]),
-            gemini_api_key=safe_key(current_config["local_model_or_key"])
-        )
-        game_logger.info("⚙️ Đã áp dụng cấu hình Custom của người dùng và khởi động lại Engine.")
-    else:
-        orchestrator = GameOrchestrator(
-            db_path=os.path.join(SAVE_DIR, "eldoria.db"),
-            db_folder=SAVE_DIR,  # 🌟 THÊM DÒNG NÀY
-            vector_model_path="all-MiniLM-L6-v2",
-            groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
-            gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
-        )
-        game_logger.info("⚙️ Đã khôi phục về hệ thống cấu hình Mặc định (Default).")
+    # 2. NẾU UNITY CHỈ GỬI LỆNH BẬT/TẮT ẢNH
+    if enable_image is not None:
+        is_enabled = enable_image.lower() == "true"
+        orchestrator.image_manager.api.enable_image = is_enabled
+        trang_thai = "BẬT" if is_enabled else "TẮT"
+        game_logger.info(f"⚙️ Đã {trang_thai} tính năng vẽ ảnh.")
+        return JSONResponse(content={"success": True, "message": f"Đã {trang_thai} tính năng Hình ảnh!"})
 
-    return JSONResponse(content={"success": True, "message": "Đã lưu và áp dụng cài đặt hệ thống!"})
+    # 3. NẾU UNITY GỬI LỆNH ĐỔI AI (LLM KEY)
+    if mode is not None:
+        current_config["mode"] = mode
+        current_config["cloud_key"] = cloud_key.strip() if cloud_key else ""
+        current_config["local_model_or_key"] = local_model_or_key.strip() if local_model_or_key else ""
+        current_config["local_provider"] = "ollama" if str(is_ollama).lower() == "true" else "gemini"
+
+        # Khởi tạo lại AI nhưng PHẢI GIỮ LẠI trạng thái bật/tắt ảnh trước đó
+        old_enable_image = getattr(orchestrator.image_manager.api, 'enable_image', True)
+        old_quality = getattr(orchestrator.image_manager.api, 'quality', 'medium')
+
+        if mode == "custom":
+            orchestrator = GameOrchestrator(
+                db_path=os.path.join(SAVE_DIR, "eldoria.db"),
+                db_folder=SAVE_DIR,
+                vector_model_path="all-MiniLM-L6-v2",
+                groq_api_key=safe_key(current_config["cloud_key"]),
+                gemini_api_key=safe_key(current_config["local_model_or_key"])
+            )
+        else:
+            orchestrator = GameOrchestrator(
+                db_path=os.path.join(SAVE_DIR, "eldoria.db"),
+                db_folder=SAVE_DIR,
+                vector_model_path="all-MiniLM-L6-v2",
+                groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
+                gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
+            )
+        
+        # Nạp lại trạng thái ảnh cho Orchestrator mới
+        orchestrator.image_manager.api.enable_image = old_enable_image
+        orchestrator.image_manager.api.quality = old_quality
+
+        game_logger.info(f"⚙️ Đã áp dụng hệ thống AI: {mode.upper()}")
+        return JSONResponse(content={"success": True, "message": "Đã lưu và áp dụng cài đặt AI mới!"})
+
+    return JSONResponse(status_code=400, content={"error": "Không nhận được tham số hợp lệ"})
 
 @app.post("/api/save_game")
 async def save_game(slot: str = Form(...)):

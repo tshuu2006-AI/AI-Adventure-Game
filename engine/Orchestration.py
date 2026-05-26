@@ -31,6 +31,7 @@ class GameOrchestrator:
         self.audio_manager = AudioManager()
         self.music_classifier = MusicClassifier(pm = self.pm, gemini_api_key=gemini_api_key)
         self.current_emotion = "bình thường"
+        self.is_processing_bg = False
 
         # Khởi tạo các Subsystem (Phân chia rành mạch)
         self.memory_sys = MemoryProcessor(self.db,

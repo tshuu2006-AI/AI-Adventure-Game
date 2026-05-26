@@ -130,6 +130,13 @@ class StateProcessor:
                         status=npc_dict.get("status", "Bình thường")
                     )
 
+                    img_path = await self.image_manager.get_or_create_npc_image(
+                        npc_name=new_npc.name,
+                        description=new_npc.description
+                    )
+                    if img_path:
+                        new_npc.image_path = img_path
+
                     await self.db.add_npc_to_db(new_npc)
                     self.player_state.currentNPCs.append(new_npc)
             else:
