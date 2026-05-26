@@ -208,15 +208,19 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
         # 🌟 NẾU LÀ GAME MỚI -> ÉP KAGGLE VẼ ẢNH ĐỊA ĐIỂM XUẤT PHÁT
         if is_new_game:
             curr_loc = orchestrator.player_state.currentLocation
-            if curr_loc and not curr_loc.image_path:
-                game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh địa điểm xuất phát: {curr_loc.name}")
-                img_path = await orchestrator.image_manager.get_or_create_location_image(
-                    location_name=curr_loc.name,
-                    description=curr_loc.description,
-                    atmosphere=curr_loc.atmosphere
-                )
-                if img_path:
-                    orchestrator.player_state.currentLocation.image_path = img_path
+            if curr_loc:
+                if not curr_loc.image_path:
+                    game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh địa điểm xuất phát: {curr_loc.name}")
+                    img_path = await orchestrator.image_manager.get_or_create_location_image(
+                        location_name=curr_loc.name,
+                        description=curr_loc.description,
+                        atmosphere=curr_loc.atmosphere
+                    )
+                    if img_path:
+                        curr_loc.image_path = img_path
+                
+                # 🌟 ĐƯA LỆNH LƯU DATABASE VÀO ĐÂY (Lúc này object đã có đầy đủ ảnh)
+                await orchestrator.db.add_location_to_db(curr_loc)
 
         # Vẫn cho chạy trích xuất ngầm bình thường để bắt NPC/Item từ đoạn Prologue
         ep_data, scene_emotion = await orchestrator.state_sys.process_background_tasks(player_input, story_response)
@@ -276,7 +280,7 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
             orchestrator.world_state.name, "Fantasy", "Tối tăm"
         )
         orchestrator.player_state.currentLocation = starting_loc
-        await orchestrator.db.add_location_to_db(starting_loc)
+        # await orchestrator.db.add_location_to_db(starting_loc)
         
         story_response = ""
         # 🌟 Truyền thêm tham số world_bible_dir vào đây:
