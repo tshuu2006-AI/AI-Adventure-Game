@@ -207,6 +207,8 @@ async def background_post_turn_processing(player_input, story_response):
     try:
         ep_data, scene_emotion = await orchestrator.state_sys.process_background_tasks(player_input, story_response)
 
+        orchestrator.current_emotion = scene_emotion
+
         encountered = [n.name for n in orchestrator.player_state.currentNPCs]
         await orchestrator.memory_sys.save_turn(
             player_input=player_input,
@@ -247,7 +249,7 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
         await orchestrator.db.reset_database()
         await orchestrator.db.create_tables()
         orchestrator.image_manager.clear_image_folders()
-        
+
         world_bible_dir = os.path.join(orchestrator.db.db_folder, "world_bible.json")
         world_bible = await orchestrator.story_director.create_world_bible(player_idea=idea, path=world_bible_dir)
 
@@ -335,11 +337,13 @@ async def poll_updates():
             char_img = image_to_base64_with_default(orchestrator.player_state.currentNPCs[0].image_path)
             
         inv_payload = build_inventory_payload()
+        emotion = getattr(orchestrator, "current_emotion", "bình thường")
             
         return JSONResponse(content={
             "bg_image_b64": bg_img,
             "char_image_b64": char_img,
-            "inventory": inv_payload
+            "inventory": inv_payload,
+            "emotion": emotion
         })
     except Exception as e:
         print(f"Lỗi poll_updates: {e}")
