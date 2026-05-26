@@ -263,8 +263,12 @@ class StateProcessor:
         game_logger.debug(f"[Profile] Background Tasks (State Extraction): {time.perf_counter() - start_bg:.3f}s")
 
         if new_location_entered_name:
-            await self._update_location(new_location_entered_name= new_location_entered_name,
-                                    context=context)
+            current_loc_name = self.player_state.currentLocation.name if self.player_state.currentLocation else ""
+            
+            if new_location_entered_name.strip().lower() != current_loc_name.strip().lower():
+                await self._update_location(new_location_entered_name=new_location_entered_name, context=context)
+            else:
+                game_logger.debug(f"[State] Đã ở {current_loc_name}, không cần phân tích tạo lại.")
 
         update_tasks = [
             self._update_inventory(items_added= items_added,

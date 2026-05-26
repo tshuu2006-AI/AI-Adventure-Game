@@ -201,12 +201,25 @@ async def verify_ollama_model(model_name: str) -> bool:
     except Exception:
         return False
     return False
-
-async def background_post_turn_processing(player_input, story_response):
-    """(Req 1) Hàm này sẽ chạy ngầm sau khi Text đã được ném về Unity"""
+# 🌟 Bổ sung tham số is_new_game=False
+async def background_post_turn_processing(player_input, story_response, is_new_game=False):
+    """Hàm này sẽ chạy ngầm sau khi Text đã được ném về Unity"""
     try:
-        ep_data, scene_emotion = await orchestrator.state_sys.process_background_tasks(player_input, story_response)
+        # 🌟 NẾU LÀ GAME MỚI -> ÉP KAGGLE VẼ ẢNH ĐỊA ĐIỂM XUẤT PHÁT
+        if is_new_game:
+            curr_loc = orchestrator.player_state.currentLocation
+            if curr_loc and not curr_loc.image_path:
+                game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh địa điểm xuất phát: {curr_loc.name}")
+                img_path = await orchestrator.image_manager.get_or_create_location_image(
+                    location_name=curr_loc.name,
+                    description=curr_loc.description,
+                    atmosphere=curr_loc.atmosphere
+                )
+                if img_path:
+                    orchestrator.player_state.currentLocation.image_path = img_path
 
+        # Vẫn cho chạy trích xuất ngầm bình thường để bắt NPC/Item từ đoạn Prologue
+        ep_data, scene_emotion = await orchestrator.state_sys.process_background_tasks(player_input, story_response)
         orchestrator.current_emotion = scene_emotion
 
         encountered = [n.name for n in orchestrator.player_state.currentNPCs]
@@ -219,7 +232,7 @@ async def background_post_turn_processing(player_input, story_response):
         )
         game_logger.info("Hoàn tất xử lý ngầm (State & Memory)!")
     except Exception as e:
-        game_logger.error(f"Lỗi chạy ngầm: {e}")
+        game_logger.error(f"Lỗi chạy ngầm: {e}", exc_info=True)
     finally:
         orchestrator.is_processing_bg = False
 
@@ -278,7 +291,7 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
         orchestrator.last_choices = choices
         choice_texts = [c["action_text"] for c in choices]
 
-        bg_tasks.add_task(background_post_turn_processing, "[Bắt đầu trò chơi]", story_response)
+        bg_tasks.add_task(background_post_turn_processing, "[Bắt đầu trò chơi]", story_response, is_new_game=True)
 
         return JSONResponse(content={
             "segments": segments,
