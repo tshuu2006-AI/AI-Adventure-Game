@@ -247,8 +247,10 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
         await orchestrator.db.reset_database()
         await orchestrator.db.create_tables()
         orchestrator.image_manager.clear_image_folders()
+        
+        world_bible_dir = os.path.join(orchestrator.db.db_folder, "world_bible.json")
+        world_bible = await orchestrator.story_director.create_world_bible(player_idea=idea, path=world_bible_dir)
 
-        world_bible = await orchestrator.story_director.create_world_bible(idea)
         reqs = world_bible.get("system_requirements", {})
         orchestrator.world_state.name = reqs.get("world_name", "Vùng đất vô danh")
         
@@ -257,9 +259,6 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
         )
         orchestrator.player_state.currentLocation = starting_loc
         await orchestrator.db.add_location_to_db(starting_loc)
-
-        # 🌟 Lấy đường dẫn tới file world_bible.json trong thư mục an toàn
-        world_bible_dir = os.path.join(orchestrator.db.db_folder, "world_bible.json")
         
         story_response = ""
         # 🌟 Truyền thêm tham số world_bible_dir vào đây:
