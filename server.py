@@ -223,6 +223,19 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
                 # 🌟 ĐƯA LỆNH LƯU DATABASE VÀO ĐÂY (Lúc này object đã có đầy đủ ảnh)
                 await orchestrator.db.add_location_to_db(curr_loc)
 
+                for npc in orchestrator.player_state.currentNPCs:
+                    if not npc.image_path:
+                        game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh NPC: {npc.name}")
+                        npc_img = await orchestrator.image_manager.get_or_create_npc_image(
+                            npc_name=npc.name,
+                            description=npc.description
+                        )
+                        if npc_img:
+                            npc.image_path = npc_img
+                    
+                    # Giờ thì lưu thoải mái không sợ lỗi Khóa Ngoại nữa!
+                    await orchestrator.db.add_npc_to_db(npc)
+
         # Vẫn cho chạy trích xuất ngầm bình thường để bắt NPC/Item từ đoạn Prologue
         ep_data, scene_emotion = await orchestrator.state_sys.process_background_tasks(player_input, story_response)
         orchestrator.current_emotion = scene_emotion
@@ -304,10 +317,10 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
                 personality=npc_data.get("personality", "Bí ẩn"),
                 description=npc_data.get("description", "Không rõ"),
                 affectionate=npc_data.get("affectionate", 0),
-                location=npc_data.get("location", starting_loc.name), # Gắn vào location hiện tại
+                location=starting_loc.name, #Ép location
                 status=npc_data.get("status", "Bình thường")
             )
-            await orchestrator.db.add_npc_to_db(npc_obj)
+            # await orchestrator.db.add_npc_to_db(npc_obj)
             orchestrator.player_state.currentNPCs.append(npc_obj)
         
         story_response = ""
@@ -381,23 +394,30 @@ async def poll_updates():
         curr_loc = orchestrator.player_state.currentLocation
         bg_img = image_to_base64_with_default(curr_loc.image_path if curr_loc else None)
         
-        char_img = ""
+        # 🌟 NÂNG CẤP: Lấy ảnh của TẤT CẢ NPC trong cảnh hiện tại
+        npc_images_payload = []
         if orchestrator.player_state.currentNPCs:
-            char_img = image_to_base64_with_default(orchestrator.player_state.currentNPCs[0].image_path)
+            for npc in orchestrator.player_state.currentNPCs:
+                img_b64 = image_to_base64_with_default(npc.image_path)
+                if img_b64:
+                    npc_images_payload.append({
+                        "name": npc.name,
+                        "image_b64": img_b64
+                    })
             
         inv_payload = build_inventory_payload()
         emotion = getattr(orchestrator, "current_emotion", "bình thường")
             
         return JSONResponse(content={
             "bg_image_b64": bg_img,
-            "char_image_b64": char_img,
+            "npc_images": npc_images_payload, # 🌟 Gửi mảng ảnh thay cho char_image_b64 cũ
             "inventory": inv_payload,
             "emotion": emotion,
             "is_processing_bg": getattr(orchestrator, "is_processing_bg", False)
         })
     except Exception as e:
         print(f"Lỗi poll_updates: {e}")
-        return JSONResponse(content={"bg_image_b64": "", "char_image_b64": "", "inventory": []})
+        return JSONResponse(content={"bg_image_b64": "", "npc_images": [], "inventory": []})
 
 @app.get("/api/diary")
 async def get_diary():
