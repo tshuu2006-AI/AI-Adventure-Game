@@ -19,11 +19,20 @@ class ImageAPI:
 
         start_img = time.perf_counter()
         
+        safe_prompt = prompt
+        if image_type.lower() == "npc":
+            # Ép buộc NPC phải mặc đồ đàng hoàng, phong cách fantasy, nghiêm cấm hở hang
+            safe_prompt += ", fully clothed, wearing detailed modest fantasy clothing/armor, sfw, masterpiece, high quality, no nude, no cleavage"
+        else:
+            # Ép buộc Background/Item mượt mà, không dính nhân vật (để tránh AI tự vẽ thêm người hở hang vào cảnh)
+            safe_prompt += ", sfw, masterpiece, high quality, highly detailed, no humans"
+            
         async with aiohttp.ClientSession() as session:
             data = aiohttp.FormData()
-            data.add_field("prompt", prompt)
-            data.add_field("image_type", image_type) # Gửi loại ảnh
-            data.add_field("quality", self.quality)  # Gửi chất lượng
+            # 🌟 Gửi safe_prompt thay cho prompt gốc
+            data.add_field("prompt", safe_prompt)
+            data.add_field("image_type", image_type) 
+            data.add_field("quality", self.quality)  
             
             try:
                 async with session.post(self.api_url, data=data, timeout=60) as response:
@@ -32,7 +41,8 @@ class ImageAPI:
                         print(f"[Profile] Sinh ảnh {image_type} mất: {time.perf_counter() - start_img:.3f}s")
                         return img_bytes
                     else:
-                        print(f"[ImageAPI Lỗi] HTTP {response.status}")
+                        print(f"[ImageAPI] Lỗi HTTP: {response.status}")
                         return None
             except Exception as e:
+                print(f"[ImageAPI] Lỗi kết nối Kaggle: {e}")
                 return None

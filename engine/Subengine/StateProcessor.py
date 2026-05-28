@@ -84,10 +84,16 @@ class StateProcessor:
         current_npc_names = {npc.name.lower() for npc in self.player_state.currentNPCs}
 
         # Chỉ lấy những cái tên hợp lệ (không rỗng) và chưa có trong cảnh
-        real_new_npcs = [
-            name.strip() for name in npcs_arrived
-            if name and str(name).strip() and name.strip().lower() not in current_npc_names
-        ]
+        real_new_npcs = []
+        for name in npcs_arrived:
+            name_lower = name.strip().lower()
+            if not name_lower: continue
+            
+            # Kiểm tra xem tên ngắn có nằm trong tên dài, hoặc ngược lại không
+            is_exist = any(name_lower in curr_name or curr_name in name_lower for curr_name in current_npc_names)
+            
+            if not is_exist:
+                real_new_npcs.append(name.strip())
 
         if not real_new_npcs:
             return
@@ -137,8 +143,8 @@ class StateProcessor:
                     if img_path:
                         new_npc.image_path = img_path
 
-                    await self.db.add_npc_to_db(new_npc)
-                    self.player_state.currentNPCs.append(new_npc)
+                    res = await self.db.add_npc_to_db(new_npc)
+                    if res: self.player_state.currentNPCs.append(new_npc)
             else:
                 game_logger.error(f"[Cloud Lỗi] Định dạng trả về bulk_npcs không hợp lệ: {results}")
 
