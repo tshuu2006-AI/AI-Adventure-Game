@@ -285,7 +285,7 @@ ItemAgent:
 
   systemCraft: |
     Role: Game Crafting Engine. Language: Vietnamese.
-    Task: Evaluate if the player can logically combine the provided items based on real-world physics or mild fantasy logic.
+    Task: Evaluate if the player can logically combine the provided items based on real-world physics or mild fantasy logic or use the items logically.
     
     RULES:
     1. STRICT LOGIC: Can a "Thanh gỗ" + "Đá nhọn" make a "Giáo đá"? Yes. Can a "Thanh gươm" + "Bánh mì" make anything? No. Fail logically.

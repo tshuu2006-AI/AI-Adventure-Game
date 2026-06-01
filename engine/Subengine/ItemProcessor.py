@@ -100,7 +100,7 @@ class ItemProcessor:
     async def interact(self, item_list: List[BaseItem], action_details: str) -> str:
 
         # 1. Kiểm tra xem người chơi có thực sự sở hữu các món đồ này không
-        items_to_craft = []
+        items_to_interact = []
         item_names = [item.name for item in item_list]
 
         for name in item_names:
@@ -109,13 +109,13 @@ class ItemProcessor:
                 return f"[HỆ THỐNG]: Bạn không có vật phẩm '{name}' trong túi đồ."
             if item.item_type == "quest":
                 return f"[HỆ THỐNG]: Không thể dùng vật phẩm nhiệm vụ '{name}' để chế tạo."
-            items_to_craft.append(item)
+            items_to_interact.append(item)
 
-        if len(items_to_craft) == 0:
+        if len(items_to_interact) == 0:
             return "[HỆ THỐNG]: Không có vật phẩm để chế tạo."
 
         items = []
-        for item in items_to_craft:
+        for item in items_to_interact:
             # Quét tất cả thuộc tính (key) và giá trị (value) của object hiện tại
             attrs = [f"{key}: {value}" for key, value in vars(item).items() if key != 'id']
 
@@ -123,7 +123,7 @@ class ItemProcessor:
             items.append(" - ".join(attrs))
 
         # 2. Gọi Gemini (ItemAgent) để thẩm định tính logic
-        evaluation_json = await self.item_agent.craft(action_details=action_details,
+        evaluation_json = await self.item_agent.interact(action_details=action_details,
                                                 items_list=items)
 
         evaluation = self._parse_craft_result(evaluation_json)
@@ -132,13 +132,13 @@ class ItemProcessor:
             return f"[CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning', 'Sự kết hợp này hoàn toàn vô lý.')}"
 
         # 3. NẾU THÀNH CÔNG: Xóa đồ cũ, Sinh đồ mới
-        for old_item in items_to_craft:
+        for old_item in items_to_interact:
             self.player_state.remove_item(old_item)  # Hàm đã có sẵn trong InventoryManager
             # (Tùy chọn) Xóa ảnh cũ trên ổ cứng bằng ImageManager
 
         new_item_obj = evaluation.get("new_item")
 
         self.player_state.add_item(new_item_obj)
-        crafted_names = ", ".join([item.name for item in items_to_craft])
+        crafted_names = ", ".join([item.name for item in items_to_interact])
 
         return f"[CHẾ TẠO THÀNH CÔNG]: Bạn đã kết hợp {crafted_names} thành [{new_item_obj.name}]. {evaluation.get('reasoning')}"

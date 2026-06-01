@@ -335,7 +335,7 @@ class GameOrchestrator:
                 items_str = input(">> Nhập tên các vật phẩm muốn ghép (cách nhau bằng dấu phẩy): ").strip()
                 target_items = []
                 for item_name in items_str.split(","):
-                    target_item= inv_manager.get_item_by_name(item_name=item_name)
+                    target_item= inv_manager.get_item_by_name(item_name=item_name.strip())
                     if target_item:
                         target_items.append(target_item)
 
