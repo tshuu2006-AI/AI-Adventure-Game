@@ -1,11 +1,11 @@
 """Module điều phối việc cập nhật thông tin, trạng thái của trò chơi trong csdl"""
 import asyncio
 import time
-from world.Entity import Location, NPC, Item
-from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor
+from world.Entity import Location, NPC
+from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor, ItemAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
 from engine.Agents.CloudAgents import LocationAgent, NPCAgent
-from static.config import STATE_EXTRACTOR_MODEL, MEMORY_EXTRACTOR_MODEL, LOCATION_AGENT_MODEL, NPC_AGENT_MODEL
+from static.config import STATE_EXTRACTOR_MODEL, MEMORY_EXTRACTOR_MODEL, LOCATION_AGENT_MODEL, NPC_AGENT_MODEL, ITEM_AGENT_MODEL
 
 
 class StateProcessor:
@@ -24,6 +24,8 @@ class StateProcessor:
         self.npc_agent = NPCAgent(api_key = groq_api_key,
                                   pm = pm,
                                   model_name = NPC_AGENT_MODEL)
+
+        self.item_agent = ItemAgent(model_name = ITEM_AGENT_MODEL, pm = pm, gemini_api_key=gemini_api_key)
 
 
     async def _update_location(self, new_location_entered_name: str, context: str) -> Location:
@@ -173,7 +175,7 @@ class StateProcessor:
                         npc.status = new_status
                     break
 
-    async def _update_inventory(self, items_added: list, items_removed: list):
+    async def _update_inventory(self, items_added: list, items_removed: list, context):
         """Hàm chuyên xử lý logic túi đồ dưới dạng List[Item] và quản lý tài nguyên ảnh."""
         if items_added or items_removed:
             game_logger.info("[Hệ Thống] ---> THAY ĐỔI TÚI ĐỒ <---")
@@ -181,24 +183,36 @@ class StateProcessor:
 
             # 1. Thêm Item mới vào Danh sách
             if isinstance(items_added, list):
-                for item_name in items_added:
+                for item_data in items_added:
+                    if isinstance(item_data, dict):
+                        item_name = str(item_data.get("name", "")).strip()
+                        item_type = str(item_data.get("type", "miscellaneous")).strip()
+                    else:
+                        item_name = str(item_data).strip()
+                        item_type = "miscellaneous"
+
                     if not item_name or str(item_name).strip().lower() in invalid_items:
                         continue
 
                     item_name = str(item_name).strip()
 
+
                     # 🌟 KIỂM TRA: Nếu vật phẩm chưa có trong danh sách mảng Object
-                    if not any(item.name.lower() == item_name.lower() for item in self.player_state.inventory):
+                    if not self.player_state.inventory_manager.get_item_by_name(item_name):
                         # Gọi Kaggle vẽ ảnh
                         img_path = await self.image_manager.get_or_create_item_image(item_name)
 
                         # Khởi tạo Object Item chuẩn
-                        new_item = Item(id=None, name=item_name,
-                                        description=f"Vật phẩm '{item_name}' nhặt được trong hành trình.")
+                        new_item = await self.item_agent.generate_item(
+                            context=context,
+                            item_name=item_name,
+                            item_type=item_type,
+                            quest=self.player_state.active_quest
+                        )
                         new_item.image_path = img_path
 
                         # 🌟 THÊM VÀO MẢNG (APPEND):
-                        self.player_state.inventory.append(new_item)
+                        self.player_state.add_item(new_item)
                         game_logger.info(f" [+] Nhận được: {item_name}")
 
             # 2. Mất Item cũ khỏi Danh sách
@@ -207,24 +221,16 @@ class StateProcessor:
                     if not item_name or str(item_name).strip().lower() in invalid_items:
                         continue
 
-                    item_name = str(item_name).strip()
-
-                    # 🌟 TÌM OBJECT TRONG MẢNG:
-                    target_item = next(
-                        (item for item in self.player_state.inventory if item.name.lower() == item_name.lower()), None)
+                    target_item = self.player_state.inventory_manager.get_item_by_name(item_name.strip())
 
                     if target_item:
-                        # 🌟 XÓA KHỎI MẢNG (REMOVE):
-                        self.player_state.inventory.remove(target_item)
-
-                        # Xóa file vật lý
+                        self.player_state.inventory_manager.remove_item(target_item)
                         if hasattr(target_item, 'image_path') and target_item.image_path:
                             self.image_manager.delete_image(target_item.image_path)
-                        game_logger.info(f" [-] Bị mất: {item_name}")
+                        game_logger.info(f" [-] Bị mất: {target_item.name}")
 
             # In nhật ký balo ra màn hình điều khiển
-            inventory_status = ", ".join(
-                [item.name for item in self.player_state.inventory]) if self.player_state.inventory else "Trống rỗng"
+            inventory_status = self.player_state.inventory_manager.get_all_item_names()
             game_logger.info(f" [Balo hiện tại]: {inventory_status}")
 
 
@@ -278,7 +284,8 @@ class StateProcessor:
 
         update_tasks = [
             self._update_inventory(items_added= items_added,
-                                   items_removed=items_removed),
+                                   items_removed=items_removed,
+                                   context = context),
             self._update_npcs(npcs_arrived = npcs_arrived,
                               npcs_left = npcs_left,
                               context = context),

@@ -17,6 +17,7 @@ class ActionProcessor:
         self.prob_have_npc = 5
         self.prob_new_location = 5
 
+
     def _load_yaml(self) -> dict:
         """
         Đọc file YAML và chuyển đổi thành Dictionary cho hệ thống sử dụng.
@@ -35,6 +36,7 @@ class ActionProcessor:
         except yaml.YAMLError as exc:
             game_logger.error(f"[ActionManager] Lỗi YAML: Sai cú pháp trong file {self.yaml_path}:\n{exc}")
             return {"BaseDirectives": {}, "RNGModifiers": {}}
+
 
     async def get_system_directive(self, player_input: str) -> str:
         intent_data = await self.intent_parser.parse_intent(player_input)

@@ -211,3 +211,14 @@ class ShortTermMemory:
     def get_memory(self) -> List[str]:
         """Lấy memory gần"""
         return self.context_window
+
+
+    def to_dict(self) -> dict:
+        return {
+            "context_window": self.context_window,
+            "current_structured_memory": self.current_structured_memory
+        }
+
+    def load_state(self, data: dict):
+        self.context_window = data.get("context_window", [])
+        self.current_structured_memory = data.get("current_structured_memory")

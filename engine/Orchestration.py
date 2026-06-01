@@ -1,7 +1,11 @@
 import time
+
+from engine.Subengine import ItemProcessor
 from world.Entity import NPC
 import os
-from engine.DataManager.DatabaseManager import DatabaseManager, PlayerState, WorldState
+from engine.DataManager.DatabaseManager import DatabaseManager
+from engine.DataManager.PlayerState import PlayerState
+from engine.DataManager.WorldState import WorldState
 from engine.Utils.PromptManager import PromptManager
 from engine.ImageAPI import ImageAPI
 from engine.DataManager.ImageManager import ImageManager
@@ -16,6 +20,7 @@ from engine.Subengine.MemoryProcessor import MemoryProcessor
 from engine.Subengine.SaveManager import SaveManager
 from engine.Subengine.StateProcessor import StateProcessor
 from engine.Subengine.StoryDirector import StoryDirector
+from engine.Subengine.ItemProcessor import ItemProcessor
 
 
 class GameOrchestrator:
@@ -50,6 +55,10 @@ class GameOrchestrator:
                                         groq_api_key=groq_api_key,
                                         gemini_api_key=gemini_api_key,
                                         pm=self.pm)
+
+        self.item_sys = ItemProcessor(player_state=self.player_state,
+                                      gemini_api_key = gemini_api_key,
+                                      pm = self.pm)
 
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)
         self.save_manager = SaveManager()
@@ -157,7 +166,7 @@ class GameOrchestrator:
         self.world_state.type = reqs.get("world_type", "Fantasy")
         self.world_state.theme_and_tone = reqs.get("theme_and_tone", "Tối tăm")
         self.world_state.core_conflict = reqs.get("core_conflict", "Sinh tồn")
-        self.world_state.mission = reqs.get("world_mission", "Sống sót")
+        self.world_state.world_mission = reqs.get("world_mission", "Sống sót")
         self.world_state.dynamic_vocabulary = world_bible.get("dynamic_vocabulary", {})
 
         print(f"\n>> Chào mừng đến với {self.world_state.name}!")
@@ -176,7 +185,7 @@ class GameOrchestrator:
             world_type=self.world_state.type,
             world_theme=self.world_state.theme_and_tone,
             world_conflict = self.world_state.core_conflict,
-            world_mission = self.world_state.mission
+            world_mission = self.world_state.world_mission
         )
 
         # Lưu vào State và Database
@@ -264,6 +273,10 @@ class GameOrchestrator:
                     self.audio_manager.toggle_music(True)
                 continue
 
+            if player_input.lower().strip() in ["i", "inv", "inventory", "túi đồ", "balo", "tui do"]:
+                await self._open_inventory_menu()
+                continue  # Dùng continue để KHÔNG tính turn này vào cốt truyện
+
             resolved_input = player_input
             if self.last_choices and player_input.strip().isdigit():
                 choice_id = int(player_input.strip())
@@ -275,3 +288,67 @@ class GameOrchestrator:
                 await self._process_game_turn(resolved_input)
             except Exception as e:
                 game_logger.error(f"[Game Loop] Lỗi nghiêm trọng ở Turn hiện tại: {e}", exc_info=True)
+
+    async def _open_inventory_menu(self):
+        """Mở giao diện tương tác riêng cho Túi đồ, ngắt hoàn toàn khỏi LLM IntentRouter."""
+        inv_manager = self.player_state.inventory_manager
+
+        while True:
+            print("\n" + "=" * 50)
+            print("🎒 TÚI ĐỒ CỦA BẠN".center(50))
+            print("=" * 50)
+
+            # Hiển thị trạng thái HP và Vũ khí
+            print(f"❤️ HP: {self.player_state.hp}/{self.player_state.max_hp}")
+            equipped = inv_manager.equipped_weapon.name if inv_manager.equipped_weapon else 'Tay không'
+            print(f"🗡️ Đang trang bị: {equipped}")
+            print("-" * 50)
+
+            # Liệt kê đồ
+            print(f"📦 Vật phẩm hiện có: {inv_manager.get_all_item_names()}")
+            print("-" * 50)
+
+            # Các tùy chọn
+            print(" [1] Dùng vật phẩm (Hồi máu, giải độc...)")
+            print(" [2] Trang bị vũ khí")
+            print(" [3] Chế tạo / Ghép đồ")
+            print(" [0] Đóng túi đồ và trở lại Game")
+
+            choice = input("\nChọn thao tác (0-3): ").strip()
+
+            if choice == "0":
+                print("[Hệ thống] Đã đóng túi đồ.")
+                break
+
+            elif choice == "1":
+                item_name = input(">> Nhập chính xác tên vật phẩm muốn dùng: ").strip()
+                # Gọi thẳng logic xử lý trong InventoryManager
+                result = inv_manager.use_consumable(item_name, self.player_state)
+                print(f"[Hệ thống] 🧪 {result}")
+
+            elif choice == "2":
+                item_name = input(">> Nhập chính xác tên vũ khí muốn trang bị: ").strip()
+                result = inv_manager.equip_weapon(item_name)
+                print(f"[Hệ thống] ⚔️ {result}")
+
+            elif choice == "3":
+                items_str = input(">> Nhập tên các vật phẩm muốn ghép (cách nhau bằng dấu phẩy): ").strip()
+                target_items = []
+                for item_name in items_str.split(","):
+                    target_item= inv_manager.get_item_by_name(item_name=item_name)
+                    if target_item:
+                        target_items.append(target_item)
+
+                if len(target_items) < 1:
+                    print("[Hệ thống] ⚠️ Cần ít nhất 1 vật pẩm")
+                else:
+                    print("[Hệ thống] 🔨 Đang đánh giá công thức chế tạo...")
+                    # Gọi ItemAgent (Chỉ tốn API LLM tại đúng bước này)
+                    action_detail = input(">> Cách chế tạo: ").strip()
+                    craft_result = await self.item_sys.interact(
+                        item_list=target_items,
+                        action_details=action_detail
+                    )
+                    print(craft_result)
+            else:
+                print("[Hệ thống] ⚠️ Lựa chọn không hợp lệ.")

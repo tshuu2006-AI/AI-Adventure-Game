@@ -1,74 +1,79 @@
+"""
+Chứa các Local Agent
+"""
 import json
 import re
 import logging
 from typing import Dict, Any
 
-# Sử dụng SDK mới của Google
 from google import genai
 from google.genai import types
-
+from engine.DataManager.PlayerState import PlayerState
 from engine.Utils.PromptManager import PromptManager
 from engine.Utils.logger import game_logger
+from world.Entity import ConsumableItem, QuestItem, MiscellaneousItem, WeaponItem, BaseItem
 
 
 class BaseLocalAgent:
     """
-    Class Cha (Base Class) chịu trách nhiệm gọi Google Gemini API SDK MỚI.
+    Lớp cơ sở (Base Class) quản lý việc giao tiếp với Google Gemini API.
+    Cung cấp các phương thức dùng chung để khởi tạo client và sinh nội dung định dạng JSON.
     """
 
-    def __init__(self, pm: PromptManager, model_name: str = "gemini-3.1-flash-lite", gemini_api_key: str = None, **kwargs):
+    def __init__(self, pm: PromptManager, model_name: str = "gemini-3.1-flash-lite", gemini_api_key: str = None):
         self.api_key = gemini_api_key
+        self.model_name = model_name
+        self.pm = pm
+        self.logger = logging.getLogger(self.__class__.__name__)
 
-        # Khởi tạo Client theo chuẩn SDK mới
         try:
             if self.api_key:
                 self.client = genai.Client(api_key=self.api_key)
             else:
-                # Nếu không truyền key, SDK sẽ tự động tìm biến môi trường GEMINI_API_KEY
                 self.client = genai.Client()
         except Exception as e:
             game_logger.warning(f"[Gemini] Lỗi khởi tạo Client (Kiểm tra lại GEMINI_API_KEY trong .env): {e}")
             self.client = None
 
-        self.model_name = model_name
-        self.pm = pm
-        self.logger = logging.getLogger(self.__class__.__name__)
 
     def _log_error(self, context: str, error: Exception):
         """Ghi log lỗi chi tiết kèm theo Stack Trace."""
         self.logger.error(f"Lỗi tại {context}: {str(error)}", exc_info=True)
 
-    # Giữ nguyên tham số max_tokens để tương thích ngược, dù Gemini có thể tự linh hoạt
-    async def _generate_json(self, system_prompt: str, user_prompt: str, max_tokens: int = 200) -> Dict[str, Any]:
+
+    async def _generate_json(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
         """
-        Hàm dùng chung để ép LLM trả về JSON chuẩn xác bằng Gemini SDK mới.
+        Gọi API Gemini và ép kiểu dữ liệu trả về dưới dạng JSON dictionary.
+
+        Args:
+            system_prompt (str): Chỉ thị hệ thống (Rules & Role) cho LLM.
+            user_prompt (str): Dữ liệu đầu vào từ người dùng hoặc ngữ cảnh game.
+
+        Returns:
+            Dict[str, Any]: Dictionary chứa dữ liệu JSON đã được parse, hoặc dictionary rỗng nếu lỗi.
         """
         if not self.client:
             self.logger.error("[Gemini] Client chưa được khởi tạo. Không thể sinh nội dung.")
             return {}
 
         try:
-            # Cấu hình System Prompt và Ép kiểu JSON bằng `types.GenerateContentConfig`
             config = types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
-                temperature=0.0  # Giữ ở mức 0 để kết quả logic, ổn định
+                temperature=0.0,
             )
 
-            # Gọi API bất đồng bộ (Lưu ý: SDK mới dùng client.aio cho async)
             response = await self.client.aio.models.generate_content(
                 model=self.model_name,
                 contents=user_prompt,
-                config=config
+                config=config,
             )
 
             raw_content = response.text
 
-            # Thử parse JSON trực tiếp
             try:
                 return json.loads(raw_content)
             except json.JSONDecodeError:
-                # Fallback: Phương án dự phòng dùng Regex
                 return self._parse_json_safely(raw_content)
 
         except Exception as e:
@@ -76,11 +81,14 @@ class BaseLocalAgent:
             return {}
 
     def _parse_json_safely(self, text: str) -> dict:
-        """Phương án dự phòng: Tìm và trích xuất khối JSON."""
+        """
+        Phương án dự phòng để trích xuất khối JSON từ văn bản thô bằng Regex
+        trong trường hợp LLM sinh ra các ký tự thừa (như markdown code block).
+        """
         try:
             match = re.search(r'\{.*\}', text, re.DOTALL)
             if match:
-                return json.loads(match.group(0).replace('\n', ' ').replace('\r', ''))
+                return json.loads(match.group().replace('\n', ' ').replace('\r', ''))
             else:
                 self.logger.warning(f"[_parse_json_safely] Không tìm thấy JSON hợp lệ trong: {text[:100]}...")
                 return {}
@@ -95,17 +103,25 @@ class BaseLocalAgent:
 
 class IntentRouter(BaseLocalAgent):
     """
-    Agent làm nhiệm vụ gác cổng: Phân tích hành động của người chơi.
+    Agent phân tích cú pháp và phân loại ý định (intent) từ hành động của người chơi.
     """
 
     async def parse_intent(self, player_input: str) -> Dict[str, Any]:
+        """
+        Phân loại hành động của người chơi thành các Intent chuẩn của hệ thống.
+
+        Args:
+            player_input (str): Câu lệnh đầu vào của người chơi.
+
+        Returns:
+            Dict[str, Any]: Chứa 'intent', 'target', và 'action_details'.
+        """
         sys_prompt = self.pm.get_prompt('IntentRouter', 'system')
         user_prompt = self.pm.get_prompt('IntentRouter', 'user', user_input=player_input)
 
         result = await self._generate_json(
             system_prompt=sys_prompt,
-            user_prompt=user_prompt,
-            max_tokens=150
+            user_prompt=user_prompt
         )
 
         if not result or "intent" not in result:
@@ -116,11 +132,23 @@ class IntentRouter(BaseLocalAgent):
 
 class StateExtractor(BaseLocalAgent):
     """
-    Agent Kế toán viên: Trích xuất sự thay đổi vật phẩm, NPC và địa điểm.
+    Agent theo dõi và trích xuất sự thay đổi trạng thái của game (Vật phẩm, NPC, Địa điểm).
     """
 
-    async def extract_state(self, player_input: str, story_response: str, player_state) -> Dict[str, Any]:
-        inventory_str = ", ".join([item.name for item in player_state.inventory]) if player_state.inventory else "Trống rỗng"
+    async def extract_state(self, player_input: str, story_response: str, player_state: PlayerState) -> Dict[str, Any]:
+        """
+        Phân tích cốt truyện vừa diễn ra để cập nhật các thay đổi vào CSDL.
+
+        Args:
+            player_input (str): Hành động của người chơi.
+            story_response (str): Phản hồi cốt truyện từ Game Master.
+            player_state (PlayerState): Trạng thái hiện tại của người chơi.
+
+        Returns:
+            Dict[str, Any]: Các thay đổi về items, npcs, location, emotion, v.v.
+        """
+        all_item_names = player_state.get_all_item_names()
+        inventory_str = ", ".join([item for item in all_item_names]) if all_item_names else "Trống rỗng"
         npc_str = ", ".join(
             [npc.name for npc in player_state.currentNPCs]) if player_state.currentNPCs else "Không có ai"
         location_str = player_state.currentLocation.name if player_state.currentLocation else "Chưa xác định"
@@ -138,8 +166,7 @@ class StateExtractor(BaseLocalAgent):
 
         result = await self._generate_json(
             system_prompt=sys_prompt,
-            user_prompt=user_prompt,
-            max_tokens=220
+            user_prompt=user_prompt
         )
 
         if not result:
@@ -159,14 +186,21 @@ class StateExtractor(BaseLocalAgent):
 
 class MemoryExtractor(BaseLocalAgent):
     """
-    Agent Phân tích Ký ức: Bóc tách các sự kiện quan trọng.
+    Agent bóc tách và tóm tắt các sự kiện cốt lõi để lưu vào Vector Database.
     """
 
     async def extract_memory(self, player_input: str, story_response: str) -> dict:
-        # 1. Lấy thẳng System Prompt (Đã bao gồm sẵn luật và ví dụ trong file yaml)
-        sys_prompt = self.pm.get_prompt("MemoryExtractor", 'system')
+        """
+        Trích xuất các mảnh ký ức (atomic memories) từ lượt tương tác hiện tại.
 
-        # 2. Lấy User Prompt
+        Args:
+            player_input (str): Hành động của người chơi.
+            story_response (str): Phản hồi từ hệ thống.
+
+        Returns:
+            dict: Danh sách các mảnh ký ức đã được chuẩn hóa.
+        """
+        sys_prompt = self.pm.get_prompt("MemoryExtractor", 'system')
         user_prompt = self.pm.get_prompt(
             'MemoryExtractor',
             'user',
@@ -174,14 +208,11 @@ class MemoryExtractor(BaseLocalAgent):
             story_response=story_response
         )
 
-        # 3. Gọi API Gemini
         result = await self._generate_json(
             system_prompt=sys_prompt,
-            user_prompt=user_prompt,
-            max_tokens=200
+            user_prompt=user_prompt
         )
 
-        # 4. Trả về an toàn
         if not result or "atomic_memories" not in result:
             self.logger.warning("[MemoryExtractor] Trả về cấu trúc trống hoặc thiếu key 'atomic_memories'.")
             return {"atomic_memories": []}
@@ -191,10 +222,19 @@ class MemoryExtractor(BaseLocalAgent):
 
 class MusicClassifier(BaseLocalAgent):
     """
-    Agent phân tích cảm xúc phân cảnh để kích hoạt nhạc nền tương ứng.
+    Agent phân tích sắc thái bối cảnh để điều phối nhạc nền của game.
     """
 
     async def classify_emotion(self, atmosphere_text: str) -> str:
+        """
+        Xác định cảm xúc chủ đạo của một phân cảnh.
+
+        Args:
+            atmosphere_text (str): Đoạn văn bản mô tả bối cảnh hoặc không khí.
+
+        Returns:
+            str: Tên cảm xúc (VD: 'bình thường', 'căng thẳng', 'buồn'...).
+        """
         sys_prompt = (
             "Role: Music Director. Language: Vietnamese.\n"
             "Task: Classify the atmosphere or context into exactly ONE of the following moods: "
@@ -207,7 +247,7 @@ class MusicClassifier(BaseLocalAgent):
 
         user_prompt = f"Context: {atmosphere_text}"
 
-        result = await self._generate_json(sys_prompt, user_prompt, max_tokens=30)
+        result = await self._generate_json(sys_prompt, user_prompt)
 
         if result and "emotion" in result:
             emotion = str(result["emotion"]).lower().strip()
@@ -217,3 +257,87 @@ class MusicClassifier(BaseLocalAgent):
                 return emotion
 
         return "bình thường"
+
+
+class ItemAgent(BaseLocalAgent):
+    """
+    Agent phụ trách sinh chỉ số cho vật phẩm mới và thẩm định logic khi người chơi chế tạo đồ.
+    """
+
+    async def generate_item(self, context: str, item_name: str, item_type: str, quest=None) -> BaseItem:
+        """
+        Tạo đối tượng vật phẩm hoàn chỉnh với các chỉ số tương ứng dựa vào ngữ cảnh.
+
+        Args:
+            context (str): Ngữ cảnh hoặc lý do vật phẩm xuất hiện.
+            item_name (str): Tên vật phẩm.
+            item_type (str): Phân loại vật phẩm ('weapon', 'consumable', 'quest', 'miscellaneous').
+            quest (optional): Thông tin nhiệm vụ đính kèm nếu là quest item.
+
+        Returns:
+            BaseItem: Đối tượng vật phẩm đã được khởi tạo theo đúng class tương ứng.
+        """
+        sys_prompt = self.pm.get_prompt('ItemAgent', 'systemGenerate')
+        user_prompt = self.pm.get_prompt('ItemAgent', 'userGenerate',
+                                         context=context, item_name=item_name, item_type=item_type)
+
+        item_json = await self._generate_json(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt
+        )
+
+        if item_type == 'weapon':
+            new_item = WeaponItem(
+                id=None,
+                name=item_json.get("name", item_name),
+                description=item_json.get("description", ""),
+                base_damage=item_json.get("base_damage", 0),
+                modifiers=item_json.get("modifiers", {}),
+                status_effect=item_json.get("status_effect"),
+                proc_chance=item_json.get("proc_chance", 0.0)
+            )
+        elif item_type == 'consumable':
+            new_item = ConsumableItem(
+                id=None,
+                name=item_json.get("name", item_name),
+                description=item_json.get("description", ""),
+                effect=item_json.get("effect", 0)
+            )
+
+        elif item_type == 'quest':
+            new_item = QuestItem(
+                id=None,
+                name=item_json.get("name", item_name),
+                description=item_json.get("description", ""),
+                quest=quest
+            )
+
+        else:
+            new_item = MiscellaneousItem(
+                id=None,
+                name=item_json.get("name", item_name),
+                description=item_json.get("description", 'a random item')
+            )
+
+        return new_item
+
+    async def interact(self, action_details: str, items_list: list[str]) -> dict:
+        """
+        Đánh giá tính logic và khả thi khi người chơi kết hợp nhiều vật phẩm với nhau hoặc sử dụng sáng tạo.
+
+        Args:
+            action_details (str): Ý định hoặc cách thức người chơi muốn kết hợp.
+            items_list (list[str]): Chuỗi mô tả các vật phẩm nguyên liệu.
+
+        Returns:
+            dict: Kết quả chế tạo (success, reasoning, và thông tin new_item nếu thành công).
+        """
+        sys_prompt = self.pm.get_prompt('ItemAgent', 'systemCraft')
+        user_prompt = self.pm.get_prompt('ItemAgent', 'userCraft',
+                                         action_details=action_details,
+                                         items_list=items_list)
+
+        return await self._generate_json(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt
+        )

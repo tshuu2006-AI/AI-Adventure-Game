@@ -151,7 +151,7 @@ StateExtractor:
     Task: Read the recent game interaction and detect changes based on the provided Context.
     
     RULES:
-    1. ITEMS ADDED: List names of items the player successfully picked up, bought, or received.
+    1. ITEMS ADDED: Extract items the player successfully picked up, bought, or received. Output as a list of objects containing 'name' (item's name) and 'type' (MUST be exactly one of: 'weapon', 'quest', 'miscellaneous', 'consumable').
     2. ITEMS REMOVED: If an item is lost, consumed, or thrown away, you MUST output its EXACT name from the [Current Inventory].
     3. NPCS ARRIVED: List names of characters/creatures that just appeared or approached the player. Only output short names.
     4. NPCS LEFT: If an NPC from [Current NPCs] dies, runs away, or the player leaves them behind, output their EXACT name.
@@ -162,7 +162,9 @@ StateExtractor:
     
     Format:
     {
-      "items_added": ["Tên item mới"],
+      "items_added": [
+        {"name": "Tên item mới", "type": "weapon"}
+      ],
       "items_removed": ["Tên item cũ bị mất"],
       "npcs_arrived": ["Tên NPC mới"],
       "npcs_left": ["Tên NPC cũ rời đi"],
@@ -243,3 +245,72 @@ MemoryExtractor:
     [Interaction]
     Player: {player_input}
     GameMaster: {story_response}
+    
+    
+    
+
+ItemAgent:
+  systemGenerate: |
+    Role: Game Item Generator. Language: Vietnamese.
+    Task: Generate detailed attributes for a new game item based on its requested name, the current context, and its specific type.
+
+    RULES:
+    1. LINGUISTIC CONSISTENCY: All generated text (names, descriptions, quest details) MUST be in VIETNAMESE.
+    2. BASE ATTRIBUTES: Every item MUST have "name" (string), "type" (string, matching the input), and "description" (string, vivid and thematic to the provided context).
+    3. TYPE-SPECIFIC ATTRIBUTES: You must include specific keys depending ONLY on the [Item Type]:
+       - If 'consumable': Add "effect" (integer, representing the amount of HP healed/recovered).
+       - If 'weapon': Add "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties, e.g., {"str": 5, "agi": -2}), "status_effect" (string, e.g., "burn", "poison", "stun", or null if none), and "proc_chance" (float between 0.0 and 1.0 representing the chance to apply the status).
+       - If 'quest': No additional keys are needed beyond the base attributes.
+       - If 'miscellaneous': No additional keys are needed beyond the base attributes.
+    4. OUTPUT FORMAT: Return STRICTLY valid JSON only. Do not include markdown blocks (like ```json), explanations, or conversational text.
+
+    Format Example (Your keys MUST change depending on the requested type):
+    {
+      "name": "Thanh kiếm rực lửa",
+      "type": "weapon",
+      "description": "Một thanh kiếm cũ kỹ nhưng phần lưỡi luôn tỏa ra nhiệt lượng nóng rực, được tìm thấy dưới đáy núi lửa.",
+      "base_damage": 25,
+      "modifiers": {"str": 3, "agi": 1},
+      "status_effect": "burn",
+      "proc_chance": 0.15
+    }
+
+  userGenerate: |
+    [Context]: {context}
+    [Item Name]: {item_name}
+    [Item Type]: {item_type}
+
+    Tạo JSON cho vật phẩm này.
+
+
+  systemCraft: |
+    Role: Game Crafting Engine. Language: Vietnamese.
+    Task: Evaluate if the player can logically combine the provided items based on real-world physics or mild fantasy logic.
+    
+    RULES:
+    1. STRICT LOGIC: Can a "Thanh gỗ" + "Đá nhọn" make a "Giáo đá"? Yes. Can a "Thanh gươm" + "Bánh mì" make anything? No. Fail logically.
+    2. BASE ATTRIBUTES: If SUCCESS, you MUST determine the NEW item's "name" (string), "type" (MUST be exactly 'weapon' or 'miscellaneous'), and "description" (string).
+    3. TYPE-SPECIFIC ATTRIBUTES: You MUST include additional keys inside the "new_item" object depending ONLY on the chosen "type":
+       - If 'weapon': Add "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties, e.g., {"str": 3, "agi": -1}), "status_effect" (string, e.g., "burn", "poison", "stun", or null), and "proc_chance" (float between 0.0 and 1.0).
+       - If 'miscellaneous': No additional keys are needed beyond the base attributes.
+    4. Output STRICTLY JSON. Do not include markdown blocks (like ```json).
+    
+    Format Example (Keys inside new_item MUST change depending on the chosen type):
+    {
+      "success": true,
+      "reasoning": "Nhựa cây có tính kết dính, kết hợp với thanh gỗ và đá nhọn tạo thành một vũ khí hoàn chỉnh.",
+      "new_item": {
+        "name": "Giáo đá thô sơ",
+        "type": "weapon",
+        "description": "Một mũi giáo được buộc chặt bằng nhựa cây, tuy thô kệch nhưng khá nguy hiểm.",
+        "base_damage": 15,
+        "modifiers": {"str": 2, "agi": -1},
+        "status_effect": "bleed",
+        "proc_chance": 0.15
+      }
+    }
+
+  userCraft: |
+    [Player Intent]: {action_details}
+    [Items to combine]: {items_list}
+    Evaluate.

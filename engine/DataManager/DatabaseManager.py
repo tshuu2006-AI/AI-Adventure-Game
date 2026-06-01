@@ -168,28 +168,3 @@ class DatabaseManager:
             'locations': [Location(id=r[0], name=r[1], description=r[2], atmosphere=r[3], image_path=r[4]) for r in
                           loc_rows]
         }
-
-
-class PlayerState:
-    """Đối tượng lưu trữ các trạng thái, vị trí và thông tin theo thời gian thực của người chơi."""
-
-
-    def __init__(self):
-        self.currentLocation = None
-        self.currentTurn = 0
-        self.currentNPCs = []
-        self.inventory = []
-
-
-class WorldState:
-    """Đối tượng lưu trữ các quy tắc bối cảnh (World Bible) đang áp dụng cho phiên chơi hiện tại."""
-
-    def __init__(self):
-        self.name = None
-        self.type = None
-        self.theme_and_tone = None
-        self.core_conflict = None
-        self.mission = None
-
-        self.dynamic_lore = {}
-        self.dynamic_vocabulary = {}
