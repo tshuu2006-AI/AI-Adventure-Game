@@ -54,6 +54,7 @@ class GameOrchestrator:
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)
         self.save_manager = SaveManager()
         self.last_choices = []
+        self.last_story_response = ""
 
         game_logger.info("Hệ thống đã sẵn sàng!")
 
@@ -72,15 +73,57 @@ class GameOrchestrator:
             player_input, self.player_state
         )
 
+        quest_context = None
+        if getattr(self.player_state, "quest_branch_active", False) and self.player_state.active_quests:
+            quest = self.player_state.active_quests[0]
+            quest_context = {
+                "title": quest.title,
+                "objectives": quest.objectives,
+                "origin_location": quest.branch_origin_location,
+                "branch_state": quest.branch_state,
+            }
+
+            return_tokens = ["tạm gác", "tam gac", "quay lại mạch chính", "quay lai mach chinh", "gác quest", "gac quest", "return"]
+            if any(token in player_input.lower() for token in return_tokens):
+                ok, transition = await self.state_sys.return_from_quest_branch(reason="abandoned")
+                story_response = transition
+                self.last_story_response = story_response
+                episode_data = {}
+                scene_emotion = self.current_emotion
+                self._print_quest_updates()
+
+                if self.player_state.preQuestMainChoices:
+                    choices = self.player_state.preQuestMainChoices
+                    self.player_state.preQuestMainChoices = None
+                    game_logger.debug("[QuestSystem] Phục hồi lựa chọn mạch chính từ cache")
+                else:
+                    choices = await self.story_director.generate_player_choices(
+                        current_location_name=self.player_state.currentLocation.name,
+                        encountered_npc_name=[npc.name for npc in self.player_state.currentNPCs],
+                        recent_story_text=story_response,
+                    )
+                self.last_choices = choices
+                self._display_choices(choices)
+                return story_response, choices
+
         # 2. ĐẠO DIỄN KỂ CHUYỆN (Streaming qua StoryDirector)
         story_response = ""
         first_token = False
         start_story = time.perf_counter()
 
         # Trực tiếp gọi hàm narrate_turn của StoryDirector
-        async for chunk in self.story_director.narrate_turn(
+        if quest_context:
+            quest_objectives = ", ".join(quest_context.get("objectives", []))
+            quest_directive = f"{system_directive}\n[QUEST_BRANCH] {quest_context.get('title', 'Quest')} | {quest_objectives}"
+            story_stream = self.story_director.narrate_quest_turn(
+                player_input, self.world_state, self.player_state, npcs_context, hybrid_context, quest_directive, quest_context
+            )
+        else:
+            story_stream = self.story_director.narrate_turn(
                 player_input, self.world_state, self.player_state, npcs_context, hybrid_context, system_directive
-        ):
+            )
+
+        async for chunk in story_stream:
             if not first_token and chunk.strip():
                 game_logger.debug(f"[Profile] Time to First Token (TTFT): {time.perf_counter() - start_story:.3f}s")
                 first_token = True
@@ -91,6 +134,7 @@ class GameOrchestrator:
 
         # 3. CHẠY TÁC VỤ NỀN (Local LLM bẻ Chunk + Cập nhật State, UI)
         episode_data, scene_emotion = await self.state_sys.process_background_tasks(player_input, story_response)
+        self._print_quest_updates()
         encountered_npc_names = [npc.name for npc in self.player_state.currentNPCs]
 
         # Gọi nhạc nền:
@@ -103,13 +147,15 @@ class GameOrchestrator:
                                         episode_data=episode_data,
                                         current_location_name=self.player_state.currentLocation.name,
                                         encountered_npc_names=encountered_npc_names)
+        self.last_story_response = story_response
 
         # 5. SINH MENU LỰA CHỌN (Qua StoryDirector)
 
         choices = await self.story_director.generate_player_choices(
             current_location_name=self.player_state.currentLocation.name,
             encountered_npc_name = encountered_npc_names,
-            recent_story_text=story_response
+            recent_story_text=story_response,
+            quest_context=quest_context,
         )
         self.last_choices = choices
         self._display_choices(choices)
@@ -129,6 +175,84 @@ class GameOrchestrator:
             for choice in choices:
                 print(f" {choice['id']}. {choice['action_text']} ({choice['style']})")
             print("-" * 30)
+
+    def _print_quest_updates(self):
+        notifications = getattr(self.player_state, "quest_notifications", [])
+        if notifications:
+            print("\n[Quest] Thong bao:")
+            for message in notifications:
+                print(f"- {message}")
+            self.player_state.quest_notifications = []
+
+        available_quests = getattr(self.player_state, "available_quests", [])
+        if available_quests:
+            print("\n[Quest] San sang:")
+            for idx, quest in enumerate(available_quests, start=1):
+                objectives_text = ", ".join(quest.objectives) if quest.objectives else "Chua ro"
+                print(f" {idx}. {quest.title} | {objectives_text}")
+
+        active_quests = getattr(self.player_state, "active_quests", [])
+        if active_quests:
+            print("\n[Quest] Dang lam:")
+            for quest in active_quests:
+                objectives_text = ", ".join(quest.objectives) if quest.objectives else "Chua ro"
+                print(f"- {quest.title}: {objectives_text}")
+
+        completed_count = len(getattr(self.player_state, "completed_quests", []))
+        if completed_count:
+            print(f"[Quest] Da hoan thanh: {completed_count}")
+
+        if getattr(self.player_state, "quest_branch_active", False):
+            branch_title = getattr(self.player_state, "quest_branch_title", "Quest")
+            print(f"[Quest] Dang o nhánh quest: {branch_title}")
+
+    async def _handle_quest_command(self, command_text: str) -> bool:
+        command = command_text.strip().lower()
+        if not command.startswith("quest"):
+            return False
+
+        parts = command.split()
+        if len(parts) == 1 or parts[1] in {"list", "ds", "danh-sach"}:
+            self._print_quest_updates()
+            return True
+
+        if parts[1] in {"accept", "nhan", "bat-dau"}:
+            if len(parts) < 3 or not parts[2].isdigit():
+                print("[Quest] Dung: quest accept <so thu tu>")
+                return True
+            quest_index = int(parts[2]) - 1
+            self.player_state.quest_branch_story_snapshot = self.last_story_response
+            
+            await self.state_sys.capture_main_menu_choices(self.last_choices)
+            
+            ok, message = await self.state_sys.start_quest_branch(quest_index)
+            print(f"[Quest] {message}")
+            
+            if ok and self.player_state.active_quests:
+                quest = self.player_state.active_quests[0]
+                quest_choices = await self.story_director.generate_quest_intro_choices(
+                    quest_title=quest.title,
+                    quest_objectives=", ".join(quest.objectives) if quest.objectives else "Chưa rõ",
+                    current_location_name=self.player_state.currentLocation.name,
+                    encountered_npc_name=[npc.name for npc in self.player_state.currentNPCs],
+                )
+                self.last_choices = quest_choices
+                self._display_choices(quest_choices)
+                game_logger.info("[QuestSystem] Sinh lựa chọn intro cho quest")
+            
+            return True
+
+        if parts[1] in {"abandon", "thoat", "bo", "back", "return"}:
+            ok, message = await self.state_sys.return_from_quest_branch(reason="abandoned")
+            print(f"[Quest] {message}")
+            return True
+
+        if parts[1] in {"status", "info"}:
+            self._print_quest_updates()
+            return True
+
+        print("[Quest] Lenh khong hop le. Dung: quest list | quest accept <so> | quest abandon")
+        return True
 
     async def run(self):
         """Vòng lặp khởi tạo và chạy Game chính"""
@@ -241,6 +365,9 @@ class GameOrchestrator:
         game_logger.info("=== BẮT ĐẦU VÒNG LẶP GAME CHÍNH (GAME LOOP) ===")
         while True:
             player_input = input("\nBạn muốn làm gì? (Gõ 'exit' để thoát, 'on' để bật nhạc, 'off' để tắt nhạc: ")
+
+            if await self._handle_quest_command(player_input):
+                continue
 
             if player_input.lower() in ['exit', 'quit', 'thoát']:
                 print("\n[Hệ thống] Đang lưu và đóng Database. Hẹn gặp lại!")

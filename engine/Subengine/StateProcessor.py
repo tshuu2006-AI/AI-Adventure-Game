@@ -1,8 +1,8 @@
 """Module điều phối việc cập nhật thông tin, trạng thái của trò chơi trong csdl"""
 import asyncio
 import time
-from world.Entity import Location, NPC, Item
-from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor
+from world.Entity import Location, NPC, Item, Quest
+from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor, ItemAgent, QuestAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
 from engine.Agents.CloudAgents import LocationAgent, NPCAgent
 from static.config import STATE_EXTRACTOR_MODEL, MEMORY_EXTRACTOR_MODEL, LOCATION_AGENT_MODEL, NPC_AGENT_MODEL
@@ -16,6 +16,8 @@ class StateProcessor:
         self.image_manager = image_manager
         self.state_extractor = StateExtractor(model_name = STATE_EXTRACTOR_MODEL, pm = pm, gemini_api_key=gemini_api_key)
         self.memory_extractor = MemoryExtractor(model_name = MEMORY_EXTRACTOR_MODEL, pm = pm, gemini_api_key=gemini_api_key)
+        self.item_agent = ItemAgent(model_name="gemini-3.1-flash-lite", pm=pm, gemini_api_key=gemini_api_key)
+        self.quest_agent = QuestAgent(model_name="gemini-3.1-flash-lite", pm=pm, gemini_api_key=gemini_api_key)
 
         self.location_agent = LocationAgent(api_key = groq_api_key,
                                             pm = pm,
@@ -24,6 +26,28 @@ class StateProcessor:
         self.npc_agent = NPCAgent(api_key = groq_api_key,
                                   pm = pm,
                                   model_name = NPC_AGENT_MODEL)
+
+        if not hasattr(self.player_state, "active_quests"):
+            self.player_state.active_quests = []
+        if not hasattr(self.player_state, "available_quests"):
+            self.player_state.available_quests = []
+        if not hasattr(self.player_state, "completed_quests"):
+            self.player_state.completed_quests = []
+        if not hasattr(self.player_state, "quest_notifications"):
+            self.player_state.quest_notifications = []
+        if not hasattr(self.player_state, "quest_branch_active"):
+            self.player_state.quest_branch_active = False
+        if not hasattr(self.player_state, "current_quest_branch_id"):
+            self.player_state.current_quest_branch_id = None
+        if not hasattr(self.player_state, "quest_branch_checkpoint"):
+            self.player_state.quest_branch_checkpoint = None
+        if not hasattr(self.player_state, "quest_branch_title"):
+            self.player_state.quest_branch_title = None
+        if not hasattr(self.player_state, "quest_branch_story_snapshot"):
+            self.player_state.quest_branch_story_snapshot = ""
+
+        self.max_available_quests = 4
+        self.max_active_quests = 1
 
 
     async def _update_location(self, new_location_entered_name: str, context: str) -> Location:
@@ -189,12 +213,15 @@ class StateProcessor:
 
                     # 🌟 KIỂM TRA: Nếu vật phẩm chưa có trong danh sách mảng Object
                     if not any(item.name.lower() == item_name.lower() for item in self.player_state.inventory):
+                        # Gọi ItemAgent để phân loại vật phẩm
+                        item_context = f"Location: {self.player_state.currentLocation.name if self.player_state.currentLocation else ''}"
+                        item_spec = await self.item_agent.classify_item(item_name, item_context)
+
                         # Gọi Kaggle vẽ ảnh
                         img_path = await self.image_manager.get_or_create_item_image(item_name)
 
-                        # Khởi tạo Object Item chuẩn
-                        new_item = Item(id=None, name=item_name,
-                                        description=f"Vật phẩm '{item_name}' nhặt được trong hành trình.")
+                        # Khởi tạo object item theo loại
+                        new_item = self.item_agent.build_item_object(item_spec, fallback_name=item_name)
                         new_item.image_path = img_path
 
                         # 🌟 THÊM VÀO MẢNG (APPEND):
@@ -226,6 +253,322 @@ class StateProcessor:
             inventory_status = ", ".join(
                 [item.name for item in self.player_state.inventory]) if self.player_state.inventory else "Trống rỗng"
             game_logger.info(f" [Balo hiện tại]: {inventory_status}")
+
+    def _push_quest_notification(self, message: str):
+        if not message:
+            return
+
+        if not hasattr(self.player_state, "quest_notifications"):
+            self.player_state.quest_notifications = []
+
+        self.player_state.quest_notifications.append(message)
+        self.player_state.quest_notifications = self.player_state.quest_notifications[-10:]
+        game_logger.info(f"[Quest Notice] {message}")
+
+    def _serialize_location(self, location: Location):
+        if not location:
+            return None
+        return {
+            "id": getattr(location, "id", None),
+            "name": getattr(location, "name", None),
+            "description": getattr(location, "description", ""),
+            "atmosphere": getattr(location, "atmosphere", ""),
+            "image_path": getattr(location, "image_path", None),
+        }
+
+    def _serialize_npc(self, npc: NPC):
+        return {
+            "id": getattr(npc, "id", None),
+            "name": getattr(npc, "name", None),
+            "personality": getattr(npc, "personality", ""),
+            "description": getattr(npc, "description", ""),
+            "affectionate": getattr(npc, "affectionate", 0),
+            "location": getattr(npc, "location", ""),
+            "status": getattr(npc, "status", "Bình thường"),
+            "image_path": getattr(npc, "image_path", None),
+        }
+
+    def _capture_quest_checkpoint(self, quest_title: str = "") -> dict:
+        return {
+            "location": self._serialize_location(self.player_state.currentLocation),
+            "npcs": [self._serialize_npc(npc) for npc in self.player_state.currentNPCs],
+            "turn": self.player_state.currentTurn,
+            "quest_title": quest_title,
+        }
+
+    def _restore_quest_checkpoint(self, checkpoint: dict):
+        if not checkpoint:
+            return
+
+        location_payload = checkpoint.get("location")
+        if location_payload:
+            self.player_state.currentLocation = Location(
+                id=location_payload.get("id"),
+                name=location_payload.get("name", "Vùng đất vô danh"),
+                description=location_payload.get("description", ""),
+                atmosphere=location_payload.get("atmosphere", "bình thường"),
+                image_path=location_payload.get("image_path"),
+            )
+
+        npc_payloads = checkpoint.get("npcs", [])
+        restored_npcs = []
+        for npc_payload in npc_payloads:
+            restored_npcs.append(
+                NPC(
+                    id=npc_payload.get("id"),
+                    name=npc_payload.get("name", "Vô danh"),
+                    personality=npc_payload.get("personality", "Bí ẩn"),
+                    description=npc_payload.get("description", "Không rõ"),
+                    affectionate=npc_payload.get("affectionate", 0),
+                    location=npc_payload.get("location", ""),
+                    status=npc_payload.get("status", "Bình thường"),
+                    image_path=npc_payload.get("image_path"),
+                )
+            )
+        self.player_state.currentNPCs = restored_npcs
+
+    async def start_quest_branch(self, quest_index: int) -> tuple[bool, str]:
+        if self.player_state.quest_branch_active:
+            return False, "Bạn đang ở trong một quest branch rồi."
+
+        if quest_index < 0 or quest_index >= len(self.player_state.available_quests):
+            return False, "Quest không hợp lệ."
+
+        quest = self.player_state.available_quests.pop(quest_index)
+        checkpoint = self._capture_quest_checkpoint(quest_title=quest.title)
+
+        branch_id = await self.db.create_quest_branch(
+            quest_title=quest.title,
+            checkpoint=checkpoint,
+            started_turn=self.player_state.currentTurn,
+            origin_location=checkpoint.get("location", {}).get("name") if checkpoint.get("location") else None,
+            quest_status="active",
+        )
+
+        quest.branch_id = branch_id
+        quest.branch_state = "active"
+        quest.status = "active"
+        quest.branch_checkpoint = checkpoint
+        quest.branch_start_turn = self.player_state.currentTurn
+        quest.branch_origin_location = checkpoint.get("location", {}).get("name") if checkpoint.get("location") else None
+        quest.branch_origin_npcs = [npc.get("name") for npc in checkpoint.get("npcs", [])]
+        quest.branch_story_snapshot = self.player_state.quest_branch_story_snapshot
+
+        self.player_state.active_quests = [quest]
+        self.player_state.quest_branch_active = True
+        self.player_state.current_quest_branch_id = branch_id
+        self.player_state.quest_branch_checkpoint = checkpoint
+        self.player_state.quest_branch_title = quest.title
+
+        await self.db.add_quest_event(
+            branch_id=branch_id,
+            quest_title=quest.title,
+            event_type="branch_start",
+            description=f"Bắt đầu nhánh quest '{quest.title}'.",
+            story_text=quest.branch_story_snapshot,
+            location=checkpoint.get("location", {}).get("name") if checkpoint.get("location") else "",
+            npc_names=quest.branch_origin_npcs,
+            inventory=[item.name for item in self.player_state.inventory],
+            turn_number=self.player_state.currentTurn,
+        )
+
+        transition_text = (
+            f"Bạn tạm rời mạch chính để xử lý quest '{quest.title}'. "
+            f"Điểm xuất phát hiện tại được lưu lại để quay về sau khi hoàn tất."
+        )
+        self._push_quest_notification(transition_text)
+        return True, transition_text
+
+    async def capture_main_menu_choices(self, choices: list):
+        """Lưu lựa chọn hiện tại từ mạch chính trước khi vào quest"""
+        self.player_state.preQuestMainChoices = choices
+        game_logger.debug(f"[QuestSystem] Lưu {len(choices)} lựa chọn mạch chính để sử dụng sau quest")
+
+    async def return_from_quest_branch(self, reason: str, reward_item_name: str = None, transition_override: str = None) -> tuple[bool, str]:
+        if not self.player_state.quest_branch_active or not self.player_state.active_quests:
+            return False, "Không có quest branch nào đang hoạt động."
+
+        quest = self.player_state.active_quests[0]
+        checkpoint = quest.branch_checkpoint or self.player_state.quest_branch_checkpoint or {}
+
+        if reason == "completed":
+            quest.branch_state = "rewarded" if quest.reward_claimed else "completed"
+            quest.status = "completed"
+            quest.turn_completed = self.player_state.currentTurn
+            quest.branch_end_turn = self.player_state.currentTurn
+            if quest not in self.player_state.completed_quests:
+                self.player_state.completed_quests.append(quest)
+        else:
+            quest.branch_state = "paused"
+            quest.status = "available"
+            if quest not in self.player_state.available_quests:
+                self.player_state.available_quests.insert(0, quest)
+
+        self._restore_quest_checkpoint(checkpoint)
+
+        if quest.branch_id is not None:
+            await self.db.update_quest_branch(
+                branch_id=quest.branch_id,
+                quest_status=quest.branch_state,
+                checkpoint=checkpoint,
+                ended_turn=self.player_state.currentTurn,
+                return_reason=reason,
+                return_transition=transition_override,
+            )
+
+        await self.db.add_quest_event(
+            branch_id=quest.branch_id or 0,
+            quest_title=quest.title,
+            event_type="branch_end",
+            description=f"Kết thúc nhánh quest '{quest.title}' với lý do: {reason}.",
+            story_text=transition_override or "",
+            location=self.player_state.currentLocation.name if self.player_state.currentLocation else "",
+            npc_names=[npc.name for npc in self.player_state.currentNPCs],
+            inventory=[item.name for item in self.player_state.inventory],
+            turn_number=self.player_state.currentTurn,
+        )
+
+        self.player_state.active_quests = []
+        self.player_state.quest_branch_active = False
+        self.player_state.current_quest_branch_id = None
+        self.player_state.quest_branch_checkpoint = None
+        self.player_state.quest_branch_title = None
+        self.player_state.quest_branch_story_snapshot = ""
+
+        if reason == "completed" and reward_item_name:
+            return_transition = (
+                transition_override
+                or f"Sau khi hoàn tất quest '{quest.title}', bạn mang theo phần thưởng '{reward_item_name}' và quay lại mạch truyện chính từ vị trí đã lưu."
+            )
+        elif reason == "completed":
+            return_transition = transition_override or f"Sau khi hoàn tất quest '{quest.title}', bạn quay lại mạch truyện chính từ vị trí đã lưu."
+        else:
+            return_transition = transition_override or f"Bạn gác quest '{quest.title}' lại và quay về mạch truyện chính từ điểm đã lưu."
+
+        quest.return_transition = return_transition
+        self._push_quest_notification(return_transition)
+        return True, return_transition
+
+    async def record_active_quest_event(self, player_input: str, story_response: str, episode_data: dict, scene_emotion: str):
+        if not self.player_state.quest_branch_active or not self.player_state.active_quests:
+            return
+
+        quest = self.player_state.active_quests[0]
+        if quest.branch_id is None:
+            return
+
+        summary = episode_data.get("result") if isinstance(episode_data, dict) else ""
+        if not summary:
+            summary = story_response[:400]
+
+        await self.db.add_quest_event(
+            branch_id=quest.branch_id,
+            quest_title=quest.title,
+            event_type="turn",
+            description=f"Quest turn: {summary}",
+            story_text=story_response,
+            location=self.player_state.currentLocation.name if self.player_state.currentLocation else "",
+            npc_names=[npc.name for npc in self.player_state.currentNPCs],
+            inventory=[item.name for item in self.player_state.inventory],
+            turn_number=self.player_state.currentTurn,
+        )
+
+    async def _maybe_create_side_quest(self, story_response: str):
+        current_location = self.player_state.currentLocation.name if self.player_state.currentLocation else "Chưa xác định"
+        current_npcs = ", ".join([npc.name for npc in self.player_state.currentNPCs]) if self.player_state.currentNPCs else "Không có ai"
+        inventory = ", ".join([item.name for item in self.player_state.inventory]) if self.player_state.inventory else "Trống rỗng"
+
+        if self.player_state.quest_branch_active:
+            return
+
+        if len(self.player_state.available_quests) >= self.max_available_quests:
+            return
+
+        quest_data = await self.quest_agent.generate_side_quest(
+            story_response=story_response,
+            current_location=current_location,
+            current_npcs=current_npcs,
+            inventory=inventory
+        )
+
+        if not quest_data:
+            return
+
+        quest = Quest(
+            id=None,
+            title=quest_data.get("title", "Nhiệm vụ phụ"),
+            description=quest_data.get("description", ""),
+            objectives=quest_data.get("objectives", []),
+            status="available",
+            reward_type=quest_data.get("reward", {}).get("item_type", "ConsumableItem"),
+            reward_data=quest_data.get("reward", {}),
+            linked_npc_names=quest_data.get("linked_npc_names", []),
+            linked_location=quest_data.get("linked_location"),
+            completion_hint=quest_data.get("completion_hint", ""),
+            turn_created=self.player_state.currentTurn,
+            branch_state="available",
+        )
+
+        self.player_state.available_quests.append(quest)
+        game_logger.info(f"[Quest] Nhiệm vụ phụ mới: {quest.title}")
+        objectives_text = ", ".join(quest.objectives) if quest.objectives else "Chưa có mục tiêu rõ ràng"
+        self._push_quest_notification(f"Nhiệm vụ mới sẵn sàng: {quest.title}. Mục tiêu: {objectives_text}.")
+
+    async def _evaluate_active_quests(self, story_response: str):
+        if not self.player_state.active_quests:
+            return
+
+        current_location = self.player_state.currentLocation.name if self.player_state.currentLocation else "Chưa xác định"
+        current_npcs = ", ".join([npc.name for npc in self.player_state.currentNPCs]) if self.player_state.currentNPCs else "Không có ai"
+        inventory = ", ".join([item.name for item in self.player_state.inventory]) if self.player_state.inventory else "Trống rỗng"
+
+        for quest in list(self.player_state.active_quests):
+            quest_payload = {
+                "title": quest.title,
+                "description": quest.description,
+                "objectives": quest.objectives,
+                "linked_npc_names": quest.linked_npc_names,
+                "linked_location": quest.linked_location,
+                "difficulty": quest.reward_data.get("difficulty", "easy"),
+            }
+
+            evaluation = await self.quest_agent.evaluate_quest(
+                quest_data=quest_payload,
+                story_response=story_response,
+                current_location=current_location,
+                current_npcs=current_npcs,
+                inventory=inventory,
+            )
+
+            if evaluation.get("progress_notes"):
+                quest.progress_notes.append(evaluation["progress_notes"])
+
+            if evaluation.get("is_completed") and not quest.reward_claimed:
+                reward = evaluation.get("reward") or quest.reward_data
+                reward_item = None
+                if reward:
+                    reward["quest_id"] = quest.id or quest.title
+                    reward_item = self.item_agent.build_item_object(reward, fallback_name=reward.get("name", quest.title))
+                    img_path = await self.image_manager.get_or_create_item_image(reward_item.name)
+                    reward_item.image_path = img_path
+                    self.player_state.inventory.append(reward_item)
+                    self._push_quest_notification(
+                        f"Hoàn thành nhiệm vụ '{quest.title}'. Nhận thưởng: {reward_item.name} ({reward_item.item_type})."
+                    )
+                else:
+                    self._push_quest_notification(f"Hoàn thành nhiệm vụ '{quest.title}'.")
+
+                quest.status = "completed"
+                quest.reward_claimed = True
+                quest.turn_completed = self.player_state.currentTurn
+                game_logger.info(f"[Quest] Hoàn thành nhiệm vụ phụ: {quest.title}")
+                await self.return_from_quest_branch(
+                    reason="completed",
+                    reward_item_name=reward_item.name if reward_item else None,
+                    transition_override=(
+                        f"Sau khi giải quyết xong quest '{quest.title}', bạn bình tĩnh quay lại điểm đã lưu trong mạch truyện chính."
+                    ),
+                )
 
 
     async def process_background_tasks(self, player_input, story_response):
@@ -286,4 +629,7 @@ class StateProcessor:
         ]
 
         await asyncio.gather(*update_tasks)
+        await self.record_active_quest_event(player_input, story_response, atomic_memories, scene_emotion)
+        await self._evaluate_active_quests(story_response)
+        await self._maybe_create_side_quest(story_response)
         return atomic_memories, scene_emotion

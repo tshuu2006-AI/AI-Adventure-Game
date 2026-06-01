@@ -100,12 +100,43 @@ def build_inventory_payload():
                 "name": getattr(item, 'name', 'Vật phẩm'),
                 "description": getattr(item, 'description', 'Vật phẩm bí ẩn.'),
                 "quote": getattr(item, 'quote', ''),
+                "item_type": getattr(item, 'item_type', 'item'),
+                "effect": getattr(item, 'effect', {}),
                 "image_b64": image_to_base64_with_default(getattr(item, 'image_path', None), is_item=True)
             })
         return payload
     except Exception as e:
         print(f"Lỗi tải túi đồ: {e}")
         return []
+
+
+def build_quest_payload(quest):
+    return {
+        "id": getattr(quest, "id", None),
+        "title": getattr(quest, "title", ""),
+        "description": getattr(quest, "description", ""),
+        "objectives": getattr(quest, "objectives", []),
+        "status": getattr(quest, "status", "active"),
+        "lifecycle_state": quest.lifecycle_state() if hasattr(quest, "lifecycle_state") else getattr(quest, "status", "active"),
+        "reward_type": getattr(quest, "reward_type", "ConsumableItem"),
+        "reward_data": getattr(quest, "reward_data", {}),
+        "linked_npc_names": getattr(quest, "linked_npc_names", []),
+        "linked_location": getattr(quest, "linked_location", None),
+        "progress_notes": getattr(quest, "progress_notes", []),
+        "completion_hint": getattr(quest, "completion_hint", ""),
+        "reward_claimed": getattr(quest, "reward_claimed", False),
+        "turn_created": getattr(quest, "turn_created", 0),
+        "turn_completed": getattr(quest, "turn_completed", None),
+        "branch_id": getattr(quest, "branch_id", None),
+        "branch_state": getattr(quest, "branch_state", "available"),
+        "branch_checkpoint": getattr(quest, "branch_checkpoint", {}),
+        "branch_start_turn": getattr(quest, "branch_start_turn", None),
+        "branch_end_turn": getattr(quest, "branch_end_turn", None),
+        "branch_origin_location": getattr(quest, "branch_origin_location", None),
+        "branch_origin_npcs": getattr(quest, "branch_origin_npcs", []),
+        "branch_story_snapshot": getattr(quest, "branch_story_snapshot", ""),
+        "return_transition": getattr(quest, "return_transition", ""),
+    }
 
 
 def parse_story_into_segments(full_text):
@@ -355,20 +386,58 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
     """Xử lý lượt đi (Giống _process_game_turn)"""
     try:
         orchestrator.is_processing_bg = True
+        if getattr(orchestrator.player_state, "quest_branch_active", False) and orchestrator.player_state.active_quests:
+            return_tokens = ["tạm gác", "tam gac", "quay lại mạch chính", "quay lai mach chinh", "gác quest", "gac quest", "return"]
+            if any(token in action.lower() for token in return_tokens):
+                ok, transition = await orchestrator.state_sys.return_from_quest_branch(reason="abandoned")
+                segments = parse_story_into_segments(transition)
+
+                choices = await orchestrator.story_director.generate_player_choices(
+                    current_location_name=orchestrator.player_state.currentLocation.name,
+                    encountered_npc_name=[n.name for n in orchestrator.player_state.currentNPCs],
+                    recent_story_text=transition
+                )
+                orchestrator.last_choices = choices
+                choice_texts = [c["action_text"] for c in choices]
+
+                return JSONResponse(content={
+                    "segments": segments,
+                    "choices": choice_texts,
+                    "bg_image_b64": "",
+                    "char_image_b64": "",
+                    "inventory": []
+                })
+
         directive = await orchestrator.action_sys.get_system_directive(action)
         hybrid_ctx, npcs_ctx = await orchestrator.memory_sys.get_hybrid_context(action, orchestrator.player_state)
 
         story_response = ""
-        async for chunk in orchestrator.story_director.narrate_turn(
-                action, orchestrator.world_state, orchestrator.player_state, npcs_ctx, hybrid_ctx, directive):
-            story_response += chunk
+        quest_context = None
+        if getattr(orchestrator.player_state, "quest_branch_active", False) and orchestrator.player_state.active_quests:
+            quest = orchestrator.player_state.active_quests[0]
+            quest_context = {
+                "title": quest.title,
+                "objectives": quest.objectives,
+                "origin_location": quest.branch_origin_location,
+                "branch_state": quest.branch_state,
+            }
+            quest_objectives = ", ".join(quest_context.get("objectives", []))
+            quest_directive = f"{directive}\n[QUEST_BRANCH] {quest_context.get('title', 'Quest')} | {quest_objectives}"
+            async for chunk in orchestrator.story_director.narrate_quest_turn(
+                    action, orchestrator.world_state, orchestrator.player_state, npcs_ctx, hybrid_ctx, quest_directive, quest_context):
+                story_response += chunk
+        else:
+            async for chunk in orchestrator.story_director.narrate_turn(
+                    action, orchestrator.world_state, orchestrator.player_state, npcs_ctx, hybrid_ctx, directive):
+                story_response += chunk
         
         segments = parse_story_into_segments(story_response)
 
         choices = await orchestrator.story_director.generate_player_choices(
             current_location_name=orchestrator.player_state.currentLocation.name,
             encountered_npc_name=[n.name for n in orchestrator.player_state.currentNPCs],
-            recent_story_text=story_response
+            recent_story_text=story_response,
+            quest_context=quest_context,
         )
         orchestrator.last_choices = choices
         choice_texts = [c["action_text"] for c in choices]
@@ -406,18 +475,29 @@ async def poll_updates():
                     })
             
         inv_payload = build_inventory_payload()
+        active_quests = [build_quest_payload(q) for q in getattr(orchestrator.player_state, "active_quests", [])]
+        available_quests = [build_quest_payload(q) for q in getattr(orchestrator.player_state, "available_quests", [])]
+        completed_quests = [build_quest_payload(q) for q in getattr(orchestrator.player_state, "completed_quests", [])]
+        quest_notifications = list(getattr(orchestrator.player_state, "quest_notifications", []))
         emotion = getattr(orchestrator, "current_emotion", "bình thường")
             
         return JSONResponse(content={
             "bg_image_b64": bg_img,
             "npc_images": npc_images_payload, # 🌟 Gửi mảng ảnh thay cho char_image_b64 cũ
             "inventory": inv_payload,
+            "available_quests": available_quests,
+            "active_quests": active_quests,
+            "completed_quests": completed_quests,
+            "quest_notifications": quest_notifications,
+            "quest_branch_active": getattr(orchestrator.player_state, "quest_branch_active", False),
+            "current_quest_branch_id": getattr(orchestrator.player_state, "current_quest_branch_id", None),
+            "current_quest_branch_title": getattr(orchestrator.player_state, "quest_branch_title", None),
             "emotion": emotion,
             "is_processing_bg": getattr(orchestrator, "is_processing_bg", False)
         })
     except Exception as e:
         print(f"Lỗi poll_updates: {e}")
-        return JSONResponse(content={"bg_image_b64": "", "npc_images": [], "inventory": []})
+        return JSONResponse(content={"bg_image_b64": "", "npc_images": [], "inventory": [], "available_quests": [], "active_quests": [], "completed_quests": [], "quest_notifications": [], "quest_branch_active": False, "current_quest_branch_id": None, "current_quest_branch_title": None})
 
 @app.get("/api/diary")
 async def get_diary():

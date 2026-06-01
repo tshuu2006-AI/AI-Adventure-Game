@@ -9,6 +9,7 @@ from google.genai import types
 
 from engine.Utils.PromptManager import PromptManager
 from engine.Utils.logger import game_logger
+from world.Entity import Item, ConsumableItem, WeaponItem, QuestItem
 
 
 class BaseLocalAgent:
@@ -217,3 +218,228 @@ class MusicClassifier(BaseLocalAgent):
                 return emotion
 
         return "bình thường"
+
+
+class ItemAgent(BaseLocalAgent):
+    """Agent phan loai va chuan hoa item thanh cac loai vat pham game."""
+
+    def _fallback_item_spec(self, item_name: str, context: str = "") -> Dict[str, Any]:
+        full_text = f"{item_name} {context}".lower()
+
+        if any(keyword in full_text for keyword in ["kiếm", "dao", "súng", "rìu", "cung", "kiem", "weapon", "blade"]):
+            return {
+                "name": item_name,
+                "item_type": "WeaponItem",
+                "description": f"Một vũ khí tên {item_name}.",
+                "damage": 5,
+                "rarity": "common"
+            }
+
+        if any(keyword in full_text for keyword in ["thuốc", "nước", "bình", "kẹo", "tăng lực", "potion", "elixir", "medkit"]):
+            return {
+                "name": item_name,
+                "item_type": "ConsumableItem",
+                "description": f"Vật phẩm sử dụng được mang tên {item_name}.",
+                "effect": {"kind": "heal", "value": 10, "duration_turns": 0, "target": "player"}
+            }
+
+        return {
+            "name": item_name,
+            "item_type": "QuestItem",
+            "description": f"Vật phẩm cốt truyện mang tên {item_name}."
+        }
+
+    async def classify_item(self, item_name: str, context: str = "") -> Dict[str, Any]:
+        sys_prompt = self.pm.get_prompt("ItemAgent", "system")
+        user_prompt = self.pm.get_prompt("ItemAgent", "user", item_name=item_name, context=context)
+
+        result = await self._generate_json(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt,
+            max_tokens=220
+        )
+
+        if not result:
+            return self._fallback_item_spec(item_name, context)
+
+        item_type = str(result.get("item_type", "")).strip()
+        if item_type not in {"ConsumableItem", "WeaponItem", "QuestItem"}:
+            return self._fallback_item_spec(item_name, context)
+
+        result.setdefault("name", item_name)
+        result.setdefault("description", f"Vật phẩm {item_name}.")
+
+        if item_type == "ConsumableItem":
+            result.setdefault(
+                "effect",
+                {"kind": "heal", "value": 10, "duration_turns": 0, "target": "player"}
+            )
+        elif item_type == "WeaponItem":
+            result.setdefault("damage", 0)
+            result.setdefault("rarity", "common")
+
+        return result
+
+    def build_item_object(self, item_data: Dict[str, Any], fallback_name: str = "Vật phẩm"):
+        item_name = item_data.get("name") or fallback_name
+        description = item_data.get("description") or f"Vật phẩm {item_name}."
+        item_type = str(item_data.get("item_type", "QuestItem")).strip()
+
+        if item_type == "ConsumableItem":
+            effect = item_data.get("effect") or {"kind": "heal", "value": 10, "duration_turns": 0, "target": "player"}
+            item = ConsumableItem(
+                id=None,
+                name=item_name,
+                description=description,
+                effect=effect,
+                quest_id=item_data.get("quest_id")
+            )
+        elif item_type == "WeaponItem":
+            item = WeaponItem(
+                id=None,
+                name=item_name,
+                description=description,
+                damage=int(item_data.get("damage") or 0),
+                rarity=str(item_data.get("rarity") or "common"),
+                quest_id=item_data.get("quest_id")
+            )
+        elif item_type == "QuestItem":
+            item = QuestItem(
+                id=None,
+                name=item_name,
+                description=description,
+                quest_id=item_data.get("quest_id")
+            )
+        else:
+            item = Item(
+                id=None,
+                name=item_name,
+                description=description,
+                item_type=item_type,
+                effect=item_data.get("effect", {}),
+                quest_id=item_data.get("quest_id")
+            )
+
+        if item_data.get("image_path"):
+            item.image_path = item_data["image_path"]
+
+        if item_data.get("quote"):
+            item.quote = item_data["quote"]
+
+        return item
+
+
+class QuestAgent(BaseLocalAgent):
+    """Agent tao va kiem tra quest phu theo boi canh hien tai."""
+
+    def _fallback_reward(self, quest_data: Dict[str, Any]) -> Dict[str, Any]:
+        difficulty = str(quest_data.get("difficulty", "easy")).lower()
+        if difficulty in {"medium", "hard"}:
+            return {
+                "item_type": "WeaponItem",
+                "name": f"Thưởng từ {quest_data.get('title', 'nhiệm vụ')}",
+                "description": "Một phần thưởng dạng vũ khí.",
+                "damage": 5,
+                "rarity": "common"
+            }
+
+        return {
+            "item_type": "ConsumableItem",
+            "name": f"Thưởng từ {quest_data.get('title', 'nhiệm vụ')}",
+            "description": "Một phần thưởng dùng được ngay.",
+            "effect": {"kind": "heal", "value": 15, "duration_turns": 0, "target": "player"}
+        }
+
+    def _fallback_quest(self, current_location: str, current_npcs: str, inventory: str) -> Dict[str, Any]:
+        return {
+            "title": f"Nhiệm vụ phụ ở {current_location}",
+            "description": "Làm một việc nhỏ để đổi lấy phần thưởng.",
+            "objectives": ["Quan sát khu vực", "Nói chuyện với người liên quan"],
+            "linked_npc_names": [name.strip() for name in current_npcs.split(",") if name.strip() and current_npcs != "Không có ai"],
+            "linked_location": current_location,
+            "difficulty": "easy",
+            "reward": self._fallback_reward({"title": f"Nhiệm vụ phụ ở {current_location}", "difficulty": "easy"})
+        }
+
+    async def generate_side_quest(self, story_response: str, current_location: str, current_npcs: str, inventory: str) -> Dict[str, Any]:
+        sys_prompt = self.pm.get_prompt("QuestAgent", "systemGenerate")
+        user_prompt = self.pm.get_prompt(
+            "QuestAgent",
+            "userGenerate",
+            story_response=story_response,
+            current_location=current_location,
+            current_npcs=current_npcs,
+            inventory=inventory,
+        )
+
+        result = await self._generate_json(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt,
+            max_tokens=280
+        )
+
+        if not result or "title" not in result:
+            return self._fallback_quest(current_location, current_npcs, inventory)
+
+        result.setdefault("description", "")
+        result.setdefault("objectives", [])
+        result.setdefault("linked_npc_names", [])
+        result.setdefault("linked_location", current_location)
+        result.setdefault("difficulty", "easy")
+        result.setdefault("reward", self._fallback_reward(result))
+
+        reward = result.get("reward") or self._fallback_reward(result)
+        if reward.get("item_type") not in {"ConsumableItem", "WeaponItem"}:
+            reward = self._fallback_reward(result)
+        result["reward"] = reward
+
+        return result
+
+    async def evaluate_quest(
+        self,
+        quest_data: Dict[str, Any],
+        story_response: str,
+        current_location: str,
+        current_npcs: str,
+        inventory: str,
+    ) -> Dict[str, Any]:
+        sys_prompt = self.pm.get_prompt("QuestAgent", "systemEvaluate")
+        user_prompt = self.pm.get_prompt(
+            "QuestAgent",
+            "userEvaluate",
+            quest_json=json.dumps(quest_data, ensure_ascii=False),
+            story_response=story_response,
+            current_location=current_location,
+            current_npcs=current_npcs,
+            inventory=inventory,
+        )
+
+        result = await self._generate_json(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt,
+            max_tokens=260
+        )
+
+        if not result:
+            return {
+                "is_completed": False,
+                "progress_notes": "",
+                "matched_objectives": [],
+                "missing_objectives": quest_data.get("objectives", []),
+                "reward": None,
+            }
+
+        result.setdefault("is_completed", False)
+        result.setdefault("progress_notes", "")
+        result.setdefault("matched_objectives", [])
+        result.setdefault("missing_objectives", quest_data.get("objectives", []))
+        result.setdefault("reward", None)
+
+        if result.get("is_completed") and not result.get("reward"):
+            result["reward"] = self._fallback_reward(quest_data)
+
+        reward = result.get("reward")
+        if reward and reward.get("item_type") not in {"ConsumableItem", "WeaponItem"}:
+            result["reward"] = self._fallback_reward(quest_data)
+
+        return result

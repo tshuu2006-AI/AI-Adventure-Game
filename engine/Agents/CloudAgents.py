@@ -239,6 +239,85 @@ class ChoiceAgent(BaseCloudAgent):
             return {"choices": [{"id": 1, "action_text": "Tiếp tục quan sát xung quanh", "style": "Thận trọng"}]}
         return result
 
+    async def generate_quest_choices(
+        self,
+        current_location: str,
+        npc_name: str,
+        recent_story_summary: str,
+        quest_title: str,
+        quest_objectives: str,
+    ) -> Dict[str, Any]:
+        sys_prompt = self.pm.get_prompt('QuestChoiceAgent', 'system')
+        user_prompt = self.pm.get_prompt(
+            'QuestChoiceAgent',
+            'user',
+            quest_title=quest_title,
+            quest_objectives=quest_objectives,
+            current_location=current_location,
+            npc_name=npc_name,
+            recent_story_summary=recent_story_summary,
+        )
+
+        required_keys = ["choices"]
+
+        result = await self._generate_json_with_retry(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt,
+            required_keys=required_keys,
+            temperature=0.7
+        )
+
+        if not result:
+            return {
+                "choices": [
+                    {"id": 1, "action_text": "Tôi tiến hành theo mục tiêu quest", "style": "Chủ động"},
+                    {"id": 2, "action_text": "Tôi quan sát thêm xung quanh", "style": "Thận trọng"},
+                    {"id": 3, "action_text": "Tạm gác quest và quay lại mạch chính", "style": "Rút lui"},
+                ]
+            }
+        return result
+
+    async def generate_quest_intro_choices(
+        self,
+        quest_title: str,
+        quest_objectives: str,
+        current_location: str,
+        npc_name: str,
+    ) -> Dict[str, Any]:
+        """
+        Sinh lựa chọn intro khi bắt đầu quest (sau khi chấp nhận quest từ mạch chính).
+        Lựa chọn tập trung vào cách bắt đầu quest.
+        """
+        sys_prompt = self.pm.get_prompt('QuestIntroChoiceAgent', 'system')
+        user_prompt = self.pm.get_prompt(
+            'QuestIntroChoiceAgent',
+            'user',
+            quest_title=quest_title,
+            quest_objectives=quest_objectives,
+            current_location=current_location,
+            npc_name=npc_name,
+        )
+
+        required_keys = ["choices"]
+
+        result = await self._generate_json_with_retry(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt,
+            required_keys=required_keys,
+            temperature=0.7
+        )
+
+        if not result:
+            return {
+                "choices": [
+                    {"id": 1, "action_text": "Tiến hành mục tiêu của quest", "style": "Chủ động"},
+                    {"id": 2, "action_text": "Quan sát xung quanh trước", "style": "Thận trọng"},
+                    {"id": 3, "action_text": "Tạm gác quest và quay lại mạch chính", "style": "Rút lui"},
+                ]
+            }
+        return result
+
+
 
 # ===============================================
 # CÁC AGENT KHÔNG XUẤT JSON (Story và Query)

@@ -1,5 +1,5 @@
 import json
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 from world.Entity import Location
 from static.config import STORY_AGENT_MODEL, CHOICE_AGENT_MODEL, LOCATION_AGENT_MODEL, WORLD_GENERATE_AGENT_MODEL, NPC_AGENT_MODEL
 from engine.Agents.CloudAgents import StoryAgent, ChoiceAgent, WorldGenerateAgent, LocationAgent, NPCAgent
@@ -67,8 +67,50 @@ class StoryDirector:
         async for chunk in stream:
             yield chunk
 
+    async def narrate_quest_turn(self, player_input: str,
+                                world_state,
+                                player_state, npcs_context,
+                                hybrid_rag_context,
+                                system_directive,
+                                quest_context: dict) -> AsyncGenerator[str, None]:
+        full_user_input = f"[Context]:\n{hybrid_rag_context}\n\n[Player action]: {player_input}"
+
+        if npcs_context:
+            npc_context_str = "\n".join(
+                [f"- {npc.name}: Thiện cảm {npc.affectionate}/100, Thể trạng: {npc.status}"
+                 for npc in npcs_context]
+            )
+        else:
+            npc_context_str = "Nobody is near"
+
+        quest_title = quest_context.get("title", "Quest")
+        quest_objectives = quest_context.get("objectives", [])
+        objectives_text = ", ".join(quest_objectives) if quest_objectives else "Chưa rõ"
+        quest_origin_location = quest_context.get("origin_location", "")
+
+        system_prompt = self.pm.get_prompt(
+            'QuestStoryAgent',
+            'system',
+            world_theme=world_state.theme_and_tone,
+            world_conflict=world_state.core_conflict,
+            world_vocabulary=world_state.dynamic_vocabulary,
+            current_location=player_state.currentLocation.name,
+            npc_context=npc_context_str,
+            rag_context=hybrid_rag_context,
+            system_directive=system_directive,
+            quest_title=quest_title,
+            quest_objectives=objectives_text,
+            quest_origin_location=quest_origin_location,
+        )
+        user_prompt = self.pm.get_prompt('QuestStoryAgent', 'user', user_input=full_user_input)
+
+        stream = self.story_agent._generate_stream(system_prompt=system_prompt, user_prompt=user_prompt)
+
+        async for chunk in stream:
+            yield chunk
+
     async def generate_player_choices(self, current_location_name: str, encountered_npc_name: str,
-                                      recent_story_text: str) -> list:
+                                      recent_story_text: str, quest_context: Optional[dict] = None) -> list:
         """
         Dựa vào kết quả đoạn truyện vừa sinh ra để làm ra 3-4 lựa chọn tiếp theo.
         """
@@ -76,16 +118,69 @@ class StoryDirector:
 
         npc_name = encountered_npc_name if encountered_npc_name else "Không có"
 
-        choices_data = await self.choice_agent.generate_choices(
-            current_location=current_location_name,
-            npc_name=npc_name,
-            recent_story_summary=recent_story_text  # Đưa đoạn truyện vừa kể vào đây để AI ra lựa chọn sát thực tế
-        )
+        if quest_context:
+            quest_title = quest_context.get("title", "Quest")
+            quest_objectives = quest_context.get("objectives", [])
+            objectives_text = ", ".join(quest_objectives) if quest_objectives else "Chưa rõ"
+            choices_data = await self.choice_agent.generate_quest_choices(
+                current_location=current_location_name,
+                npc_name=npc_name,
+                recent_story_summary=recent_story_text,
+                quest_title=quest_title,
+                quest_objectives=objectives_text,
+            )
+        else:
+            choices_data = await self.choice_agent.generate_choices(
+                current_location=current_location_name,
+                npc_name=npc_name,
+                recent_story_summary=recent_story_text  # Đưa đoạn truyện vừa kể vào đây để AI ra lựa chọn sát thực tế
+            )
 
         choices_list = choices_data.get('choices', [])
+        if quest_context and choices_list:
+            has_return = any(
+                "quay lại" in c.get("action_text", "").lower()
+                or "quay lai" in c.get("action_text", "").lower()
+                or "tạm gác" in c.get("action_text", "").lower()
+                or "tam gac" in c.get("action_text", "").lower()
+                for c in choices_list
+            )
+            if not has_return:
+                choices_list[-1] = {
+                    "id": choices_list[-1].get("id", len(choices_list)),
+                    "action_text": "Tạm gác quest và quay lại mạch chính",
+                    "style": "Rút lui",
+                }
         game_logger.debug(f"[StoryDirector] Đã tạo thành công {len(choices_list)} lựa chọn khả thi.")
 
         return choices_list
+
+    async def generate_quest_intro_choices(self, quest_title: str, quest_objectives: str,
+                                          current_location_name: str, encountered_npc_name: str) -> list:
+        """
+        Sinh lựa chọn khi MỚI vào quest branch (sau khi accept quest).
+        Giúp người chơi có hướng đi rõ ràng cho quest.
+        """
+        game_logger.info(f"[StoryDirector] Sinh lựa chọn intro cho quest '{quest_title}'...")
+
+        npc_name = encountered_npc_name if encountered_npc_name else "Không có"
+        choices_data = await self.choice_agent.generate_quest_intro_choices(
+            quest_title=quest_title,
+            quest_objectives=quest_objectives,
+            current_location=current_location_name,
+            npc_name=npc_name,
+        )
+
+        choices_list = choices_data.get('choices', [])
+        if not choices_list:
+            choices_list = [
+                {"id": 1, "action_text": "Tiến hành mục tiêu của quest", "style": "Chủ động"},
+                {"id": 2, "action_text": "Quan sát xung quanh trước", "style": "Thận trọng"},
+                {"id": 3, "action_text": "Tạm gác quest và quay lại mạch chính", "style": "Rút lui"},
+            ]
+
+        return choices_list
+
 
     # ---- CÁC HÀM KHỞI TẠO GAME BỎ VÀO ĐÂY ----
     async def create_world_bible(self, player_idea: str, path='./data/world_bible.json') -> dict:
