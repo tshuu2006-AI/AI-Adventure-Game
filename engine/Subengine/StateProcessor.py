@@ -198,7 +198,7 @@ class StateProcessor:
 
 
                     # 🌟 KIỂM TRA: Nếu vật phẩm chưa có trong danh sách mảng Object
-                    if not self.player_state.inventory_manager.get_item_by_name(item_name):
+                    if not self.player_state.get_item_by_name(item_name):
                         # Gọi Kaggle vẽ ảnh
                         img_path = await self.image_manager.get_or_create_item_image(item_name)
 
@@ -221,16 +221,16 @@ class StateProcessor:
                     if not item_name or str(item_name).strip().lower() in invalid_items:
                         continue
 
-                    target_item = self.player_state.inventory_manager.get_item_by_name(item_name.strip())
+                    target_item = self.player_state.get_item_by_name(item_name.strip())
 
                     if target_item:
-                        self.player_state.inventory_manager.remove_item(target_item)
+                        self.player_state.remove_item(target_item)
                         if hasattr(target_item, 'image_path') and target_item.image_path:
                             self.image_manager.delete_image(target_item.image_path)
                         game_logger.info(f" [-] Bị mất: {target_item.name}")
 
             # In nhật ký balo ra màn hình điều khiển
-            inventory_status = self.player_state.inventory_manager.get_all_item_names()
+            inventory_status = self.player_state.get_all_item_names()
             game_logger.info(f" [Balo hiện tại]: {inventory_status}")
 
 
