@@ -97,7 +97,7 @@ class ItemProcessor:
         }
 
 
-    async def interact(self, item_list: List[BaseItem], action_details: str) -> str:
+    async def interact(self, item_list: List[BaseItem], action_details: str, image_manager=None) -> str:
 
         # 1. Kiểm tra xem người chơi có thực sự sở hữu các món đồ này không
         items_to_interact = []
@@ -137,6 +137,12 @@ class ItemProcessor:
             # (Tùy chọn) Xóa ảnh cũ trên ổ cứng bằng ImageManager
 
         new_item_obj = evaluation.get("new_item")
+
+        if image_manager and new_item_obj:
+            game_logger.info(f"[Crafting] Đang vẽ ảnh cho vật phẩm mới: {new_item_obj.name}...")
+            # Lệnh await này sẽ chặn lại, chờ Kaggle vẽ xong mới đi tiếp
+            img_path = await image_manager.get_or_create_item_image(new_item_obj.name)
+            new_item_obj.image_path = img_path
 
         self.player_state.add_item(new_item_obj)
         crafted_names = ", ".join([item.name for item in items_to_interact])

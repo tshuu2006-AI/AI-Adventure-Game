@@ -90,23 +90,41 @@ def image_to_base64_with_default(image_path, is_item=False):
     return ""
 
 def build_inventory_payload():
-    """Lấy túi đồ mới nhất trực tiếp từ RAM"""
+    """Đồng bộ túi đồ chuẩn từ InventoryManager (Khắc phục xé chuỗi & Nhầm Type)"""
     try:
-        inv_list = orchestrator.player_state.inventory
         payload = []
-        # ✅ Duyệt trực tiếp qua từng Item object trong List
-        for item in inv_list:
-            payload.append({
-                "name": getattr(item, 'name', 'Vật phẩm'),
-                "description": getattr(item, 'description', 'Vật phẩm bí ẩn.'),
-                "quote": getattr(item, 'quote', ''),
-                "image_b64": image_to_base64_with_default(getattr(item, 'image_path', None), is_item=True)
-            })
+        inv_manager = orchestrator.player_state.inventory_manager
+        
+        # 1. Lấy thẳng danh sách đối tượng Item (Không lấy chuỗi String)
+        all_items = inv_manager.get_all_item()
+        
+        # Dùng set để ghi nhớ những món đồ đã đóng gói, tránh trùng lặp
+        seen_names = set()
+        
+        for item_obj in all_items:
+            name = getattr(item_obj, 'name', 'Vô danh')
+            
+            # Khử trùng lặp: Nếu tên này chưa từng xuất hiện thì mới xử lý
+            if name not in seen_names:
+                seen_names.add(name)
+                
+                # 🌟 SỬA LỖI TYPE: Phải gọi 'item_type' thay vì 'type'
+                raw_type = getattr(item_obj, 'item_type', 'miscellaneous')
+                safe_type = str(raw_type).strip().lower() if raw_type else 'miscellaneous'
+                
+                payload.append({
+                    "name": name,
+                    "type": safe_type, # Bây giờ nó sẽ ra đúng 'weapon', 'consumable'...
+                    "description": getattr(item_obj, 'description', 'Chưa rõ công dụng.'),
+                    "quote": getattr(item_obj, 'quote', ''),
+                    "image_b64": image_to_base64_with_default(getattr(item_obj, 'image_path', None), is_item=True)
+                })
+                game_logger.info(f"Tên vật phẩm: {getattr(item_obj, 'name', name)}, loại: {safe_type}")
+                
         return payload
     except Exception as e:
-        print(f"Lỗi tải túi đồ: {e}")
+        print(f"❌ Lỗi tải túi đồ: {e}")
         return []
-
 
 def parse_story_into_segments(full_text):
     """Cắt text dựa trên tag [NPC_TALK: Tên] và [PLAYER_TALK] từ LLM"""
@@ -276,8 +294,18 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
     """Khởi tạo Game Loop mới giống hệt run() trong Orchestration"""
     try:
         orchestrator.is_processing_bg = True
-        orchestrator.player_state.inventory = []
         orchestrator.player_state.currentNPCs = []
+        orchestrator.player_state.inventory = [] # Dọn list cũ
+        
+        # 🌟 DỌN SẠCH KHO ĐỒ KHI TẠO GAME MỚI
+        inv_manager = orchestrator.player_state.inventory_manager
+        inv_manager.equipped_weapon = None
+        
+        old_items = list(inv_manager.get_all_item_names())
+        for old_item_name in old_items:
+            obj = inv_manager.get_item_by_name(old_item_name)
+            if obj:
+                inv_manager.remove_item(obj)
 
         await orchestrator.db.connect()
         await orchestrator.db.reset_database()
@@ -407,11 +435,19 @@ async def poll_updates():
             
         inv_payload = build_inventory_payload()
         emotion = getattr(orchestrator, "current_emotion", "bình thường")
+
+        current_hp = orchestrator.player_state.hp
+        max_hp = orchestrator.player_state.max_hp
+        equipped_weapon = orchestrator.player_state.inventory_manager.equipped_weapon
+        weapon_name = equipped_weapon.name if equipped_weapon else "Tay không"
             
         return JSONResponse(content={
             "bg_image_b64": bg_img,
-            "npc_images": npc_images_payload, # 🌟 Gửi mảng ảnh thay cho char_image_b64 cũ
+            "npc_images": npc_images_payload, 
             "inventory": inv_payload,
+            "hp": current_hp,              # MỚI
+            "max_hp": max_hp,              # MỚI
+            "weapon": weapon_name,         # MỚI
             "emotion": emotion,
             "is_processing_bg": getattr(orchestrator, "is_processing_bg", False)
         })
@@ -557,6 +593,65 @@ async def load_game(slot: str = Form(...)):
             return JSONResponse(status_code=400, content={"error": msg})
     except Exception as e:
         game_logger.error(f"Lỗi Load API: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+# ==========================================
+# 🌟 CÁC API DÀNH RIÊNG CHO HỆ THỐNG TÚI ĐỒ MỚI
+# ==========================================
+
+@app.post("/api/inventory/use")
+async def use_item(item_name: str = Form(...)):
+    """API để Unity ra lệnh dùng vật phẩm (Hồi máu, giải độc...)"""
+    try:
+        inv_manager = orchestrator.player_state.inventory_manager
+        # Gọi thẳng logic đã viết rất chuẩn của bạn
+        result_msg = inv_manager.use_consumable(item_name, orchestrator.player_state)
+        return JSONResponse(content={"success": True, "message": result_msg})
+    except Exception as e:
+        game_logger.error(f"Lỗi dùng vật phẩm: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/inventory/equip")
+async def equip_item(item_name: str = Form(...)):
+    """API để Unity ra lệnh trang bị vũ khí"""
+    try:
+        inv_manager = orchestrator.player_state.inventory_manager
+        result_msg = inv_manager.equip_weapon(item_name)
+        return JSONResponse(content={"success": True, "message": result_msg})
+    except Exception as e:
+        game_logger.error(f"Lỗi trang bị: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/inventory/craft")
+async def craft_item(items_str: str = Form(...), action_detail: str = Form(...)):
+    """
+    API để Unity ra lệnh chế tạo. 
+    - items_str: chuỗi các tên vật phẩm cách nhau bằng dấu phẩy (VD: 'Thanh gỗ, Đá nhọn')
+    - action_detail: mô tả ý định ghép (VD: 'Dùng dây leo buộc đá vào gỗ')
+    """
+    try:
+        inv_manager = orchestrator.player_state.inventory_manager
+        target_items = []
+        
+        # Tách chuỗi để lấy ra các Object Item thật từ Balo
+        for name in items_str.split(","):
+            if not name.strip(): continue
+            item_obj = inv_manager.get_item_by_name(name.strip())
+            if item_obj:
+                target_items.append(item_obj)
+
+        if len(target_items) < 1:
+            return JSONResponse(content={"success": False, "message": "⚠️ Vật phẩm không tồn tại trong túi đồ!"})
+
+        # Gọi ItemAgent xử lý (Tốn API LLM)
+        craft_result = await orchestrator.item_sys.interact(
+            item_list=target_items,
+            action_details=action_detail,
+            image_manager=orchestrator.image_manager
+        )
+        return JSONResponse(content={"success": True, "message": craft_result})
+    except Exception as e:
+        game_logger.error(f"Lỗi chế tạo: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 if __name__ == "__main__":
