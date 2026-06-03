@@ -268,7 +268,11 @@ class LocationAgent(BaseCloudAgent):
 class ChoiceAgent(BaseCloudAgent):
     """Agent phân tích tình huống hiện tại để gợi ý các hành động (menu options) cho người chơi."""
 
-    async def generate_choices(self, current_location: str, npc_name: str, recent_story_summary: str) -> Dict[str, Any]:
+    async def generate_choices(self, current_location: str,
+                               npc_name: str,
+                               recent_story_summary: str,
+                               active_quest_context: str,
+                               quest_items: str) -> Dict[str, Any]:
         """
         Sinh ra danh sách lựa chọn tình huống.
 
@@ -281,8 +285,12 @@ class ChoiceAgent(BaseCloudAgent):
             Dict[str, Any]: JSON chứa danh sách các lựa chọn (choices).
         """
         sys_prompt = self.pm.get_prompt('ChoiceAgent', 'system')
-        user_prompt = self.pm.get_prompt('ChoiceAgent', 'user', current_location=current_location, npc_name=npc_name,
-                                         recent_story_summary=recent_story_summary)
+        user_prompt = self.pm.get_prompt('ChoiceAgent', 'user',
+                                         current_location=current_location,
+                                         npc_name=npc_name,
+                                         recent_story_summary=recent_story_summary,
+                                         active_quest_context=active_quest_context,
+                                         quest_items = quest_items)
 
         required_keys = ["choices"]
 
@@ -317,7 +325,8 @@ class StoryAgent(BaseCloudAgent):
 
     async def generate_story(self, world_theme: str, world_conflict: str, world_vocabulary: dict,
                              current_location: str, npc_context: str, rag_context: str,
-                             system_directive: str, user_input: str) -> AsyncGenerator[str, None]:
+                             system_directive: str, user_input: str,
+                             active_quest_context, quest_items: str) -> AsyncGenerator[str, None]:
         """
         Sinh diễn biến cốt truyện tiếp theo (Streaming) dựa trên hành động của người chơi và ngữ cảnh RAG.
         """
@@ -325,7 +334,8 @@ class StoryAgent(BaseCloudAgent):
             'StoryAgent', 'system',
             world_theme=world_theme, world_conflict=world_conflict, world_vocabulary=world_vocabulary,
             current_location=current_location, npc_context=npc_context,
-            rag_context=rag_context, valid_paths_from_sql=None, system_directive=system_directive
+            rag_context=rag_context, valid_paths_from_sql=None, system_directive=system_directive,
+            active_quest_context=active_quest_context, quest_items=quest_items
         )
         user_prompt = self.pm.get_prompt('StoryAgent', 'user', user_input=user_input)
 

@@ -175,13 +175,17 @@ class StateProcessor:
                         npc.status = new_status
                     break
 
-    async def _update_inventory(self, items_added: list, items_removed: list, context):
-        """Hàm chuyên xử lý logic túi đồ dưới dạng List[Item] và quản lý tài nguyên ảnh."""
+    async def _update_player_state(self, items_added: list, items_removed: list, story_response: str, context: str, is_safe_zone: bool):
+        """Hàm chuyên xử lý logic túi đồ và tự động lưu Checkpoint (Snapshot) khi an toàn."""
+
+        # ==========================================
+        # 1. CẬP NHẬT TÚI ĐỒ (ĐÃ VÁ LỖI BUG LOGIC)
+        # ==========================================
         if items_added or items_removed:
             game_logger.info("[Hệ Thống] ---> THAY ĐỔI TÚI ĐỒ <---")
             invalid_items = ["không", "không có", "none", "trống", "nothing", "không có gì", "null", "n/a"]
 
-            # 1. Thêm Item mới vào Danh sách
+            # Thêm Item mới
             if isinstance(items_added, list):
                 for item_data in items_added:
                     if isinstance(item_data, dict):
@@ -194,44 +198,55 @@ class StateProcessor:
                     if not item_name or str(item_name).strip().lower() in invalid_items:
                         continue
 
-                    item_name = str(item_name).strip()
+                    # [ĐÃ SỬA]: Bỏ lệnh check tồn tại để cho phép nhặt nhiều đồ giống nhau (VD: 3 Bình máu)
+                    img_path = await self.image_manager.get_or_create_item_image(item_name)
 
+                    new_item = await self.item_agent.generate_item(
+                        context=context,
+                        item_name=item_name,
+                        item_type=item_type,
+                        quest=getattr(self.player_state, "active_quest", [None])[0] if getattr(self.player_state,
+                                                                                                "active_quests",
+                                                                                                []) else None
+                    )
+                    new_item.image_path = img_path
 
-                    # 🌟 KIỂM TRA: Nếu vật phẩm chưa có trong danh sách mảng Object
-                    if not self.player_state.inventory_manager.get_item_by_name(item_name):
-                        # Gọi Kaggle vẽ ảnh
-                        img_path = await self.image_manager.get_or_create_item_image(item_name)
+                    self.player_state.add_item(new_item)
+                    game_logger.info(f" [+] Nhận được: {item_name}")
 
-                        # Khởi tạo Object Item chuẩn
-                        new_item = await self.item_agent.generate_item(
-                            context=context,
-                            item_name=item_name,
-                            item_type=item_type,
-                            quest=self.player_state.active_quest
-                        )
-                        new_item.image_path = img_path
-
-                        # 🌟 THÊM VÀO MẢNG (APPEND):
-                        self.player_state.add_item(new_item)
-                        game_logger.info(f" [+] Nhận được: {item_name}")
-
-            # 2. Mất Item cũ khỏi Danh sách
+            # Mất Item cũ
             if isinstance(items_removed, list):
                 for item_name in items_removed:
                     if not item_name or str(item_name).strip().lower() in invalid_items:
                         continue
 
-                    target_item = self.player_state.inventory_manager.get_item_by_name(item_name.strip())
+                    target_item = self.player_state.get_item_by_name(item_name.strip())
 
                     if target_item:
-                        self.player_state.inventory_manager.remove_item(target_item)
-                        if hasattr(target_item, 'image_path') and target_item.image_path:
-                            self.image_manager.delete_image(target_item.image_path)
+                        self.player_state.remove_item(target_item)
+                        # [ĐÃ SỬA]: Bỏ lệnh xóa file vật lý (delete_image) để tái sử dụng ảnh cache sau này
                         game_logger.info(f" [-] Bị mất: {target_item.name}")
 
-            # In nhật ký balo ra màn hình điều khiển
-            inventory_status = self.player_state.inventory_manager.get_all_item_names()
+            inventory_status = self.player_state.get_all_item_names()
             game_logger.info(f" [Balo hiện tại]: {inventory_status}")
+
+        # ==========================================
+        # 2. LƯU SNAPSHOT VÀO QUEST HIỆN TẠI (SAFE ZONE)
+        # ==========================================
+        self.player_state.is_safe_zone = is_safe_zone
+        if is_safe_zone:
+            # Tách Story Response từ biến context (do context truyền vào đang chứa cả player_input và story_response)
+
+            # 2.1. Nếu đang ở trong một Nhiệm vụ phụ (Quest nhánh)
+            if hasattr(self.player_state, "active_quest") and self.player_state.active_quest:
+                current_quest = self.player_state.active_quest
+                current_quest.snapshot = {
+                    "location": self.player_state.currentLocation,
+                    "npcs": self.player_state.currentNPCs.copy() if self.player_state.currentNPCs else [],
+                    "last_story": story_response
+                }
+
+                game_logger.debug(f"[Checkpoint] Đã lưu Snapshot an toàn trực tiếp vào Quest: '{current_quest.name}'.")
 
 
     async def process_background_tasks(self, player_input, story_response):
@@ -271,6 +286,7 @@ class StateProcessor:
         new_location_entered_name = state_changes.get("new_location_entered", "")
         scene_emotion = state_changes.get("scene_emotion", "bình thường")
         affection_changes = state_changes.get("affection_changes", [])
+        is_safe_zone = state_changes.get("is_safe_zone", True)
 
         game_logger.debug(f"[Profile] Background Tasks (State Extraction): {time.perf_counter() - start_bg:.3f}s")
 
@@ -283,9 +299,11 @@ class StateProcessor:
                 game_logger.debug(f"[State] Đã ở {current_loc_name}, không cần phân tích tạo lại.")
 
         update_tasks = [
-            self._update_inventory(items_added= items_added,
-                                   items_removed=items_removed,
-                                   context = context),
+            self._update_player_state(items_added= items_added,
+                                    items_removed=items_removed,
+                                    context = context,
+                                    story_response=story_response,
+                                    is_safe_zone=is_safe_zone),
             self._update_npcs(npcs_arrived = npcs_arrived,
                               npcs_left = npcs_left,
                               context = context),

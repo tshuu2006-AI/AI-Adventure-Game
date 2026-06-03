@@ -1,6 +1,8 @@
 """
 lưu trữ và quản lý trạng thái tổng thể của người chơi
 """
+
+
 from engine.DataManager.InventoryManager import InventoryManager
 
 
@@ -31,13 +33,34 @@ class PlayerState:
             "INT": 10  # Trí tuệ: Tác động đến phép thuật, giải mã
         }
 
+        self.is_safe_zone = False
         self.active_quest = None
+        self.main_quest = None
         self.quests = []
+        self.quest_items = []
+
+
+    def back_to_main_quest(self) -> bool:
+        """
+        Khôi phục lại không gian và trạng thái từ main_snapshot khi kết thúc nhiệm vụ.
+        """
+
+        snapshot = self.main_quest.snapshot
+
+        # 1. Khôi phục không gian mạch chính
+        self.currentLocation = snapshot.get("location")
+        self.currentNPCs = snapshot.get("npcs", []).copy()
+
+        # 2. Xóa quest đang làm
+        self.active_quest = self.main_quest
+
+        # 3. Thông báo cho hệ thống rằng đã về mạch chính
+        return True
 
     # ==========================================
     # CÁC HÀM GIAO TIẾP VỚI TÚI ĐỒ (Wrapper Methods)
     # ==========================================
-    def get_all_item_names(self) -> str:
+    def get_all_item_names(self):
         """
         Trích xuất chuỗi danh sách tên vật phẩm đang sở hữu.
         """
@@ -60,6 +83,14 @@ class PlayerState:
         Tìm kiếm vật phẩm trong túi đồ theo tên.
         """
         return self.inventory_manager.get_item_by_name(item_name)
+
+
+    def get_quest_items(self):
+        return self.inventory_manager.get_quest_items(quest=self.active_quest)
+
+
+    def save_snapshot(self, snapshot):
+      self.active_quest.snapshot = snapshot
 
     # ==========================================
     # CÁC HÀM LƯU TRỮ VÀ PHỤC HỒI TRẠNG THÁI
@@ -105,3 +136,10 @@ class PlayerState:
 
         # 3. Yêu cầu túi đồ tự khôi phục dữ liệu vật phẩm
         self.inventory_manager.load_state(data.get("inventory_data", {}), image_manager)
+
+
+    def update_quest_items(self):
+        self.quest_items = []
+        for item in self.inventory_manager.quest_item_inventory:
+            if item.quest.id == self.active_quest.id:
+                self.quest_items.append(item)

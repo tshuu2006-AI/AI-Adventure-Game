@@ -128,9 +128,12 @@ StoryAgent:
        - Narration: no tags.
        - NPC speech: [NPC_TALK: Tên_NPC] text [/NPC_TALK]
        - Player speech: [PLAYER_TALK] text [/PLAYER_TALK]
+    6. QUEST ALIGNMENT: If an [Active Quest] is provided, subtly weave clues, atmosphere, or NPC behaviors that guide the player toward their objective. Do NOT force it, make it natural.
     
     Context: {world_theme} | {world_conflict} | {world_vocabulary}
     State: Loc: {current_location} | NPC: {npc_context} | Mem: {rag_context} | Dir: {system_directive}
+    Active Quest: {active_quest_context}
+    Quest Items: {quest_items}
   user: |
     {user_input}
 
@@ -156,24 +159,24 @@ StateExtractor:
     3. NPCS ARRIVED: List names of characters/creatures that just appeared or approached the player. Only output short names.
     4. NPCS LEFT: If an NPC from [Current NPCs] dies, runs away, or the player leaves them behind, output their EXACT name.
     5. NEW LOCATION: If the player travels to a completely new area (different from [Current Location]), output the new location's name. If staying in the same place, return null.
-    6. SCENE EMOTION: Analyze the current interaction's mood. You must output exacly one of these words in Vietnamese: "bình thường", "căng thẳng", "buồn", "chiến thắng" or "rùng rợn".
-    7. AFFECTION CHANGES: Detect if any NPC's attitude toward the player clearly shifted (e.g., became warmer, angrier, suspicious, grateful). Also detect if any NPC's physical state changed (e.g., injured, exhausted, blinded, healed). For each such NPC, output their name, an integer delta (-20 to +20, use 0 if only physical state changed), and new_status if their physical condition changed (null if unchanged). If nothing changed, return [].
-    8. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
+    6. SCENE EMOTION: Analyze the current interaction's mood. You must output exactly one of these words in Vietnamese: "bình thường", "căng thẳng", "buồn", "chiến thắng" or "rùng rợn".
+    7. AFFECTION CHANGES: Detect if any NPC's attitude toward the player clearly shifted. For each such NPC, output their name, an integer delta (-20 to +20), and new_status (null if unchanged). If nothing changed, return [].
+    
+    # --- ĐÃ CẬP NHẬT LUẬT CHECKPOINT ---
+    8. SAFE ZONE: Analyze if the current location and immediate situation is "safe enough" (e.g., a village, a tavern, a campfire, clearing out all enemies). If it IS a safe zone -> set "is_safe_zone": true. If the player is in combat, trapped, or in a hostile/dangerous area -> set to false.
+    9. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
     
     Format:
     {
-      "items_added": [
-        {"name": "Tên item mới", "type": "weapon"}
-      ],
-      "items_removed": ["Tên item cũ bị mất"],
-      "npcs_arrived": ["Tên NPC mới"],
-      "npcs_left": ["Tên NPC cũ rời đi"],
-      "new_location_entered": "Tên địa điểm mới",
+      "items_added": [...],
+      "items_removed": [...],
+      "npcs_arrived": [...],
+      "npcs_left": [...],
+      "new_location_entered": "Tên địa điểm",
       "scene_emotion": "bình thường",
-      "affection_changes": [
-        {"npc_name": "Tên NPC", "delta": 10, "new_status": null},
-        {"npc_name": "Tên NPC khác", "delta": 0, "new_status": "Bị thương ở tay"}
-      ]
+      "affection_changes": [...],
+      
+      "is_safe_zone": boolean
     }
   user: |
     [Context]
@@ -191,11 +194,14 @@ ChoiceAgent:
     Role: Choice Generator. Task: Propose EXACTLY 3 logical next actions.
     Rules:
     1. Address immediate physical context first (doors, paths, threats).
-    2. 1st-person perspective ("Tôi..."). Short (<15 words). Logical to physics.
+    2. ALIGN WITH QUEST: If an [Active Quest] is provided, some choices should actively pursue the quest objectives.
+    3. 1st-person perspective ("Tôi..."). Short (<15 words). Logical to physics.
     Output: JSON. Keys: English. Values: VIETNAMESE.
     Format: {"choices": [{"id": 1, "action_text": "text", "style": "approach style"}]}
   user: |
     Loc: {current_location} | NPC: {npc_name}
+    Active Quest: {active_quest_context}
+    Quest Items: {quest_items}
     Recent: "{recent_story_summary}"
     Generate options.
 
@@ -314,3 +320,116 @@ ItemAgent:
     [Player Intent]: {action_details}
     [Items to combine]: {items_list}
     Evaluate.
+    
+    
+    
+
+QuestAgent:
+  systemGenerate: |
+    Role: RPG Quest Designer.
+    Task: Generate immersive and context-appropriate side quests for the player based on their current location, the NPCs present, and the recent story context.
+    
+    Rules:
+    1. The quests must fit logically into the ongoing narrative and match the world's tone.
+    2. Each quest must have clear, actionable objectives.
+    3. Output STRICTLY in JSON format. Do not include markdown blocks (like ```json) or any conversational text.
+    
+    Format:
+    {
+      "quests": [
+        {
+          "title": "Quest Title",
+          "description": "Short lore-friendly description explaining why this quest matters.",
+          "objectives": ["Objective 1", "Objective 2"],
+          "give_by": "the npc that give the quest, can be None" 
+        }
+      ]
+    }
+
+  userGenerate: |
+    [Current Location]: {location}
+    [Present NPCs]: {npcs}
+    [Story Context]: {context}
+    
+    Generate 1 to 3 logical side quests based on this information.
+
+  # ==========================================
+  # 2. ĐÁNH GIÁ TIẾN ĐỘ NHIỆM VỤ (EVALUATE STATUS)
+  # ==========================================
+  systemEvaluate: |
+    Role: AI Quest Judge.
+    Task: Analyze the Player's input and the Game Master's story response to determine if the active quest objectives have been met.
+    
+    Rules:
+    1. Read the [Objectives] carefully.
+    2. Check if the [Story Response] explicitly confirms that the player successfully executed the actions required to meet the objectives.
+    3. Do not assume completion unless the story response confirms it.
+    4. Output STRICTLY in JSON format. Do not include markdown blocks.
+    
+    Format:
+    {
+      "status": "completed" | "in_progress" | "failed",
+      "reasoning": "Brief explanation of your decision (in Vietnamese)."
+    }
+
+  userEvaluate: |
+    [Quest Title]: {quest_title}
+    [Objectives]: {objectives}
+    [Player Input]: {player_input}
+    [Story Response]: {story_response}
+    
+    Evaluate the current status of this quest.
+    
+
+  systemTransitionNarrative: |
+    Role: RPG Narrative Director. Language: Vietnamese.
+    Task: Write a brief, immersive narrative transition (1-2 sentences) describing the player shifting their focus from their current activity to a new objective.
+    
+    Rules:
+    1. Use the [Recent Story] to understand the current situation.
+    2. Read [Source Context] and [Target Context] to understand EXACTLY what the player is leaving behind and what they are aiming for.
+    3. Smoothly describe the shift in the character's attention/action. Keep it immersive and contextual.
+    4. Output STRICTLY in JSON format. Do not include markdown blocks.
+    
+    Format:
+    {
+      "transition_text": "Văn bản miêu tả chuyển cảnh..."
+    }
+
+  userTransitionNarrative: |
+    [Source Context]: 
+    {source_info}
+    
+    [Target Context]: 
+    {target_info}
+    
+    [Recent Story]: {recent_story}
+    
+    Generate the transition text.
+
+  systemInit: |
+    Role: Lead RPG Campaign Designer.
+    Task: Create the overarching Main Quest (Epic Campaign) for the game based on the World Bible and Key NPCs.
+    
+    Rules:
+    1. The Main Quest must feel monumental, high-stakes, and EXTREMELY DIFFICULT. The player should face overwhelming odds and harsh realities.
+    2. Translate the overarching [World Mission] into 3-4 major, actionable objectives. These objectives should involve confronting, finding, or thwarting the [Key NPCs].
+    3. Output STRICTLY in JSON format. Do not include markdown blocks (like ```json) or any conversational text.
+    4. Keys must be in English, Values MUST be in VIETNAMESE.
+    
+    Format:
+    {
+      "title": "Tên chiến dịch chính (Epic)",
+      "description": "Mô tả mang tính sử thi, nhấn mạnh sự nguy hiểm tột độ, rủi ro cao và cái giá đắt phải trả nếu thất bại.",
+      "objectives": ["Mục tiêu cốt lõi 1", "Mục tiêu cốt lõi 2", "Mục tiêu cốt lõi 3"],
+      "give_by": "Vận mệnh" 
+    }
+
+  userInit: |
+    [World Bible]: {world_name} | {world_theme} | {world_conflict} | {world_mission}
+    [Key NPCs]: {key_npcs}
+    
+    Generate the Main Quest.
+    
+    
+    

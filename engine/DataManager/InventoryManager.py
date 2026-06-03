@@ -155,6 +155,16 @@ class InventoryManager:
         self.remove_item(item)
         return result_msg
 
+
+    def get_quest_items(self, quest):
+        quest_items = []
+        for item in self.quest_item_inventory:
+            if item.quest == quest:
+                quest_items.append(item)
+
+        return quest_items
+
+
     # ==========================================
     # NHÓM 4: CÁC HÀM HỖ TRỢ LƯU TRỮ
     # ==========================================

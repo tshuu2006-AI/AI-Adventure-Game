@@ -1,6 +1,6 @@
 import json
 from typing import AsyncGenerator
-from world.Entity import Location
+from world.Entity import Location, Quest
 from static.config import STORY_AGENT_MODEL, CHOICE_AGENT_MODEL, LOCATION_AGENT_MODEL, WORLD_GENERATE_AGENT_MODEL, NPC_AGENT_MODEL
 from engine.Agents.CloudAgents import StoryAgent, ChoiceAgent, WorldGenerateAgent, LocationAgent, NPCAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
@@ -48,8 +48,21 @@ class StoryDirector:
         else:
             npc_context_str = "Nobody is near"
 
+        active_quest = player_state.active_quest
+        active_quest_context = ""
+        if active_quest:
+            active_quest_context += f'Name: {active_quest.name}\n Description: {active_quest.description}\n Objectives: {active_quest.objective}'
+
+        items = player_state.quest_items
+        quest_items = []
+        for i, item in enumerate(items):
+            item_str = f"Item#{i}:\n - Name: {item.name}\n - Description: {item.description}"
+            quest_items.append(item_str)
+        quest_items_str = "\n".join(quest_items)
+
         game_logger.debug(
             f"[StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: '{player_input[:50]}...'")
+
 
         # Kích hoạt StoryAgent sinh chữ
         stream = self.story_agent.generate_story(
@@ -60,7 +73,9 @@ class StoryDirector:
             npc_context = npc_context_str,
             rag_context=hybrid_rag_context,  # Đã bao gồm cả FAISS và Cửa sổ trượt 4 lượt
             system_directive=system_directive,
-            user_input=full_user_input
+            user_input=full_user_input,
+            active_quest_context=active_quest_context,
+            quest_items=quest_items_str
         )
 
         # Truyền luồng stream ra ngoài
@@ -68,18 +83,30 @@ class StoryDirector:
             yield chunk
 
     async def generate_player_choices(self, current_location_name: str, encountered_npc_name: str,
-                                      recent_story_text: str) -> list:
+                                      recent_story_text: str, active_quest: Quest, quest_items) -> list:
         """
         Dựa vào kết quả đoạn truyện vừa sinh ra để làm ra 3-4 lựa chọn tiếp theo.
         """
         game_logger.info("[StoryDirector] Đang tính toán các lựa chọn tiếp theo...")
 
         npc_name = encountered_npc_name if encountered_npc_name else "Không có"
+        active_quest_context = ""
+        if active_quest:
+            active_quest_context += f'Name: {active_quest.name}\n Description: {active_quest.description}\n Objectives: {active_quest.objective}'
+
+        items = quest_items
+        quest_items = []
+        for i, item in enumerate(items):
+            item_str = f"Item#{i}:\n - Name: {item.name}\n - Description: {item.description}"
+            quest_items.append(item_str)
+        quest_items_str = "\n".join(quest_items)
 
         choices_data = await self.choice_agent.generate_choices(
             current_location=current_location_name,
             npc_name=npc_name,
-            recent_story_summary=recent_story_text  # Đưa đoạn truyện vừa kể vào đây để AI ra lựa chọn sát thực tế
+            recent_story_summary=recent_story_text,  # Đưa đoạn truyện vừa kể vào đây để AI ra lựa chọn sát thực tế,
+            active_quest_context = active_quest_context,
+            quest_items = quest_items_str
         )
 
         choices_list = choices_data.get('choices', [])

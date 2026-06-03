@@ -4,7 +4,7 @@ Chứa các Local Agent
 import json
 import re
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from google import genai
 from google.genai import types
@@ -90,7 +90,7 @@ class BaseLocalAgent:
             if match:
                 return json.loads(match.group().replace('\n', ' ').replace('\r', ''))
             else:
-                self.logger.warning(f"[_parse_json_safely] Không tìm thấy JSON hợp lệ trong: {text[:100]}...")
+                self.logger.warning(f"[_parse_ json_safely] Không tìm thấy JSON hợp lệ trong: {text[:100]}...")
                 return {}
         except json.JSONDecodeError as e:
             self._log_error(f"_parse_json_safely (Lỗi Regex JSON) | Text: {text[:100]}", e)
@@ -341,3 +341,108 @@ class ItemAgent(BaseLocalAgent):
             system_prompt=sys_prompt,
             user_prompt=user_prompt
         )
+
+
+class QuestAgent(BaseLocalAgent):
+    """
+    Agent chuyên trách xử lý vòng đời của Nhiệm vụ (Sinh nhiệm vụ mới và Nghiệm thu).
+    """
+
+    async def initialize_main_quest(self, world_name: str, world_theme: str, world_conflict: str, world_mission: str,
+                                    key_npcs: str) -> dict:
+        """
+        Khởi tạo Nhiệm vụ chính (Epic Campaign) dựa trên Kinh thánh thế giới và các NPC quan trọng.
+        """
+        sys_prompt = self.pm.get_prompt('QuestAgent', 'systemInit')
+        user_prompt = self.pm.get_prompt('QuestAgent', 'userInit',
+                                         world_name=world_name,
+                                         world_theme=world_theme,
+                                         world_conflict=world_conflict,
+                                         world_mission=world_mission,
+                                         key_npcs=key_npcs)
+
+        result = await self._generate_json(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt
+        )
+
+        return result
+
+    
+    async def generate_quests(self, location_name: str, npc_names: str, context: str):
+        """
+        Dựa vào bối cảnh, địa điểm và NPC hiện tại để sinh ra các nhiệm vụ phụ phù hợp.
+        """
+        sys_prompt = self.pm.get_prompt('QuestAgent', 'systemGenerate')
+        user_prompt = self.pm.get_prompt('QuestAgent', 'userGenerate',
+                                         location=location_name, npcs=npc_names, context=context)
+
+        result = await self._generate_json(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt
+        )
+
+        return result.get("quests", [])
+
+    async def evaluate_quest_status(self, quest_title: str, objectives: List[str], player_input: str,
+                                    story_response: str) -> Dict[str, Any]:
+        """
+        Đọc hành động của người chơi và phản hồi của cốt truyện để đánh giá xem
+        mục tiêu nhiệm vụ đã được hoàn thành hay chưa.
+        """
+        objectives_str = ", ".join(objectives)
+        sys_prompt = self.pm.get_prompt('QuestAgent', 'systemEvaluate')
+        user_prompt = self.pm.get_prompt('QuestAgent', 'userEvaluate',
+                                         quest_title=quest_title,
+                                         objectives=objectives_str,
+                                         player_input=player_input,
+                                         story_response=story_response)
+
+        result = await self._generate_json(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt,
+        )
+
+        # Đảm bảo có key mặc định nếu LLM lỗi
+        if not result or "status" not in result:
+            return {"status": "in_progress", "reasoning": "Không thể phân tích ngữ nghĩa."}
+
+        return result
+
+    def _format_quest_info(self, quest) -> str:
+        """Hàm phụ trợ để trích xuất thông tin Quest thành chuỗi cho LLM"""
+        if not quest:
+            return "- Mạch truyện chính (Tự do khám phá, không gò bó mục tiêu)"
+
+        info = f"- Tên nhiệm vụ: {quest.name}\n"
+        info += f"- Mô tả: {quest.description}\n"
+        info += f"- Mục tiêu: {quest.objective}"
+        if hasattr(quest, 'status'):
+            info += f"- Trạng thái hiện tại: {quest.status}\n"
+        return info
+
+
+    async def generate_transition_narrative(self, source_quest, target_quest, recent_story: str) -> str:
+        """
+        Sinh ra đoạn văn miêu tả sự chuyển hướng chú ý của người chơi.
+        """
+        # Bóc tách thông tin từ Object
+        source_info = self._format_quest_info(source_quest)
+        target_info = self._format_quest_info(target_quest)
+
+        sys_prompt = self.pm.get_prompt('QuestAgent', 'systemTransitionNarrative')
+        user_prompt = self.pm.get_prompt('QuestAgent', 'userTransitionNarrative',
+                                         source_info=source_info,
+                                         target_info=target_info,
+                                         recent_story=recent_story)
+
+        result = await self._generate_json(system_prompt=sys_prompt, user_prompt=user_prompt)
+
+        # Mặc định nếu LLM lỗi
+        fallback_name = target_quest.name if target_quest else "Mạch truyện chính"
+        fallback_msg = f"Bạn quyết định chuyển hướng tập trung sang: {fallback_name}."
+
+        if not result or "transition_text" not in result:
+            return fallback_msg
+
+        return result.get("transition_text", fallback_msg)

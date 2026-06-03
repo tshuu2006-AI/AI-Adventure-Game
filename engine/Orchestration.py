@@ -1,7 +1,7 @@
 import time
 
 from engine.Subengine import ItemProcessor
-from world.Entity import NPC
+from world.Entity import NPC, Quest
 import os
 from engine.DataManager.DatabaseManager import DatabaseManager
 from engine.DataManager.PlayerState import PlayerState
@@ -19,6 +19,7 @@ from engine.Subengine.ActionProcessor import ActionProcessor
 from engine.Subengine.MemoryProcessor import MemoryProcessor
 from engine.Subengine.SaveManager import SaveManager
 from engine.Subengine.StateProcessor import StateProcessor
+from engine.Subengine.QuestProcessor import QuestProcessor
 from engine.Subengine.StoryDirector import StoryDirector
 from engine.Subengine.ItemProcessor import ItemProcessor
 
@@ -60,6 +61,10 @@ class GameOrchestrator:
                                       gemini_api_key = gemini_api_key,
                                       pm = self.pm)
 
+        self.quest_sys = QuestProcessor(player_state=self.player_state,
+                                        gemini_api_key=gemini_api_key,
+                                        pm=self.pm)
+
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)
         self.save_manager = SaveManager()
         self.last_choices = []
@@ -87,9 +92,12 @@ class GameOrchestrator:
         start_story = time.perf_counter()
 
         # Trực tiếp gọi hàm narrate_turn của StoryDirector
-        async for chunk in self.story_director.narrate_turn(
-                player_input, self.world_state, self.player_state, npcs_context, hybrid_context, system_directive
-        ):
+        async for chunk in self.story_director.narrate_turn(player_input=player_input,
+                                                            world_state=self.world_state,
+                                                            player_state=self.player_state,
+                                                            npcs_context=npcs_context,
+                                                            hybrid_rag_context=hybrid_context,
+                                                            system_directive=system_directive):
             if not first_token and chunk.strip():
                 game_logger.debug(f"[Profile] Time to First Token (TTFT): {time.perf_counter() - start_story:.3f}s")
                 first_token = True
@@ -100,6 +108,8 @@ class GameOrchestrator:
 
         # 3. CHẠY TÁC VỤ NỀN (Local LLM bẻ Chunk + Cập nhật State, UI)
         episode_data, scene_emotion = await self.state_sys.process_background_tasks(player_input, story_response)
+        await self.quest_sys.evaluate_turn(player_input, story_response)
+
         encountered_npc_names = [npc.name for npc in self.player_state.currentNPCs]
 
         # Gọi nhạc nền:
@@ -118,7 +128,9 @@ class GameOrchestrator:
         choices = await self.story_director.generate_player_choices(
             current_location_name=self.player_state.currentLocation.name,
             encountered_npc_name = encountered_npc_names,
-            recent_story_text=story_response
+            recent_story_text=story_response,
+            active_quest=self.player_state.active_quest,
+            quest_items = self.player_state.quest_items
         )
         self.last_choices = choices
         self._display_choices(choices)
@@ -192,6 +204,7 @@ class GameOrchestrator:
         self.player_state.currentLocation = starting_loc_obj
         await self.db.add_location_to_db(starting_loc_obj)
 
+        npc_objs = []
         for starting_npc in starting_npcs:
             print(starting_npc)
             npc_obj = NPC(
@@ -204,6 +217,13 @@ class GameOrchestrator:
                     status=starting_npc.get("status", "Bình thường")
             )
             await self.db.add_npc_to_db(npc_obj)
+            npc_objs.append(npc_obj)
+
+        print("[Hệ thống] Đang kiến tạo Vận mệnh và Chiến dịch chính...")
+        await self.quest_sys.initialize_main_quest(
+            world_state=self.world_state,
+            starting_npcs=npc_objs
+        )
 
         # Tải ảnh nền cho điểm xuất phát
         await self.image_manager.get_or_create_location_image(
@@ -241,7 +261,9 @@ class GameOrchestrator:
         choices = await self.story_director.generate_player_choices(
             current_location_name=self.player_state.currentLocation.name,
             encountered_npc_name=[],
-            recent_story_text=story_response
+            recent_story_text=story_response,
+            active_quest = self.player_state.active_quest,
+            quest_items = self.player_state.quest_items
         )
         self.last_choices = choices
         self._display_choices(choices)
@@ -275,7 +297,14 @@ class GameOrchestrator:
 
             if player_input.lower().strip() in ["i", "inv", "inventory", "túi đồ", "balo", "tui do"]:
                 await self._open_inventory_menu()
-                continue  # Dùng continue để KHÔNG tính turn này vào cốt truyện
+                continue  # Bỏ qua turn để không gửi chữ 'i' lên cho AI xử lý
+
+                # Mở sổ tay nhiệm vụ
+            if player_input.lower().strip() in ['q', 'quest', 'nhiệm vụ', 'quests', 'nhiem vu']:
+                # Lấy story_response của turn trước đó (nếu có) để làm bối cảnh chuyển Quest
+                last_story = locals().get('story_response', 'Bạn đang đứng quan sát xung quanh.')
+                await self._open_quest_menu(story_response=last_story)
+                continue  # Bỏ qua turn để không gửi chữ 'q' lên cho AI xử lý
 
             resolved_input = player_input
             if self.last_choices and player_input.strip().isdigit():
@@ -290,65 +319,74 @@ class GameOrchestrator:
                 game_logger.error(f"[Game Loop] Lỗi nghiêm trọng ở Turn hiện tại: {e}", exc_info=True)
 
     async def _open_inventory_menu(self):
-        """Mở giao diện tương tác riêng cho Túi đồ, ngắt hoàn toàn khỏi LLM IntentRouter."""
-        inv_manager = self.player_state.inventory_manager
+        """
+        Hiển thị giao diện túi đồ và thông tin chi tiết vật phẩm.
+        """
+        print("\n" + "=" * 15 + " TÚI ĐỒ " + "=" * 15)
+        inv = self.player_state.inventory_manager
 
-        while True:
-            print("\n" + "=" * 50)
-            print("🎒 TÚI ĐỒ CỦA BẠN".center(50))
-            print("=" * 50)
+        # In ra các ngăn chứa
+        print(f"🗡️ [Vũ khí]: {', '.join([w.name for w in inv.weapon_item_inventory]) or 'Trống'}")
+        if inv.equipped_weapon:
+            print(f"   -> Đang trang bị: {inv.equipped_weapon.name}")
 
-            # Hiển thị trạng thái HP và Vũ khí
-            print(f"❤️ HP: {self.player_state.hp}/{self.player_state.max_hp}")
-            equipped = inv_manager.equipped_weapon.name if inv_manager.equipped_weapon else 'Tay không'
-            print(f"🗡️ Đang trang bị: {equipped}")
-            print("-" * 50)
+        print(f"🧪 [Tiêu hao]: {', '.join([c.name for c in inv.consumable_item_inventory]) or 'Trống'}")
+        print(f"📜 [Nhiệm vụ]: {', '.join([q.name for q in inv.quest_item_inventory]) or 'Trống'}")
+        print(f"📦 [Khác]: {', '.join([m.name for m in inv.interactive_item_inventory]) or 'Trống'}")
+        print("=" * 38)
 
-            # Liệt kê đồ
-            print(f"📦 Vật phẩm hiện có: {inv_manager.get_all_item_names()}")
-            print("-" * 50)
-
-            # Các tùy chọn
-            print(" [1] Dùng vật phẩm (Hồi máu, giải độc...)")
-            print(" [2] Trang bị vũ khí")
-            print(" [3] Chế tạo / Ghép đồ")
-            print(" [0] Đóng túi đồ và trở lại Game")
-
-            choice = input("\nChọn thao tác (0-3): ").strip()
-
-            if choice == "0":
-                print("[Hệ thống] Đã đóng túi đồ.")
-                break
-
-            elif choice == "1":
-                item_name = input(">> Nhập chính xác tên vật phẩm muốn dùng: ").strip()
-                # Gọi thẳng logic xử lý trong InventoryManager
-                result = inv_manager.use_consumable(item_name, self.player_state)
-                print(f"[Hệ thống] 🧪 {result}")
-
-            elif choice == "2":
-                item_name = input(">> Nhập chính xác tên vũ khí muốn trang bị: ").strip()
-                result = inv_manager.equip_weapon(item_name)
-                print(f"[Hệ thống] ⚔️ {result}")
-
-            elif choice == "3":
-                items_str = input(">> Nhập tên các vật phẩm muốn ghép (cách nhau bằng dấu phẩy): ").strip()
-                target_items = []
-                for item_name in items_str.split(","):
-                    target_item= inv_manager.get_item_by_name(item_name=item_name.strip())
-                    if target_item:
-                        target_items.append(target_item)
-
-                if len(target_items) < 1:
-                    print("[Hệ thống] ⚠️ Cần ít nhất 1 vật pẩm")
-                else:
-                    print("[Hệ thống] 🔨 Đang đánh giá công thức chế tạo...")
-                    # Gọi ItemAgent (Chỉ tốn API LLM tại đúng bước này)
-                    action_detail = input(">> Cách chế tạo: ").strip()
-                    craft_result = await self.item_sys.interact(
-                        item_list=target_items,
-                        action_details=action_detail
-                    )
-                    print(craft_result)
+        # Cho phép người chơi xem chi tiết đồ
+        cmd = input("Nhập tên vật phẩm để xem chi tiết (hoặc 'Enter' để đóng): ").strip()
+        if cmd:
+            item = self.player_state.get_item_by_name(cmd)
+            if item:
+                print(f"\n[{item.name}] - Phân loại: {item.item_type.upper()}")
+                print(f"📝 Mô tả: {item.description}")
+                if item.item_type == 'weapon':
+                    print(f"⚔️ Sát thương cơ bản: {getattr(item, 'base_damage', 0)}")
+                    if getattr(item, 'status_effect', None):
+                        print(f"🔥 Hiệu ứng đính kèm: {item.status_effect}")
+                elif item.item_type == 'consumable':
+                    print(f"💚 Hiệu ứng phục hồi: {getattr(item, 'effect', 0)} HP")
             else:
-                print("[Hệ thống] ⚠️ Lựa chọn không hợp lệ.")
+                print("[Hệ thống] Không tìm thấy vật phẩm này trong túi!")
+
+    async def _open_quest_menu(self, story_response: str):
+        """
+        Hiển thị sổ tay nhiệm vụ và cho phép chuyển đổi mục tiêu.
+        """
+        print("\n" + "=" * 12 + " NHẬT KÝ NHIỆM VỤ " + "=" * 12)
+        quests = self.player_state.quests
+
+        if not quests:
+            print("Bạn chưa có nhiệm vụ nào.")
+            print("=" * 42)
+            return
+
+        # Hiển thị danh sách nhiệm vụ với Icon biểu cảm
+        for idx, q in enumerate(quests):
+            icon = "🔄" if q.status == 'in_progress' else "✅" if q.status == 'completed' else "❌" if q.status == 'failed' else "📜"
+            print(f"[{idx}] {icon} {q.name} - Trạng thái: {q.status.upper()}")
+            print(f"    Mục tiêu: {q.objective}")
+
+            if q == self.player_state.active_quest:
+                print("    -> [ĐANG THEO DÕI]")
+        print("=" * 42)
+
+        # Cho phép chuyển đổi Quest
+        cmd = input("\nNhập số ID nhiệm vụ để chuyển đổi (hoặc 'Enter' để đóng): ").strip()
+        if cmd.isdigit():
+            idx = int(cmd)
+            if 0 <= idx < len(quests):
+                target = quests[idx]
+
+                # Chặn việc chuyển lại đúng quest đang làm
+                if target == self.player_state.active_quest:
+                    print("\n[Hệ thống] Bạn đang làm nhiệm vụ này rồi!")
+                    return
+
+                print("\n[Hệ thống] Đang lưu trữ ký ức và chuyển đổi không gian/thời gian...")
+                transition_msg = await self.quest_sys.switch_quest(target, story_response, self.last_choices)
+                print(f"\n[Đạo diễn]: 🔄 {transition_msg}\n")
+            else:
+                print("\n[Hệ thống] ID nhiệm vụ không hợp lệ!")
