@@ -99,50 +99,120 @@ class PlayerState:
     def to_dict(self) -> dict:
         """
         Đóng gói dữ liệu của người chơi thành Dictionary để chuẩn bị lưu game.
-
-        Returns:
-            dict: Dữ liệu JSON chứa thông tin trạng thái người chơi và túi đồ.
         """
+        # Hàm phụ trợ để đóng gói riêng lẻ từng Nhiệm vụ
+        def serialize_quest(q: Quest):
+            snap_dict = {}
+            if getattr(q, 'snapshot', None):
+                snap_loc = q.snapshot.get("location")
+                snap_npcs = q.snapshot.get("npcs", [])
+                snap_dict = {
+                    "location_name": snap_loc.name if snap_loc else None,
+                    "npc_names": [n.name for n in snap_npcs] if snap_npcs else [],
+                    "last_story": q.snapshot.get("last_story", ""),
+                    "last_choices": q.snapshot.get("last_choices", [])
+                }
+            return {
+                "id": q.id,
+                "name": q.name,
+                "description": q.description,
+                "objectives": q.objectives,
+                "is_finished": getattr(q, 'is_finished', [0]*len(q.objectives)),
+                "give_by": getattr(q, 'give_by', ''),
+                "rewards": getattr(q, 'rewards', []),
+                "status": getattr(q, 'status', 'available'),
+                "snapshot": snap_dict
+            }
+
         return {
             "current_turn": self.currentTurn,
             "current_location_name": self.currentLocation.name if self.currentLocation else None,
             "current_npc_names": [npc.name for npc in self.currentNPCs],
-            "inventory_data": self.inventory_manager.to_dict()
+            "inventory_data": self.inventory_manager.to_dict(),
+            
+            # 🌟 BỔ SUNG LƯU TRỮ NHIỆM VỤ VÀ CON TRỞ NHIỆM VỤ CHÍNH/ĐANG LÀM
+            "quests": [serialize_quest(q) for q in self.quests],
+            "active_quest_id": self.active_quest.id if getattr(self, 'active_quest', None) else None,
+            "main_quest_id": self.main_quest.id if getattr(self, 'main_quest', None) else None
         }
 
     async def load_state(self, data: dict, db_manager, image_manager):
         """
         Khôi phục trạng thái người chơi từ dữ liệu file save (Deserialization).
-
-        Args:
-            data (dict): Dữ liệu trạng thái người chơi từ file JSON.
-            db_manager: Trình quản lý CSDL để truy vấn lại đối tượng Location và NPC.
-            image_manager: Trình quản lý ảnh để phục hồi đường dẫn ảnh cho vật phẩm trong túi.
         """
         self.currentTurn = data.get("current_turn", 0)
 
-        # 1. Phục hồi Location từ CSDL
+        # Lấy trước toàn bộ Loc và NPC từ DB để tái tạo Ký ức (Snapshot)
+        all_locs = await db_manager.location_manager.get_all()
+        all_npcs = await db_manager.npc_manager.get_all()
+
+        # 1. Phục hồi Location hiện tại
         loc_name = data.get("current_location_name")
         if loc_name:
-            all_locs = await db_manager.location_manager.get_all()
             self.currentLocation = next((l for l in all_locs if l.name == loc_name), None)
 
-        # 2. Phục hồi NPCs từ CSDL
+        # 2. Phục hồi NPCs hiện tại
         npc_names = data.get("current_npc_names", [])
         if npc_names:
-            all_npcs = await db_manager.npc_manager.get_all()
             self.currentNPCs = [n for n in all_npcs if n.name in npc_names]
         else:
             self.currentNPCs = []
 
-        # 3. Yêu cầu túi đồ tự khôi phục dữ liệu vật phẩm
+        # 3. Phục hồi Túi đồ
         self.inventory_manager.load_state(data.get("inventory_data", {}), image_manager)
 
+        # ==========================================
+        # 🌟 4. PHỤC HỒI SỔ TAY NHIỆM VỤ (QUESTS)
+        # ==========================================
+        self.quests = []
+        for q_data in data.get("quests", []):
+            quest = Quest(
+                id=q_data.get("id"),
+                name=q_data.get("name"),
+                description=q_data.get("description"),
+                objectives=q_data.get("objectives", []),
+                give_by=q_data.get("give_by", ""),
+                rewards=q_data.get("rewards", [])
+            )
+            quest.is_finished = q_data.get("is_finished", [0] * len(quest.objectives))
+            quest.status = q_data.get("status", "available")
+            
+            # Phục hồi Bối cảnh lưu trữ (Snapshot) của từng quest
+            snap_data = q_data.get("snapshot", {})
+            if snap_data:
+                snap_loc_name = snap_data.get("location_name")
+                snap_loc = next((l for l in all_locs if l.name == snap_loc_name), None) if snap_loc_name else None
+                
+                snap_npc_names = snap_data.get("npc_names", [])
+                snap_npcs = [n for n in all_npcs if n.name in snap_npc_names] if snap_npc_names else []
+                
+                quest.snapshot = {
+                    "location": snap_loc,
+                    "npcs": snap_npcs,
+                    "last_story": snap_data.get("last_story", ""),
+                    "last_choices": snap_data.get("last_choices", [])
+                }
+            self.quests.append(quest)
+            
+        # 5. Phục hồi con trỏ Nhiệm vụ đang làm & Nhiệm vụ chính
+        active_id = data.get("active_quest_id")
+        self.active_quest = next((q for q in self.quests if q.id == active_id), None)
+        
+        main_id = data.get("main_quest_id")
+        self.main_quest = next((q for q in self.quests if q.id == main_id), None)
+        
+        # Cập nhật lại list item móc với nhiệm vụ
+        self.update_quest_items()
 
     def update_quest_items(self):
         self.quest_items = []
+        if not self.active_quest: 
+            return # 🌟 Thêm dòng này bảo vệ an toàn nếu load file mà không có Quest nào
+            
         for item in self.inventory_manager.quest_item_inventory:
-            if item.quest.id == self.active_quest.id:
+            # 🌟 Xử lý an toàn: Khi load json, 'item.quest' có thể bị biến thành số(int/string) thay vì object
+            item_quest_id = item.quest.id if hasattr(item.quest, 'id') else (item.quest.get("id") if isinstance(item.quest, dict) else item.quest)
+            if item_quest_id == self.active_quest.id:
                 self.quest_items.append(item)
 
 

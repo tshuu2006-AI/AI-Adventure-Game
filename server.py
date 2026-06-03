@@ -258,6 +258,8 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
         ep_data, scene_emotion = await orchestrator.state_sys.process_background_tasks(player_input, story_response)
         orchestrator.current_emotion = scene_emotion
 
+        await orchestrator.quest_sys.evaluate_turn(player_input, story_response)
+
         encountered = [n.name for n in orchestrator.player_state.currentNPCs]
         await orchestrator.memory_sys.save_turn(
             player_input=player_input,
@@ -350,6 +352,11 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
             )
             # await orchestrator.db.add_npc_to_db(npc_obj)
             orchestrator.player_state.currentNPCs.append(npc_obj)
+
+        await orchestrator.quest_sys.initialize_main_quest(
+            world_state=orchestrator.world_state,
+            starting_npcs=orchestrator.player_state.currentNPCs
+        )
         
         story_response = ""
         # 🌟 Truyền thêm tham số world_bible_dir vào đây:
@@ -359,7 +366,11 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
         segments = parse_story_into_segments(story_response)
 
         choices = await orchestrator.story_director.generate_player_choices(
-            current_location_name=starting_loc.name, encountered_npc_name=[], recent_story_text=story_response
+            current_location_name=starting_loc.name, 
+            encountered_npc_name=[], 
+            recent_story_text=story_response,
+            active_quest=orchestrator.player_state.active_quest,
+            quest_items=getattr(orchestrator.player_state, 'quest_items', [])
         )
         orchestrator.last_choices = choices
         choice_texts = [c["action_text"] for c in choices]
@@ -396,7 +407,9 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
         choices = await orchestrator.story_director.generate_player_choices(
             current_location_name=orchestrator.player_state.currentLocation.name,
             encountered_npc_name=[n.name for n in orchestrator.player_state.currentNPCs],
-            recent_story_text=story_response
+            recent_story_text=story_response,
+            active_quest=orchestrator.player_state.active_quest,
+            quest_items=getattr(orchestrator.player_state, 'quest_items', [])
         )
         orchestrator.last_choices = choices
         choice_texts = [c["action_text"] for c in choices]
@@ -440,6 +453,17 @@ async def poll_updates():
         max_hp = orchestrator.player_state.max_hp
         equipped_weapon = orchestrator.player_state.inventory_manager.equipped_weapon
         weapon_name = equipped_weapon.name if equipped_weapon else "Tay không"
+
+        active_quest = orchestrator.player_state.active_quest
+        quest_payload = None
+        if active_quest:
+            raw_obj = getattr(active_quest, 'objectives', getattr(active_quest, 'objective', ''))
+            obj_text = raw_obj[0] if isinstance(raw_obj, list) and len(raw_obj) > 0 else str(raw_obj)
+            quest_payload = {
+                "name": active_quest.name,
+                "objective": obj_text, # Ép trả về chữ "objective" để Unity C# không bị lỗi
+                "status": active_quest.status
+            }
             
         return JSONResponse(content={
             "bg_image_b64": bg_img,
@@ -449,6 +473,7 @@ async def poll_updates():
             "max_hp": max_hp,              # MỚI
             "weapon": weapon_name,         # MỚI
             "emotion": emotion,
+            "active_quest": quest_payload,
             "is_processing_bg": getattr(orchestrator, "is_processing_bg", False)
         })
     except Exception as e:
@@ -457,7 +482,7 @@ async def poll_updates():
 
 @app.get("/api/diary")
 async def get_diary():
-    """(Req 3) Hoàn thiện API Diary"""
+    """(Req 3) Hoàn thiện API Diary - Có thêm Nhiệm Vụ"""
     try:
         npcs = await orchestrator.db.npc_manager.get_all()
         locations = await orchestrator.db.location_manager.get_all()
@@ -469,9 +494,44 @@ async def get_diary():
         loc_list = [{"name": l.name, "description": getattr(l, 'description', ''), "atmosphere": getattr(l, 'atmosphere', 'Bình thường'),
                      "image_b64": image_to_base64_with_default(l.image_path)} for l in locations]
 
-        return JSONResponse(content={"npcs": npc_list, "locations": loc_list})
+        quests_payload = []
+        if getattr(orchestrator.player_state, 'quests', None):
+            for q in orchestrator.player_state.quests:
+                raw_obj = getattr(q, 'objectives', getattr(q, 'objective', ''))
+                obj_text = raw_obj[0] if isinstance(raw_obj, list) and len(raw_obj) > 0 else str(raw_obj)
+                quests_payload.append({
+                    "name": getattr(q, 'name', 'Nhiệm vụ ẩn'),
+                    "description": getattr(q, 'description', ''),
+                    "objective": obj_text,
+                    "status": getattr(q, 'status', 'available'),
+                    "is_active": (q == orchestrator.player_state.active_quest)
+                })
+
+        return JSONResponse(content={"npcs": npc_list, "locations": loc_list, "quests": quests_payload})
     except Exception as e:
-        print(f"❌ Lỗi tải Diary: {e}")
+        game_logger.error(f"❌ Lỗi tải Diary: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/quest/switch")
+async def switch_quest(quest_name: str = Form(...)):
+    """API để Unity ra lệnh chuyển đổi Nhiệm vụ đang theo dõi"""
+    try:
+        target = next((q for q in orchestrator.player_state.quests if q.name == quest_name), None)
+        
+        if not target:
+            return JSONResponse(content={"success": False, "message": "Không tìm thấy nhiệm vụ."})
+        if target == orchestrator.player_state.active_quest:
+            return JSONResponse(content={"success": False, "message": "Bạn đang thực hiện nhiệm vụ này rồi!"})
+        
+        # Gọi hệ thống QuestProcessor chuyển đổi & Sinh lời dẫn truyện
+        transition_msg = await orchestrator.quest_sys.switch_quest(
+            target_quest=target, 
+            recent_story="Bạn mở sổ tay và quyết định thay đổi mục tiêu hành động.", 
+            current_choices=orchestrator.last_choices
+        )
+        return JSONResponse(content={"success": True, "message": transition_msg})
+    except Exception as e:
+        game_logger.error(f"Lỗi chuyển nhiệm vụ: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
     
 @app.get("/api/progress")

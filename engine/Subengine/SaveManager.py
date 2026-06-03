@@ -29,6 +29,13 @@ class SaveManager:
         # 2. Copy file vật lý
         if os.path.exists(orchestrator.db.db_path):
             shutil.copy(orchestrator.db.db_path, os.path.join(slot_dir, "eldoria.db"))
+        
+        # Lưu world_bible
+        world_bible_path = os.path.join(orchestrator.db.db_folder, "world_bible.json")
+        if os.path.exists(world_bible_path):
+            shutil.copy(world_bible_path, os.path.join(slot_dir, "world_bible.json"))
+
+        idx_path = orchestrator.memory_sys.long_term_memory.index_path
 
         idx_path = orchestrator.memory_sys.long_term_memory.index_path
         meta_path = orchestrator.memory_sys.long_term_memory.meta_path
@@ -60,6 +67,11 @@ class SaveManager:
 
         try:
             shutil.copy(os.path.join(slot_dir, "eldoria.db"), orchestrator.db.db_path)
+
+            src_bible = os.path.join(slot_dir, "world_bible.json")
+            world_bible_path = os.path.join(orchestrator.db.db_folder, "world_bible.json")
+            if os.path.exists(src_bible): 
+                shutil.copy(src_bible, world_bible_path)
 
             src_idx = os.path.join(slot_dir, "vector_index.bin")
             if os.path.exists(src_idx): shutil.copy(src_idx, orchestrator.memory_sys.long_term_memory.index_path)
