@@ -1,19 +1,29 @@
+
 from engine.DataManager.PlayerState import PlayerState
 from engine.Utils.logger import game_logger
 from engine.Agents.LocalAgents import QuestAgent
-
-
+from typing import List
+from engine.Utils.PromptManager import PromptManager
+from world.Entity import Quest
+from engine.DataManager.WorldState import WorldState
 class QuestProcessor:
     """
     Hệ thống điều phối Nhiệm vụ (Quests) và Đa luồng Cốt truyện (Context Stacking).
     Phiên bản kiến trúc Unified Quest Log (Một danh sách nhiệm vụ duy nhất).
     """
 
-    def __init__(self, player_state: PlayerState, pm, gemini_api_key: str):
+    def __init__(self, player_state: PlayerState, pm: PromptManager, gemini_api_key: str):
         self.player_state = player_state
         self.quest_agent = QuestAgent(pm=pm, gemini_api_key=gemini_api_key)
 
-    async def switch_quest(self, target_quest, recent_story, current_choices, force=False):
+    def _handle_status(self, objective_status: List[bool]):
+        for boolean in objective_status:
+            if not boolean:
+                return "in_progress"
+        return "completed"
+
+
+    async def switch_quest(self, target_quest: Quest, recent_story:str, current_choices: List[str], force=False):
         # 1. KIỂM TRA ĐIỀU KIỆN
         if not force:
             if target_quest.status in ['failed', 'completed'] or not self.player_state.is_safe_zone:
@@ -66,25 +76,43 @@ class QuestProcessor:
     # ==========================================
     # NHÓM 3: NGHIỆM THU TIẾN ĐỘ NGẦM
     # ==========================================
+
     async def evaluate_turn(self, player_input: str, story_response: str) -> bool:
-        # Bỏ qua nếu không có quest, hoặc đang ở mạch chính
-        if not self.player_state.active_quest or self.player_state.active_quest == getattr(self.player_state,
-                                                                                           "main_quest", None):
-            return False
 
         current_quest = self.player_state.active_quest
+        objectives = current_quest.objectives.copy()
+
+        for i in range(len(objectives)):
+            if current_quest.is_finished[i]:
+                objectives[i] = f"[COMPLETED] {objectives[i]}"
 
         # Gọi Agent chấm điểm
         evaluation = await self.quest_agent.evaluate_quest_status(
             quest_title=current_quest.name,
-            objectives=getattr(current_quest, "objective", []),
+            objectives=objectives,
             player_input=player_input,
             story_response=story_response
         )
 
-        status = evaluation.get("status", "in_progress")
+        is_new_quest = evaluation.get("is_new_quest_offered", False)
+        if is_new_quest:
+            game_logger.info("[QuestSystem] 🚨 LLM phát hiện NPC vừa giao nhiệm vụ mới!")
 
-        if status in ["completed", "failed"]:
+            # Thu thập bối cảnh hiện tại để sinh nhiệm vụ
+            current_loc = self.player_state.currentLocation.name if self.player_state.currentLocation else "Không rõ"
+            current_npcs = ", ".join([npc.name for npc in self.player_state.currentNPCs])
+
+            new_quest = await self.quest_agent.generate_quests(location_name=current_loc,
+                                                         npc_names=current_npcs,
+                                                         context=story_response)
+            self.player_state.add_quest(new_quest)
+
+        objective_status = evaluation.get("objectives_status", current_quest.is_finished)
+        current_quest.is_finished = objective_status
+
+        status = self._handle_status(objective_status)
+
+        if status == 'completed':
             game_logger.info(f"[QuestSystem] Kết thúc Quest: {current_quest.name} - Trạng thái: {status}")
 
             # 1. Chỉ cập nhật trạng thái (Nhiệm vụ vẫn nằm trong player_state.quests)
@@ -104,7 +132,7 @@ class QuestProcessor:
 
         return False
 
-    async def initialize_main_quest(self, world_state, starting_npcs: list):
+    async def initialize_main_quest(self, world_state: WorldState, starting_npcs: list):
         """
         Tổng hợp thông tin, gọi Agent sinh Nhiệm vụ chính và lưu vào trạng thái người chơi.
         """
@@ -134,7 +162,7 @@ class QuestProcessor:
             id=0,
             name=title,
             description=description,
-            objective=objectives,
+            objectives=objectives,
             give_by=give_by,
             rewards=[]
         )

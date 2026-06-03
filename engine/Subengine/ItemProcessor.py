@@ -1,4 +1,5 @@
 from engine.DataManager.PlayerState import PlayerState
+from engine.Utils.PromptManager import PromptManager
 from world.Entity import BaseItem
 from typing import Dict, Any, List
 from world.Entity import WeaponItem, ConsumableItem, MiscellaneousItem
@@ -9,7 +10,9 @@ from static.config import ITEM_AGENT_MODEL
 class ItemProcessor:
     """Xử lý toàn bộ logic liên quan đến tương tác vật phẩm (Tiêu chuẩn & Sáng tạo)"""
 
-    def __init__(self, player_state: PlayerState, gemini_api_key, pm):
+    def __init__(self, player_state: PlayerState,
+                 gemini_api_key: str,
+                 pm: PromptManager):
         # Cần local_agents (Gemini) để gọi AI check logic vật lý khi dùng đồ sáng tạo
         self.item_agent = ItemAgent(pm = pm,
                                     model_name = ITEM_AGENT_MODEL,

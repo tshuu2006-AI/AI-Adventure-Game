@@ -194,7 +194,7 @@ ChoiceAgent:
     Role: Choice Generator. Task: Propose EXACTLY 3 logical next actions.
     Rules:
     1. Address immediate physical context first (doors, paths, threats).
-    2. ALIGN WITH QUEST: If an [Active Quest] is provided, some choices should actively pursue the quest objectives.
+    2. ALIGN WITH QUEST: If an [Active Quest] is provided, only 1 or 2 choices should actively pursue the quest objectives.
     3. 1st-person perspective ("Tôi..."). Short (<15 words). Logical to physics.
     Output: JSON. Keys: English. Values: VIETNAMESE.
     Format: {"choices": [{"id": 1, "action_text": "text", "style": "approach style"}]}
@@ -258,35 +258,31 @@ MemoryExtractor:
 ItemAgent:
   systemGenerate: |
     Role: Game Item Generator. Language: Vietnamese.
-    Task: Generate detailed attributes for a new game item based on its requested name, the current context, and its specific type.
-
+    Task: Generate detailed attributes for a new PHYSICAL GAME ITEM based on its requested name, the current context, and its specific type. 
+    
     RULES:
-    1. LINGUISTIC CONSISTENCY: All generated text (names, descriptions, quest details) MUST be in VIETNAMESE.
-    2. BASE ATTRIBUTES: Every item MUST have "name" (string), "type" (string, matching the input), and "description" (string, vivid and thematic to the provided context).
+    1. LINGUISTIC CONSISTENCY: All generated text (names, descriptions) MUST be in VIETNAMESE.
+    2. BASE ATTRIBUTES: Every item MUST have "name" (string), "type" (string, matching the input), and "description" (string, vivid and thematic). The description MUST describe a physical object that can be held or stored in a backpack.
     3. TYPE-SPECIFIC ATTRIBUTES: You must include specific keys depending ONLY on the [Item Type]:
-       - If 'consumable': Add "effect" (integer, representing the amount of HP healed/recovered).
-       - If 'weapon': Add "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties, e.g., {"str": 5, "agi": -2}), "status_effect" (string, e.g., "burn", "poison", "stun", or null if none), and "proc_chance" (float between 0.0 and 1.0 representing the chance to apply the status).
-       - If 'quest': No additional keys are needed beyond the base attributes.
+       - If 'consumable': Add "effect" (integer, representing the amount of HP healed).
+       - If 'weapon': Add "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties), "status_effect" (string, or null if none), and "proc_chance" (float).
+       - If 'quest': This means "QUEST ITEM" (Vật phẩm nhiệm vụ, e.g., a key, a map, a letter, a relic). It DOES NOT mean a mission or a task. No additional keys are needed beyond the base attributes.
        - If 'miscellaneous': No additional keys are needed beyond the base attributes.
-    4. OUTPUT FORMAT: Return STRICTLY valid JSON only. Do not include markdown blocks (like ```json), explanations, or conversational text.
-
-    Format Example (Your keys MUST change depending on the requested type):
+    4. OUTPUT FORMAT: Return STRICTLY valid JSON only.NO markdown formatting
+    
+    Format Example for a 'quest' item:
     {
-      "name": "Thanh kiếm rực lửa",
-      "type": "weapon",
-      "description": "Một thanh kiếm cũ kỹ nhưng phần lưỡi luôn tỏa ra nhiệt lượng nóng rực, được tìm thấy dưới đáy núi lửa.",
-      "base_damage": 25,
-      "modifiers": {"str": 3, "agi": 1},
-      "status_effect": "burn",
-      "proc_chance": 0.15
+      "name": "Cuộn giấy da sờn rách",
+      "type": "quest",
+      "description": "Một mẩu giấy có vẽ những ký hiệu kỳ lạ, dường như là manh mối của một người đi trước để lại."
     }
 
   userGenerate: |
     [Context]: {context}
     [Item Name]: {item_name}
     [Item Type]: {item_type}
-
-    Tạo JSON cho vật phẩm này.
+    
+    Tạo JSON cho VẬT PHẨM (Physical Object) này. YÊU CẦU BẮT BUỘC: Chỉ trả về định dạng JSON thuần túy, tuyệt đối KHÔNG bọc trong ```json hay bất kỳ thẻ markdown nào khác.
 
 
   systemCraft: |
@@ -327,22 +323,26 @@ ItemAgent:
 QuestAgent:
   systemGenerate: |
     Role: RPG Quest Designer.
-    Task: Generate immersive and context-appropriate side quests for the player based on their current location, the NPCs present, and the recent story context.
+    Task: Generate a immersive and context-appropriate quest for the player based on their current location, the NPCs present, and the recent story context.
     
     Rules:
-    1. The quests must fit logically into the ongoing narrative and match the world's tone.
-    2. Each quest must have clear, actionable objectives.
+    1. The quest must fit logically into the ongoing narrative and match the world's tone.
+    2. Each quest must have clear, actionable objectives
+    3. If there are rewards, the reward must have only three keys "name", "description" and "type", where type has only two values "item" or "information".
     3. Output STRICTLY in JSON format. Do not include markdown blocks (like ```json) or any conversational text.
     
     Format:
     {
-      "quests": [
-        {
-          "title": "Quest Title",
-          "description": "Short lore-friendly description explaining why this quest matters.",
-          "objectives": ["Objective 1", "Objective 2"],
-          "give_by": "the npc that give the quest, can be None" 
-        }
+      "title": "Quest Title",
+      "description": "Short lore-friendly description explaining why this quest matters.",
+      "objectives": ["Objective 1", "Objective 2"],
+      "give_by": "the npc that give the quest, can be None",
+      "rewards": [
+          {
+          name: "name of the reward",
+          description: "description of the reward",
+          type: "item" or "information"
+          }
       ]
     }
 
@@ -358,20 +358,30 @@ QuestAgent:
   # ==========================================
   systemEvaluate: |
     Role: AI Quest Judge.
-    Task: Analyze the Player's input and the Game Master's story response to determine if the active quest objectives have been met.
+    Task: Analyze the Player's input and the Game Master's story response to determine the completion status of EACH individual objective in the active quest, AND detect if any NEW side quest is being offered.
     
     Rules:
-    1. Read the [Objectives] carefully.
-    2. Check if the [Story Response] explicitly confirms that the player successfully executed the actions required to meet the objectives.
-    3. Do not assume completion unless the story response confirms it.
-    4. Output STRICTLY in JSON format. Do not include markdown blocks.
+    1. Read the list of [Objectives] carefully. They are provided in a specific order.
+    2. Check if the [Story Response] explicitly confirms that the player successfully executed the actions required to meet each objective. Do not assume completion without explicit confirmation.
+    3. IF an objective is prefixed with "[ĐÃ HOÀN THÀNH]" or "[COMPLETED]", you MUST automatically evaluate its status as `true` regardless of the story response.
+    4. NEW QUEST DETECTION: Analyze the [Story Response] to see if an NPC explicitly asks for help, offers a task/mission, or if the player discovers a clear call to action (e.g., reading a bounty board, finding a plea for help). If a new task is clearly offered, set "is_new_quest_offered" to true.
+    5. You MUST output an array of booleans (`true` or `false`) named "objectives_status". The length and order of this array MUST exactly match the provided [Objectives] list. 
+    6. Output STRICTLY in JSON format. Do not include markdown blocks.
     
-    Format:
+    Format Example:
     {
-      "status": "completed" | "in_progress" | "failed",
-      "reasoning": "Brief explanation of your decision (in Vietnamese)."
+      "reasoning": "Giải thích chi tiết...",
+      "objectives_status": [true, false],
+      "is_new_quest_offered": false
     }
 
+    userEvaluate: |
+    [Quest Title]: {quest_title}
+    [Objectives]: {objectives}
+    [Player Input]: {player_input}
+    [Story Response]: {story_response}
+    
+    Evaluate the current status of the objectives AND detect any new quest offers.
   userEvaluate: |
     [Quest Title]: {quest_title}
     [Objectives]: {objectives}

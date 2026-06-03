@@ -1,10 +1,12 @@
 import json
-from typing import AsyncGenerator
-from world.Entity import Location, Quest
+from typing import AsyncGenerator, List
+from world.Entity import Location, Quest, NPC
 from static.config import STORY_AGENT_MODEL, CHOICE_AGENT_MODEL, LOCATION_AGENT_MODEL, WORLD_GENERATE_AGENT_MODEL, NPC_AGENT_MODEL
 from engine.Agents.CloudAgents import StoryAgent, ChoiceAgent, WorldGenerateAgent, LocationAgent, NPCAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
-
+from engine.Utils.PromptManager import PromptManager
+from engine.DataManager.WorldState import WorldState
+from engine.DataManager.PlayerState import PlayerState
 
 class StoryDirector:
     """
@@ -12,7 +14,7 @@ class StoryDirector:
     Bao gồm: Viết cốt truyện, tạo menu lựa chọn, và thiết kế bối cảnh thế giới.
     """
 
-    def __init__(self, groq_api_key, pm):
+    def __init__(self, groq_api_key: str, pm: PromptManager):
         self.pm = pm
 
         # CHÚ Ý LỰA CHỌN MODEL ĐỂ TỐI ƯU CHI PHÍ & TỐC ĐỘ:
@@ -29,10 +31,11 @@ class StoryDirector:
         game_logger.debug("[StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).")
 
     async def narrate_turn(self, player_input: str,
-                           world_state,
-                           player_state, npcs_context,
-                           hybrid_rag_context,
-                           system_directive) -> \
+                           world_state: WorldState,
+                           player_state: PlayerState,
+                           npcs_context: List[NPC],
+                           hybrid_rag_context: str,
+                           system_directive: str) -> \
             AsyncGenerator[str, None]:
         """
         Nhận toàn bộ Bối cảnh + RAG + Hành động của người chơi để sinh cốt truyện (Streaming).
@@ -49,9 +52,15 @@ class StoryDirector:
             npc_context_str = "Nobody is near"
 
         active_quest = player_state.active_quest
+        objectives = active_quest.objectives.copy()
+
+        for i in range(len(objectives)):
+            if active_quest.is_finished[i]:
+                objectives[i] = "[completed]"
+
         active_quest_context = ""
         if active_quest:
-            active_quest_context += f'Name: {active_quest.name}\n Description: {active_quest.description}\n Objectives: {active_quest.objective}'
+            active_quest_context += f'Name: {active_quest.name}\n Description: {active_quest.description}\n Objectives: {objectives}'
 
         items = player_state.quest_items
         quest_items = []
@@ -90,9 +99,16 @@ class StoryDirector:
         game_logger.info("[StoryDirector] Đang tính toán các lựa chọn tiếp theo...")
 
         npc_name = encountered_npc_name if encountered_npc_name else "Không có"
+
+        objectives = active_quest.objectives.copy()
+
+        for i in range(len(objectives)):
+            if active_quest.is_finished[i]:
+                objectives[i] = "[completed]"
+
         active_quest_context = ""
         if active_quest:
-            active_quest_context += f'Name: {active_quest.name}\n Description: {active_quest.description}\n Objectives: {active_quest.objective}'
+            active_quest_context += f'Name: {active_quest.name}\n Description: {active_quest.description}\n Objectives:\n {"\n".join(objectives)}'
 
         items = quest_items
         quest_items = []
@@ -152,7 +168,6 @@ class StoryDirector:
 
         sys_requirements = world_bible.get("system_requirements", {})
         world_name = sys_requirements.get("world_name", None)
-        world_type = sys_requirements.get("world_type", None)
         world_mission = sys_requirements.get("world_mission", None)
         theme_and_tone = sys_requirements.get("theme_and_tone", None)
         core_conflict = sys_requirements.get("core_conflict", None)

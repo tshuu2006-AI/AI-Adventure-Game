@@ -194,8 +194,11 @@ class MemoryProcessor:
 
         return rag_context, npcs
 
-    async def save_turn(self, player_input: str, story_response: str, episode_data: dict,
-                        current_location_name: str, encountered_npc_names: List[str]):
+    async def save_turn(self, player_input: str,
+                        story_response: str,
+                        episode_data: dict,
+                        current_location_name: str,
+                        encountered_npc_names: List[str]):
         """Lưu lại ký ức sau khi Turn kết thúc dưới dạng Khối Tập Phim (Episode)"""
 
         # 1. GHÉP CHUỖI CÓ CẤU TRÚC TỪ DICT (JSON)

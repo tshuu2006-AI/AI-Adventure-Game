@@ -132,9 +132,10 @@ class MiscellaneousItem(BaseItem):
 
 
 class Quest(BaseEntity):
-    def __init__(self, id, name, description, objective, give_by, rewards): # Thêm objective vào tham số
+    def __init__(self, id, name, description, objectives, give_by, rewards): # Thêm objective vào tham số
         super().__init__(id, name, 'quest', description)
-        self.objective = objective # Lưu mục tiêu để AI chấm điểm
+        self.objectives = objectives # Lưu mục tiêu để AI chấm điểm
+        self.is_finished = [0] * len(self.objectives)
         self.snapshot = {}
         self.give_by = give_by
         self.rewards = rewards

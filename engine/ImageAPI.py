@@ -1,5 +1,4 @@
 import aiohttp
-import os
 import time
 class ImageAPI:
     """

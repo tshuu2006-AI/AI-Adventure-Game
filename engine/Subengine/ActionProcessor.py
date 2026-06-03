@@ -5,9 +5,16 @@ from engine.Agents.LocalAgents import IntentRouter
 from static.config import RNG_WEIGHTS, Success_rate
 from engine.Utils.logger import game_logger  # Thêm import logger
 from static.config import INTENT_ROUTER_MODEL
+from engine.DataManager.PlayerState import PlayerState
+from engine.Utils.PromptManager import PromptManager
+from engine.DataManager.DatabaseManager import DatabaseManager
 
 class ActionProcessor:
-    def __init__(self, db, player_state, pm, gemini_api_key, yaml_path="static/action_directives.yaml"):
+    def __init__(self, db: DatabaseManager,
+                 player_state: PlayerState,
+                 pm:PromptManager,
+                 gemini_api_key,
+                 yaml_path="static/action_directives.yaml"):
         self.db = db
         self.player_state = player_state
         self.intent_parser = IntentRouter(pm=pm, model_name = INTENT_ROUTER_MODEL, gemini_api_key=gemini_api_key)

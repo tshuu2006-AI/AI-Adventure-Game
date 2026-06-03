@@ -367,7 +367,7 @@ class GameOrchestrator:
         for idx, q in enumerate(quests):
             icon = "🔄" if q.status == 'in_progress' else "✅" if q.status == 'completed' else "❌" if q.status == 'failed' else "📜"
             print(f"[{idx}] {icon} {q.name} - Trạng thái: {q.status.upper()}")
-            print(f"    Mục tiêu: {q.objective}")
+            print(f"    Mục tiêu: {q.objectives}")
 
             if q == self.player_state.active_quest:
                 print("    -> [ĐANG THEO DÕI]")

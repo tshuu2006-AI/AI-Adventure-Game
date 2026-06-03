@@ -280,6 +280,8 @@ class ChoiceAgent(BaseCloudAgent):
             current_location (str): Tên địa điểm hiện tại.
             npc_name (str): Tên (các) NPC đang tương tác.
             recent_story_summary (str): Tóm tắt nội dung cốt truyện gần nhất.
+            active_quest_context (str): Tóm tắt nhiệm vụ
+            quest_items (str): Các item của nhiệm vụ
 
         Returns:
             Dict[str, Any]: JSON chứa danh sách các lựa chọn (choices).

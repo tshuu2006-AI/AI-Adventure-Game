@@ -11,7 +11,7 @@ from google.genai import types
 from engine.DataManager.PlayerState import PlayerState
 from engine.Utils.PromptManager import PromptManager
 from engine.Utils.logger import game_logger
-from world.Entity import ConsumableItem, QuestItem, MiscellaneousItem, WeaponItem, BaseItem
+from world.Entity import ConsumableItem, QuestItem, MiscellaneousItem, WeaponItem, BaseItem, Quest
 
 
 class BaseLocalAgent:
@@ -348,7 +348,10 @@ class QuestAgent(BaseLocalAgent):
     Agent chuyên trách xử lý vòng đời của Nhiệm vụ (Sinh nhiệm vụ mới và Nghiệm thu).
     """
 
-    async def initialize_main_quest(self, world_name: str, world_theme: str, world_conflict: str, world_mission: str,
+    async def initialize_main_quest(self, world_name: str,
+                                    world_theme: str,
+                                    world_conflict: str,
+                                    world_mission: str,
                                     key_npcs: str) -> dict:
         """
         Khởi tạo Nhiệm vụ chính (Epic Campaign) dựa trên Kinh thánh thế giới và các NPC quan trọng.
@@ -369,7 +372,7 @@ class QuestAgent(BaseLocalAgent):
         return result
 
     
-    async def generate_quests(self, location_name: str, npc_names: str, context: str):
+    async def generate_quests(self, location_name: str, npc_names: str, context: str) -> Quest:
         """
         Dựa vào bối cảnh, địa điểm và NPC hiện tại để sinh ra các nhiệm vụ phụ phù hợp.
         """
@@ -381,8 +384,18 @@ class QuestAgent(BaseLocalAgent):
             system_prompt=sys_prompt,
             user_prompt=user_prompt
         )
+        while isinstance(result, list):
+            result = result[0]
+        quest = Quest(
+            id = None,
+            name=result.get("title", "không rõ"),
+            description=result.get("description", "None"),
+            objectives=result.get("objectives", []),
+            give_by = result.get("give_by", "không rõ"),
+            rewards=result.get("rewards", [])
+        )
 
-        return result.get("quests", [])
+        return quest
 
     async def evaluate_quest_status(self, quest_title: str, objectives: List[str], player_input: str,
                                     story_response: str) -> Dict[str, Any]:
@@ -390,7 +403,9 @@ class QuestAgent(BaseLocalAgent):
         Đọc hành động của người chơi và phản hồi của cốt truyện để đánh giá xem
         mục tiêu nhiệm vụ đã được hoàn thành hay chưa.
         """
-        objectives_str = ", ".join(objectives)
+        objectives_str = ""
+        for objective in objectives:
+            objectives_str += f"- {objective}\n"
         sys_prompt = self.pm.get_prompt('QuestAgent', 'systemEvaluate')
         user_prompt = self.pm.get_prompt('QuestAgent', 'userEvaluate',
                                          quest_title=quest_title,
@@ -404,25 +419,29 @@ class QuestAgent(BaseLocalAgent):
         )
 
         # Đảm bảo có key mặc định nếu LLM lỗi
-        if not result or "status" not in result:
-            return {"status": "in_progress", "reasoning": "Không thể phân tích ngữ nghĩa."}
+        if not result or "objectives_status" not in result or "is_new_quest_offered" not in result:
+            return {"reasoning": "Không thể phân tích ngữ nghĩa.", "objective_status": [0] * len(objectives), "is_new_quest_offered": False}
 
         return result
 
-    def _format_quest_info(self, quest) -> str:
+    def _format_quest_info(self, quest:Quest) -> str:
         """Hàm phụ trợ để trích xuất thông tin Quest thành chuỗi cho LLM"""
         if not quest:
             return "- Mạch truyện chính (Tự do khám phá, không gò bó mục tiêu)"
 
+        objectives_str = ""
+        for objective in quest.objectives:
+            objectives_str += f"- {objective}\n"
+
         info = f"- Tên nhiệm vụ: {quest.name}\n"
         info += f"- Mô tả: {quest.description}\n"
-        info += f"- Mục tiêu: {quest.objective}"
+        info += f"- Mục tiêu\n: {objectives_str}"
         if hasattr(quest, 'status'):
             info += f"- Trạng thái hiện tại: {quest.status}\n"
         return info
 
 
-    async def generate_transition_narrative(self, source_quest, target_quest, recent_story: str) -> str:
+    async def generate_transition_narrative(self, source_quest: Quest, target_quest: Quest, recent_story: str) -> str:
         """
         Sinh ra đoạn văn miêu tả sự chuyển hướng chú ý của người chơi.
         """

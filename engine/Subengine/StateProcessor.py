@@ -6,11 +6,18 @@ from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor, ItemAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
 from engine.Agents.CloudAgents import LocationAgent, NPCAgent
 from static.config import STATE_EXTRACTOR_MODEL, MEMORY_EXTRACTOR_MODEL, LOCATION_AGENT_MODEL, NPC_AGENT_MODEL, ITEM_AGENT_MODEL
-
+from engine.DataManager.DatabaseManager import DatabaseManager
+from engine.Utils.PromptManager import PromptManager
+from engine.DataManager.PlayerState import PlayerState
 
 class StateProcessor:
     """Lớp quản lý việc tạo sinh NPC, interface để cập nhật các thông tin trong cơ sở dữ liệu"""
-    def __init__(self, db, player_state, image_manager, groq_api_key, gemini_api_key, pm):
+    def __init__(self, db: DatabaseManager,
+                 player_state: PlayerState,
+                 image_manager,
+                 groq_api_key: str,
+                 gemini_api_key: str,
+                 pm: PromptManager):
         self.db = db
         self.player_state = player_state
         self.image_manager = image_manager
@@ -175,7 +182,11 @@ class StateProcessor:
                         npc.status = new_status
                     break
 
-    async def _update_player_state(self, items_added: list, items_removed: list, story_response: str, context: str, is_safe_zone: bool):
+    async def _update_player_state(self, items_added: list,
+                                   items_removed: list,
+                                   story_response: str,
+                                   context: str,
+                                   is_safe_zone: bool):
         """Hàm chuyên xử lý logic túi đồ và tự động lưu Checkpoint (Snapshot) khi an toàn."""
 
         # ==========================================
@@ -249,7 +260,7 @@ class StateProcessor:
                 game_logger.debug(f"[Checkpoint] Đã lưu Snapshot an toàn trực tiếp vào Quest: '{current_quest.name}'.")
 
 
-    async def process_background_tasks(self, player_input, story_response):
+    async def process_background_tasks(self, player_input: str, story_response: str):
         """Chạy song song trích xuất State"""
         start_bg = time.perf_counter()
 

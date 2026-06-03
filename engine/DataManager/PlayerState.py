@@ -4,6 +4,7 @@ lưu trữ và quản lý trạng thái tổng thể của người chơi
 
 
 from engine.DataManager.InventoryManager import InventoryManager
+from world.Entity import BaseItem, Quest
 
 
 class PlayerState:
@@ -66,13 +67,13 @@ class PlayerState:
         """
         return self.inventory_manager.get_all_item_names()
 
-    def add_item(self, item):
+    def add_item(self, item: BaseItem):
         """
         Thêm vật phẩm vào túi đồ (Tự động phân loại).
         """
         self.inventory_manager.add_item(item)
 
-    def remove_item(self, item):
+    def remove_item(self, item: BaseItem):
         """
         Xóa vật phẩm khỏi túi đồ.
         """
@@ -89,7 +90,7 @@ class PlayerState:
         return self.inventory_manager.get_quest_items(quest=self.active_quest)
 
 
-    def save_snapshot(self, snapshot):
+    def save_snapshot(self, snapshot: dict):
       self.active_quest.snapshot = snapshot
 
     # ==========================================
@@ -143,3 +144,7 @@ class PlayerState:
         for item in self.inventory_manager.quest_item_inventory:
             if item.quest.id == self.active_quest.id:
                 self.quest_items.append(item)
+
+
+    def add_quest(self, quest: Quest):
+        self.quests.append(quest)
