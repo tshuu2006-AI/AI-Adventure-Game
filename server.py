@@ -457,11 +457,17 @@ async def poll_updates():
         active_quest = orchestrator.player_state.active_quest
         quest_payload = None
         if active_quest:
-            raw_obj = getattr(active_quest, 'objectives', getattr(active_quest, 'objective', ''))
-            obj_text = raw_obj[0] if isinstance(raw_obj, list) and len(raw_obj) > 0 else str(raw_obj)
+            # Lấy mảng objectives
+            raw_obj = getattr(active_quest, 'objectives', getattr(active_quest, 'objective', []))
+            if isinstance(raw_obj, str): raw_obj = [raw_obj] # Đảm bảo luôn là list
+            
+            # Lấy mảng is_finished (nếu không có thì mặc định mảng toàn 0)
+            is_fin = getattr(active_quest, 'is_finished', [0]*len(raw_obj))
+            
             quest_payload = {
                 "name": active_quest.name,
-                "objective": obj_text, # Ép trả về chữ "objective" để Unity C# không bị lỗi
+                "objectives": raw_obj,  # Gửi nguyên mảng chữ
+                "is_finished": is_fin,  # Gửi nguyên mảng số [0, 1, 0...]
                 "status": active_quest.status
             }
             
@@ -497,12 +503,16 @@ async def get_diary():
         quests_payload = []
         if getattr(orchestrator.player_state, 'quests', None):
             for q in orchestrator.player_state.quests:
-                raw_obj = getattr(q, 'objectives', getattr(q, 'objective', ''))
-                obj_text = raw_obj[0] if isinstance(raw_obj, list) and len(raw_obj) > 0 else str(raw_obj)
+                raw_obj = getattr(q, 'objectives', getattr(q, 'objective', []))
+                if isinstance(raw_obj, str): raw_obj = [raw_obj]
+                
+                is_fin = getattr(q, 'is_finished', [0]*len(raw_obj))
+
                 quests_payload.append({
                     "name": getattr(q, 'name', 'Nhiệm vụ ẩn'),
                     "description": getattr(q, 'description', ''),
-                    "objective": obj_text,
+                    "objectives": raw_obj,
+                    "is_finished": is_fin,
                     "status": getattr(q, 'status', 'available'),
                     "is_active": (q == orchestrator.player_state.active_quest)
                 })
