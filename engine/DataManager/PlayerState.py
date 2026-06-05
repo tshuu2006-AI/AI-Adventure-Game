@@ -4,7 +4,8 @@ lưu trữ và quản lý trạng thái tổng thể của người chơi
 
 
 from engine.DataManager.InventoryManager import InventoryManager
-from world.Entity import BaseItem, Quest
+from engine.DataManager.StatsManager import StatsManager
+from world.Entity import BaseItem, Quest, WeaponItem
 
 
 class PlayerState:
@@ -24,21 +25,33 @@ class PlayerState:
 
         # Khởi tạo trình quản lý túi đồ độc lập (Composition)
         self.inventory_manager = InventoryManager()
+        self.stats = StatsManager()
 
-        # Chỉ số cơ bản
-        self.hp = 100
-        self.max_hp = 100
-        self.base_stats = {
-            "STR": 10,  # Sức mạnh: Tác động đến sát thương vật lý
-            "AGI": 10,  # Nhanh nhẹn: Tác động đến tốc độ, né tránh
-            "INT": 10  # Trí tuệ: Tác động đến phép thuật, giải mã
-        }
 
         self.is_safe_zone = False
         self.active_quest = None
         self.main_quest = None
         self.quests = []
         self.quest_items = []
+
+
+    def equip_weapon(self, weapon: WeaponItem):
+        """Hàm sử dụng vũ khí"""
+        self.inventory_manager.equip_weapon(weapon=weapon)
+        self.stats.apply_equipment(weapon.modifiers)
+
+
+    def unequip_weapon(self):
+        """Hàm bỏ vũ khí"""
+        self.inventory_manager.unequip_weapon()
+        self.stats.apply_equipment(None)
+
+
+    def change_weapon(self, weapon: WeaponItem):
+        """Hàm đổi vũ khí"""
+        self.inventory_manager.change_weapon(weapon)
+        self.stats.apply_equipment(weapon.modifiers)
+
 
 
     def back_to_main_quest(self) -> bool:

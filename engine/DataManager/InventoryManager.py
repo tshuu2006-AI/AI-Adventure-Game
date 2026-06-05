@@ -117,23 +117,18 @@ class InventoryManager:
     # ==========================================
     # NHÓM 3: CÁC HÀM THỰC THI LOGIC GAME
     # ==========================================
-    def equip_weapon(self, weapon_name: str) -> str:
-        """
-        Trang bị một vũ khí từ túi đồ.
-
-        Args:
-            weapon_name (str): Tên vũ khí cần trang bị.
-
-        Returns:
-            str: Thông báo kết quả của hành động trang bị.
-        """
-        weapon = self.get_item_by_name(weapon_name)
-
-        if not weapon or weapon not in self.weapon_item_inventory:
-            return "Không tìm thấy vũ khí này trong túi đồ."
-
+    def equip_weapon(self, weapon: WeaponItem):
+        """Hàm sử dụng vũ khí"""
         self.equipped_weapon = weapon
-        return f"Đã trang bị {weapon.name}."
+
+    def unequip_weapon(self):
+        """Hàm bỏ vũ khí"""
+        self.equipped_weapon = None
+
+    def change_weapon(self, weapon: WeaponItem):
+        """Hàm đổi vũ khí"""
+        self.unequip_weapon()
+        self.equip_weapon(weapon=weapon)
 
     def use_consumable(self, item_name: str, player_state) -> str:
         """

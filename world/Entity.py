@@ -97,10 +97,10 @@ class WeaponItem(BaseItem):
         """
         super().__init__(id, name, description, 'weapon')
         self.base_damage = base_damage
-        # Đảm bảo modifiers luôn là một dictionary (nếu không truyền vào sẽ là dict rỗng)
         self.modifiers = modifiers or {}
         self.status_effect = status_effect
         self.proc_chance = proc_chance
+
 
 
 class QuestItem(BaseItem):

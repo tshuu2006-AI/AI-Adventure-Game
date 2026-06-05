@@ -293,7 +293,7 @@ ItemAgent:
     1. STRICT LOGIC: Can a "Thanh gỗ" + "Đá nhọn" make a "Giáo đá"? Yes. Can a "Thanh gươm" + "Bánh mì" make anything? No. Fail logically.
     2. BASE ATTRIBUTES: If SUCCESS, you MUST determine the NEW item's "name" (string), "type" (MUST be exactly 'weapon' or 'miscellaneous'), and "description" (string).
     3. TYPE-SPECIFIC ATTRIBUTES: You MUST include additional keys inside the "new_item" object depending ONLY on the chosen "type":
-       - If 'weapon': Add "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties, e.g., {"str": 3, "agi": -1}), "status_effect" (string, e.g., "burn", "poison", "stun", or null), and "proc_chance" (float between 0.0 and 1.0).
+       - If 'weapon': Add "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties, e.g., {"strength": 3, "agility": -1, ,"defense": 0}), "status_effect" (string, e.g., "burn", "poison", "stun", or null), and "proc_chance" (float between 0.0 and 1.0).
        - If 'miscellaneous': No additional keys are needed beyond the base attributes.
     4. Output STRICTLY JSON. Do not include markdown blocks (like ```json).
     
@@ -306,7 +306,7 @@ ItemAgent:
         "type": "weapon",
         "description": "Một mũi giáo được buộc chặt bằng nhựa cây, tuy thô kệch nhưng khá nguy hiểm.",
         "base_damage": 15,
-        "modifiers": {"str": 2, "agi": -1},
+        "modifiers": {"strength": 2, "agility": -1, "defense": 0},
         "status_effect": "bleed",
         "proc_chance": 0.15
       }
@@ -316,8 +316,7 @@ ItemAgent:
     [Player Intent]: {action_details}
     [Items to combine]: {items_list}
     Evaluate.
-    
-    
+  
     
 
 QuestAgent:
