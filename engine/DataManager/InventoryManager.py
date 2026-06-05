@@ -39,6 +39,14 @@ class InventoryManager:
         elif item.item_type == "miscellaneous":
             self.interactive_item_inventory.append(item)
 
+
+    def search(self, item) -> bool:
+        for i in (self.quest_item_inventory + self.interactive_item_inventory + self.consumable_item_inventory + self.weapon_item_inventory):
+            if item == i:
+                return True
+        return False
+
+
     def remove_item(self, item):
         """
         Xóa vật phẩm khỏi túi đồ. Tự động tháo trang bị nếu vật phẩm đó đang được sử dụng.

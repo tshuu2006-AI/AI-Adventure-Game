@@ -154,7 +154,7 @@ StateExtractor:
     Task: Read the recent game interaction and detect changes based on the provided Context.
     
     RULES:
-    1. ITEMS ADDED: Extract items the player successfully picked up, bought, or received. Output as a list of objects containing 'name' (item's name) and 'type' (MUST be exactly one of: 'weapon', 'quest', 'miscellaneous', 'consumable').
+    1. ITEMS ADDED: Extract PHYSICAL items the player successfully picked up, bought, or received. Output as a list of objects containing 'name' (item's name) and 'type' (MUST be exactly one of: 'weapon', 'quest', 'miscellaneous', 'consumable'). DO NOT confuse receiving a Mission/Quest with receiving a physical item.
     2. ITEMS REMOVED: If an item is lost, consumed, or thrown away, you MUST output its EXACT name from the [Current Inventory].
     3. NPCS ARRIVED: List names of characters/creatures that just appeared or approached the player. Only output short names.
     4. NPCS LEFT: If an NPC from [Current NPCs] dies, runs away, or the player leaves them behind, output their EXACT name.
@@ -264,7 +264,7 @@ ItemAgent:
     1. LINGUISTIC CONSISTENCY: All generated text (names, descriptions) MUST be in VIETNAMESE.
     2. BASE ATTRIBUTES: Every item MUST have "name" (string), "type" (string, matching the input), and "description" (string, vivid and thematic). The description MUST describe a physical object that can be held or stored in a backpack.
     3. TYPE-SPECIFIC ATTRIBUTES: You must include specific keys depending ONLY on the [Item Type]:
-       - If 'consumable': Add "effect" (integer, representing the amount of HP healed).
+       - If 'consumable': Add "effect" (object mapping stats to integer (can be negative) bonuses, e.g., {"hp": 50, "strength": 1, 'agility': 10, 'defense': 0, 'intelligence': -3}).
        - If 'weapon': Add "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties), "status_effect" (string, or null if none), and "proc_chance" (float).
        - If 'quest': This means "QUEST ITEM" (Vật phẩm nhiệm vụ, e.g., a key, a map, a letter, a relic). It DOES NOT mean a mission or a task. No additional keys are needed beyond the base attributes.
        - If 'miscellaneous': No additional keys are needed beyond the base attributes.
@@ -338,9 +338,9 @@ QuestAgent:
       "give_by": "the npc that give the quest, can be None",
       "rewards": [
           {
-          name: "name of the reward",
-          description: "description of the reward",
-          type: "item" or "information"
+          "name": "name of the reward",
+          "description": "description of the reward",
+          "type": "item"
           }
       ]
     }
@@ -374,21 +374,13 @@ QuestAgent:
       "is_new_quest_offered": false
     }
 
-    userEvaluate: |
-    [Quest Title]: {quest_title}
-    [Objectives]: {objectives}
-    [Player Input]: {player_input}
-    [Story Response]: {story_response}
-    
-    Evaluate the current status of the objectives AND detect any new quest offers.
   userEvaluate: |
     [Quest Title]: {quest_title}
     [Objectives]: {objectives}
     [Player Input]: {player_input}
     [Story Response]: {story_response}
     
-    Evaluate the current status of this quest.
-    
+    Evaluate the current status of the objectives AND detect any new quest offers.
 
   systemTransitionNarrative: |
     Role: RPG Narrative Director. Language: Vietnamese.

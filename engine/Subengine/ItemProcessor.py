@@ -73,7 +73,7 @@ class ItemProcessor:
         elif item_type == "consumable":
             # Đề phòng trường hợp trong tương lai LLM sinh ra đồ tiêu hao
             try:
-                effect = int(raw_new_item.get("effect", 0))
+                effect = raw_new_item.get("effect", {})
             except (ValueError, TypeError):
                 effect = 0
 

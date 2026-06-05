@@ -5,7 +5,7 @@ lưu trữ và quản lý trạng thái tổng thể của người chơi
 
 from engine.DataManager.InventoryManager import InventoryManager
 from engine.DataManager.StatsManager import StatsManager
-from world.Entity import BaseItem, Quest, WeaponItem
+from world.Entity import BaseItem, Quest, WeaponItem, ConsumableItem
 
 
 class PlayerState:
@@ -47,11 +47,23 @@ class PlayerState:
         self.stats.apply_equipment(None)
 
 
+    def is_dead(self):
+        if self.stats.current_hp <= 0:
+            return True
+        return False
+
+
     def change_weapon(self, weapon: WeaponItem):
         """Hàm đổi vũ khí"""
         self.inventory_manager.change_weapon(weapon)
         self.stats.apply_equipment(weapon.modifiers)
 
+
+    def use_consumables(self, consumable_item: ConsumableItem):
+        if self.inventory_manager.search(consumable_item):
+            self.stats.apply_effect(consumable_item.effect)
+            self.inventory_manager.remove_item(item=consumable_item)
+        return
 
 
     def back_to_main_quest(self) -> bool:

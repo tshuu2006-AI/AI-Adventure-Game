@@ -25,6 +25,14 @@ class StatsManager:
             for k in self.base_stats.keys()
         }
 
+    def apply_effect(self, effect: dict):
+        if 'hp' in effect.keys():
+            self.heal(effect['hp'])
+
+        for k in self.base_stats:
+            self.base_stats[k] += effect.get(k, 0)
+
+
     def apply_equipment(self, modifiers: dict):
         """Cập nhật chỉ số khi mặc/tháo trang bị"""
         # Xóa buff cũ

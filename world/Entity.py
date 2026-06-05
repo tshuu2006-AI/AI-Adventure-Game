@@ -51,36 +51,21 @@ class ConsumableItem(BaseItem):
     Sẽ bị mất đi hoặc giảm số lượng sau khi sử dụng.
     """
 
-    def __init__(self, id, name, description, effect):
+    def __init__(self, id, name:str, description:str, effect: dict):
         """
         Khởi tạo vật phẩm tiêu hao.
 
         Args:
-            effect (int): Giá trị tác dụng (Ví dụ: số lượng HP được hồi phục).
+            effect (dict): Giá trị tác dụng (Ví dụ: số lượng HP được hồi phục).
         """
         super().__init__(id, name, description, 'consumable')
-        self.effect = effect
-
-
-    def apply_effect(self, player_state) -> str:
-        """
-        Hàm thực thi logic hồi máu/năng lượng khi người chơi sử dụng vật phẩm.
-
-        Args:
-            player_state (PlayerState): Đối tượng chứa trạng thái hiện tại của người chơi.
-
-        Returns:
-            str: Chuỗi thông báo kết quả sau khi sử dụng vật phẩm.
-        """
-        # Cộng thêm chỉ số HP dựa trên giá trị effect của vật phẩm
-        player_state.hp += self.effect
-
-        # Đảm bảo HP không vượt quá mức tối đa cho phép
-        if player_state.hp > player_state.max_hp:
-            player_state.hp = player_state.max_hp
-
-        return f"Đã sử dụng {self.name}. HP hồi phục {self.effect} điểm. (HP hiện tại: {player_state.hp}/{player_state.max_hp})"
-
+        self.effect = {
+            'hp': effect.get('hp', 0),
+            'strength': effect.get('strength', 0),
+            'agility': effect.get('agility', 0),
+            'defense': effect.get('defense', 0),
+            'intelligence': effect.get('intelligence', 0)
+        }
 
 class WeaponItem(BaseItem):
     """
@@ -100,7 +85,6 @@ class WeaponItem(BaseItem):
         self.modifiers = modifiers or {}
         self.status_effect = status_effect
         self.proc_chance = proc_chance
-
 
 
 class QuestItem(BaseItem):
