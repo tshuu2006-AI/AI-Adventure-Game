@@ -1,7 +1,7 @@
 import time
 
 from engine.Subengine import ItemProcessor
-from world.Entity import NPC, Quest
+from world.Entity import NPC, Quest, Location, ConsumableItem
 import os
 from engine.DataManager.DatabaseManager import DatabaseManager
 from engine.DataManager.PlayerState import PlayerState
@@ -70,6 +70,63 @@ class GameOrchestrator:
         self.last_choices = []
 
         game_logger.info("Hệ thống đã sẵn sàng!")
+
+    async def setup_new_game_api(self, player_idea: str) -> str:
+        """Hàm chuyên dụng để khởi tạo New Game từ API"""
+        self.player_state.clear()
+
+        await self.db.connect()
+        await self.db.reset_database()
+        await self.db.create_tables()
+        self.image_manager.clear_image_folders()
+
+        world_bible_dir = os.path.join(self.db.db_folder, "world_bible.json")
+        world_bible = await self.story_director.create_world_bible(player_idea, path=world_bible_dir)
+
+        # Thiết lập World State
+        world_data = world_bible.get("system_requirements", {})
+        self.world_state.load_state(data = world_data)
+
+        # Tạo bối cảnh và NPC
+        starting_loc = await self.story_director.create_starting_location(
+            world_state = self.world_state
+        )
+        self.player_state.set_location(starting_loc)
+
+        starting_npcs = await self.story_director.initialize_key_npcs(
+            world_state = self.world_state
+        )
+
+        for npc in starting_npcs:
+            self.player_state.add_npc(npc)
+
+        await self.quest_sys.initialize_main_quest(world_state= self.world_state,
+                                                   starting_npcs=starting_npcs)
+
+        # Sinh truyện mở màn
+        story_response = ""
+        async for chunk in self.story_director.initialize_story(starting_loc, world_bible_dir=world_bible_dir):
+            story_response += chunk
+
+        return story_response
+
+    def get_encountered_npc_names(self) -> list:
+        """Hàm bọc (Wrapper) để lấy danh sách tên NPC hiện tại"""
+        return [n.name for n in self.player_state.get_current_npcs()]
+
+
+    async def generate_turn_narrative_api(self, action: str) -> str:
+        """Hàm bọc xử lý toàn bộ logic sinh cốt truyện (RAG + AI) cho API"""
+        directive = await self.action_sys.get_system_directive(action)
+        hybrid_ctx, npcs_ctx = await self.memory_sys.get_hybrid_context(action, self.player_state)
+
+        story_response = ""
+        async for chunk in self.story_director.narrate_turn(
+                action, self.world_state, self.player_state, npcs_ctx, hybrid_ctx, directive):
+            story_response += chunk
+
+        return story_response
+
 
     async def _process_game_turn(self, player_input: str):
         """
@@ -188,17 +245,9 @@ class GameOrchestrator:
         print("[Hệ thống] Đang tạo điểm xuất phát và vẽ bối cảnh...")
         game_logger.info("Khởi tạo Location đầu tiên...")
 
-        starting_loc_obj = await self.story_director.create_starting_location(
-            self.world_state.name, self.world_state.type, self.world_state.theme_and_tone
-        )
+        starting_loc_obj = await self.story_director.create_starting_location(world_state=self.world_state)
 
-        starting_npcs = await self.story_director.initialize_key_npcs(
-            world_name=self.world_state.name,
-            world_type=self.world_state.type,
-            world_theme=self.world_state.theme_and_tone,
-            world_conflict = self.world_state.core_conflict,
-            world_mission = self.world_state.world_mission
-        )
+        starting_npcs = await self.story_director.initialize_key_npcs(world_state=self.world_state)
 
         # Lưu vào State và Database
         self.player_state.currentLocation = starting_loc_obj
@@ -390,3 +439,83 @@ class GameOrchestrator:
                 print(f"\n[Đạo diễn]: 🔄 {transition_msg}\n")
             else:
                 print("\n[Hệ thống] ID nhiệm vụ không hợp lệ!")
+
+
+    async def switch_quest(self, target_quest: Quest, recent_story: str, current_choices: list[str]):
+        transition_msg = await self.quest_sys.switch_quest(
+            target_quest=target_quest,
+            recent_story=recent_story,
+            current_choices=current_choices
+        )
+        return transition_msg
+
+
+    async def add_location_to_db(self, location: Location):
+        await self.db.add_location_to_db(location_obj = location)
+
+    async def add_npc_to_db(self, npc: NPC):
+        await self.db.add_npc_to_db(npc_obj = npc)
+
+    async def quest_evaluate_turn(self, player_input: str, story_response: str):
+        await self.quest_sys.evaluate_turn(player_input=player_input,
+                                           story_response=story_response)
+
+    async def state_process_background_tasks(self, player_input: str, story_response:str):
+        await self.state_sys.process_background_tasks(player_input=player_input,
+                                                      story_response=story_response)
+
+    async def memory_save_turn(self, player_input: str,
+                                story_response:str,
+                                episode_data,
+                                current_location_name: str,
+                                encountered_npc_names: str):
+        await self.memory_sys.save_turn(player_input=player_input,
+            story_response=story_response,
+            episode_data=episode_data,
+            current_location_name=current_location_name,
+            encountered_npc_names=encountered_npc_names
+        )
+
+    def use_consumbales(self, consumable_item: ConsumableItem):
+        self.player_state.use_consumables(consumable_item
+
+                                          )
+    #====================================================
+    #=                    GETTER                        =
+    #====================================================
+    def get_player_item(self, item_name: str):
+        return self.player_state.get_item(item_name)
+
+    def get_all_items(self):
+        return self.player_state.get_all_item_names()
+
+    def get_current_location_name(self):
+        return self.player_state.get_current_location_name()
+
+    def get_current_npcs(self):
+        return self.player_state.get_current_npcs()
+
+    def get_current_location(self):
+        return self.player_state.get_current_location()
+
+    def get_current_hp(self):
+        return self.player_state.get_current_hp()
+
+    def get_max_hp(self):
+        return self.player_state.get_max_hp()
+
+    def get_equipped_weapon(self):
+        return self.player_state.get_equipped_weapon()
+
+    def get_active_quest(self):
+        return self.player_state.get_active_quest()
+
+    def get_all_quests(self):
+        return self.player_state.get_all_quests()
+
+    async def get_all_npcs(self):
+        return await self.db.get_all_npcs()
+
+    async def get_all_locations(self):
+        return await self.db.get_all_npcs()
+

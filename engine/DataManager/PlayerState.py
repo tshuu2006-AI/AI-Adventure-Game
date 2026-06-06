@@ -5,7 +5,7 @@ lưu trữ và quản lý trạng thái tổng thể của người chơi
 
 from engine.DataManager.InventoryManager import InventoryManager
 from engine.DataManager.StatsManager import StatsManager
-from world.Entity import BaseItem, Quest, WeaponItem, ConsumableItem
+from world.Entity import BaseItem, Quest, WeaponItem, ConsumableItem, Location, NPC
 
 
 class PlayerState:
@@ -35,16 +35,24 @@ class PlayerState:
         self.quest_items = []
 
 
-    def equip_weapon(self, weapon: WeaponItem):
-        """Hàm sử dụng vũ khí"""
-        self.inventory_manager.equip_weapon(weapon=weapon)
-        self.stats.apply_equipment(weapon.modifiers)
+    def clear(self):
+        """
+        Làm sạch toàn bộ trạng thái hiện tại của người chơi, đưa về mốc mặc định (Reset).
+        Thường được gọi khi bắt đầu một phiên New Game mới.
+        """
+        self.currentLocation = None
+        self.currentTurn = 0
+        self.currentNPCs = []
 
+        # Khởi tạo lại Túi đồ và Chỉ số (Stats) mới hoàn toàn để xóa dữ liệu cũ
+        self.inventory_manager.clear()
+        self.stats.clear()
 
-    def unequip_weapon(self):
-        """Hàm bỏ vũ khí"""
-        self.inventory_manager.unequip_weapon()
-        self.stats.apply_equipment(None)
+        self.is_safe_zone = False
+        self.active_quest = None
+        self.main_quest = None
+        self.quests = []
+        self.quest_items = []
 
 
     def is_dead(self):
@@ -83,36 +91,12 @@ class PlayerState:
         # 3. Thông báo cho hệ thống rằng đã về mạch chính
         return True
 
-    # ==========================================
-    # CÁC HÀM GIAO TIẾP VỚI TÚI ĐỒ (Wrapper Methods)
-    # ==========================================
-    def get_all_item_names(self):
-        """
-        Trích xuất chuỗi danh sách tên vật phẩm đang sở hữu.
-        """
-        return self.inventory_manager.get_all_item_names()
-
-    def add_item(self, item: BaseItem):
-        """
-        Thêm vật phẩm vào túi đồ (Tự động phân loại).
-        """
-        self.inventory_manager.add_item(item)
 
     def remove_item(self, item: BaseItem):
         """
         Xóa vật phẩm khỏi túi đồ.
         """
         self.inventory_manager.remove_item(item)
-
-    def get_item_by_name(self, item_name: str):
-        """
-        Tìm kiếm vật phẩm trong túi đồ theo tên.
-        """
-        return self.inventory_manager.get_item_by_name(item_name)
-
-
-    def get_quest_items(self):
-        return self.inventory_manager.get_quest_items(quest=self.active_quest)
 
 
     def save_snapshot(self, snapshot: dict):
@@ -229,17 +213,99 @@ class PlayerState:
         # Cập nhật lại list item móc với nhiệm vụ
         self.update_quest_items()
 
+
+#==========================================================
+#=                     GETTER                             =
+#==========================================================
+    def get_all_items(self):
+        return self.inventory_manager.get_all_items()
+
+    def get_current_location(self):
+        return self.currentLocation
+
+    def get_all_item_names(self):
+        """
+        Trích xuất chuỗi danh sách tên vật phẩm đang sở hữu.
+        """
+        return self.inventory_manager.get_all_item_names()
+
+    def get_item(self, item_name: str):
+        """Hàm ủy quyền lấy vật phẩm"""
+        return self.inventory_manager.get_item_by_name(item_name)
+
+    def get_current_location_name(self) -> str:
+        """Che giấu việc truy cập thuộc tính .name"""
+        return self.currentLocation.name if self.currentLocation else "Vùng đất vô danh"
+
+    def get_current_npcs(self):
+        return self.currentNPCs
+
+
+    def get_item_by_name(self, item_name: str):
+        """
+        Tìm kiếm vật phẩm trong túi đồ theo tên.
+        """
+        return self.inventory_manager.get_item_by_name(item_name)
+
+    def get_quest_items(self):
+        return self.inventory_manager.get_quest_items(quest=self.active_quest)
+
+    def get_current_hp(self):
+        return self.stats.get_current_hp()
+
+    def get_max_hp(self):
+        return self.stats.get_max_hp()
+
+    def get_equipped_weapon(self):
+        return self.inventory_manager.get_equipped_weapon()
+
+    def get_active_quest(self):
+        return self.active_quest
+
+    def get_all_quests(self):
+        return self.quests
+
+
+
+
+#==========================================================
+#=                     SETTER                             =
+#==========================================================
     def update_quest_items(self):
         self.quest_items = []
-        if not self.active_quest: 
-            return # 🌟 Thêm dòng này bảo vệ an toàn nếu load file mà không có Quest nào
-            
+        if not self.active_quest:
+            return  # 🌟 Thêm dòng này bảo vệ an toàn nếu load file mà không có Quest nào
+
         for item in self.inventory_manager.quest_item_inventory:
             # 🌟 Xử lý an toàn: Khi load json, 'item.quest' có thể bị biến thành số(int/string) thay vì object
-            item_quest_id = item.quest.id if hasattr(item.quest, 'id') else (item.quest.get("id") if isinstance(item.quest, dict) else item.quest)
+            item_quest_id = item.quest.id if hasattr(item.quest, 'id') else (
+                item.quest.get("id") if isinstance(item.quest, dict) else item.quest)
             if item_quest_id == self.active_quest.id:
                 self.quest_items.append(item)
 
-
     def add_quest(self, quest: Quest):
         self.quests.append(quest)
+
+
+    def add_item(self, item: BaseItem):
+        """
+        Thêm vật phẩm vào túi đồ (Tự động phân loại).
+        """
+        self.inventory_manager.add_item(item)
+
+    def set_location(self, location: Location):
+        self.currentLocation = location
+
+    def add_npc(self, npc: NPC):
+        self.currentNPCs.append(npc)
+
+    def equip_weapon(self, weapon: WeaponItem):
+        """Hàm sử dụng vũ khí"""
+        self.inventory_manager.equip_weapon(weapon=weapon)
+        self.stats.apply_equipment(weapon.modifiers)
+
+
+    def unequip_weapon(self):
+        """Hàm bỏ vũ khí"""
+        self.inventory_manager.unequip_weapon()
+        self.stats.apply_equipment(None)

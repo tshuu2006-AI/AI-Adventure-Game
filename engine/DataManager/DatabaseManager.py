@@ -168,3 +168,14 @@ class DatabaseManager:
             'locations': [Location(id=r[0], name=r[1], description=r[2], atmosphere=r[3], image_path=r[4]) for r in
                           loc_rows]
         }
+
+
+
+    #===============================================
+    #=                   GETTER                    =
+    #===============================================
+    async def get_all_npcs(self):
+        return await self.npc_manager.get_all()
+
+    async def get_all_locations(self):
+        return await self.location_manager.get_all()

@@ -57,7 +57,7 @@ class BaseManager(ABC):
             return False
 
         # 1. Kiểm tra tồn tại trước khi chèn để tránh lỗi trùng lặp dữ liệu (UNIQUE constraint)
-        async with self.conn.execute(f"SELECT 1 FROM {self.table_name} WHERE LOWER(name) = ?",
+        async with self.conn.execute(f"SELECT 1 as alias FROM {self.table_name} WHERE LOWER(name) = ?",
                                      (entity.name.lower(),)) as cursor:
 
             if await cursor.fetchone() is not None:
