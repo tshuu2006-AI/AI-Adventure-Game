@@ -97,8 +97,23 @@ class GameOrchestrator:
             world_state = self.world_state
         )
 
-        for npc in starting_npcs:
-            self.player_state.add_npc(npc)
+        npc_objects = []
+        for npc_data in starting_npcs:
+            if isinstance(npc_data, dict):
+                npc_obj = NPC(
+                    id=None,
+                    name=npc_data.get("name", "Vô danh"),
+                    personality=npc_data.get("personality", "Bí ẩn"),
+                    description=npc_data.get("description", "Không rõ"),
+                    affectionate=npc_data.get("affectionate", 0),
+                    location=starting_loc.name,
+                    status=npc_data.get("status", "Bình thường")
+                )
+            else:
+                npc_obj = npc_data
+            
+            npc_objects.append(npc_obj)
+            self.player_state.add_npc(npc_obj)
 
         await self.quest_sys.initialize_main_quest(world_state= self.world_state,
                                                    starting_npcs=starting_npcs)
@@ -461,7 +476,7 @@ class GameOrchestrator:
                                            story_response=story_response)
 
     async def state_process_background_tasks(self, player_input: str, story_response:str):
-        await self.state_sys.process_background_tasks(player_input=player_input,
+        return await self.state_sys.process_background_tasks(player_input=player_input,
                                                       story_response=story_response)
 
     async def memory_save_turn(self, player_input: str,
@@ -476,7 +491,7 @@ class GameOrchestrator:
             encountered_npc_names=encountered_npc_names
         )
 
-    def use_consumbales(self, consumable_item: ConsumableItem):
+    def use_consumables(self, consumable_item: ConsumableItem):
         self.player_state.use_consumables(consumable_item
 
                                           )
@@ -487,7 +502,7 @@ class GameOrchestrator:
         return self.player_state.get_item(item_name)
 
     def get_all_items(self):
-        return self.player_state.get_all_item_names()
+        return self.player_state.get_all_items()
 
     def get_current_location_name(self):
         return self.player_state.get_current_location_name()
@@ -514,8 +529,8 @@ class GameOrchestrator:
         return self.player_state.get_all_quests()
 
     async def get_all_npcs(self):
-        return await self.db.get_all_npcs()
+        return await self.db.npc_manager.get_all()
 
     async def get_all_locations(self):
-        return await self.db.get_all_npcs()
+        return await self.db.location_manager.get_all()
 

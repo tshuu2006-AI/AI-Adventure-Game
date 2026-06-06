@@ -72,6 +72,7 @@ class BaseManager(ABC):
 
         try:
             await self.conn.execute(insert_query, tuple(processed_params))
+            await self.conn.commit()
             game_logger.debug(f"[{self.table_name}] Đã lưu thành công '{entity.name}'.")
             return True
         except sqlite3.IntegrityError:

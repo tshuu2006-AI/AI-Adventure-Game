@@ -52,6 +52,7 @@ class NPCManager(BaseManager):
                 """
                 async with self.conn.execute(query, (affection_change, new_status, npc_name.lower())) as cursor:
                     if cursor.rowcount > 0:
+                        await self.conn.commit()
                         game_logger.info(
                             f"[NPCManager] 🩸 Cập nhật {npc_name}: Thể trạng -> '{new_status}', Thiện cảm ({affection_change:+d})")
                         return True
@@ -65,6 +66,7 @@ class NPCManager(BaseManager):
                 """
                 async with self.conn.execute(query, (affection_change, npc_name.lower())) as cursor:
                     if cursor.rowcount > 0:
+                        await self.conn.commit()
                         game_logger.info(f"[NPCManager] 💖 Cập nhật {npc_name}: Thiện cảm ({affection_change:+d})")
                         return True
 

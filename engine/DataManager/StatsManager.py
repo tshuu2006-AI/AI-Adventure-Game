@@ -150,7 +150,26 @@ class StatsManager:
         t = self.total_stats
         return f"HP: {self.current_hp}/{self.max_hp} | STR: {t['strength']} | AGI: {t['agility']} | INT: {t['intelligence']} | DEF: {t['defense']}"
 
+    def to_dict(self) -> dict:
+        """Đóng gói chỉ số thành Dictionary để lưu game"""
+        return {
+            "max_hp": self.max_hp,
+            "current_hp": self.current_hp,
+            "base_stats": self.base_stats,
+            "bonus_stats": self.bonus_stats
+        }
 
+    def load_state(self, data: dict):
+        """Khôi phục chỉ số từ file save"""
+        self.max_hp = data.get("max_hp", 100)
+        self.current_hp = data.get("current_hp", 100)
+        
+        self.base_stats = data.get("base_stats", {
+            "strength": 10, "agility": 10, "intelligence": 10, "defense": 5
+        })
+        self.bonus_stats = data.get("bonus_stats", {
+            "strength": 0, "agility": 0, "intelligence": 0, "defense": 0
+        })
 
 
 

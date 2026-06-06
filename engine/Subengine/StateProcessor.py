@@ -133,17 +133,22 @@ class StateProcessor:
 
             # 5. Lưu vào Database (Bảo vệ an toàn dữ liệu trả về)
             if isinstance(results, list):
-                for npc_dict in results:
+                for item in results:
                     # Khởi tạo an toàn bằng Keyword Arguments
-                    new_npc = NPC(
-                        id=None,
-                        name=npc_dict.get("name", "Vô danh"),
-                        personality=npc_dict.get("personality", "Bí ẩn"),
-                        description=npc_dict.get("description", "Không rõ"),
-                        affectionate=npc_dict.get("affectionate", 0),
-                        location=loc_name,
-                        status=npc_dict.get("status", "Bình thường")
-                    )
+                    if isinstance(item, dict):
+                        new_npc = NPC(
+                            id=None,
+                            name=item.get("name", "Vô danh"),
+                            personality=item.get("personality", "Bí ẩn"),
+                            description=item.get("description", "Không rõ"),
+                            affectionate=item.get("affectionate", 0),
+                            location=loc_name,
+                            status=item.get("status", "Bình thường")
+                        )
+                    else:
+                        new_npc = item
+                        new_npc.location = loc_name  # Cập nhật vị trí hiện tại
+                        new_npc.id = None
 
                     img_path = await self.image_manager.get_or_create_npc_image(
                         npc_name=new_npc.name,
@@ -153,7 +158,8 @@ class StateProcessor:
                         new_npc.image_path = img_path
 
                     res = await self.db.add_npc_to_db(new_npc)
-                    if res: self.player_state.currentNPCs.append(new_npc)
+                    if res: 
+                        self.player_state.currentNPCs.append(new_npc)
             else:
                 game_logger.error(f"[Cloud Lỗi] Định dạng trả về bulk_npcs không hợp lệ: {results}")
 

@@ -89,42 +89,39 @@ def image_to_base64_with_default(image_path, is_item=False):
     return ""
 
 def build_inventory_payload():
-    """Đồng bộ túi đồ chuẩn từ InventoryManager (Khắc phục xé chuỗi & Nhầm Type)"""
+    """Đồng bộ túi đồ chuẩn từ Orchestrator Wrapper"""
     try:
         payload = []
         orc = app.state.orchestrator
         
-        # 1. Lấy thẳng danh sách đối tượng Item (Không lấy chuỗi String)
         all_items = orc.get_all_items()
         
-        # Dùng set để ghi nhớ những món đồ đã đóng gói, tránh trùng lặp
         seen_names = set()
-        
         for item_obj in all_items:
+            # Bảo vệ nếu lỡ có chuỗi lọt vào
+            if isinstance(item_obj, str): 
+                continue
+
             name = getattr(item_obj, 'name', 'Vô danh')
             
-            # Khử trùng lặp: Nếu tên này chưa từng xuất hiện thì mới xử lý
             if name not in seen_names:
                 seen_names.add(name)
-                
-                # 🌟 SỬA LỖI TYPE: Phải gọi 'item_type' thay vì 'type'
                 raw_type = getattr(item_obj, 'item_type', 'miscellaneous')
                 safe_type = str(raw_type).strip().lower() if raw_type else 'miscellaneous'
                 
                 payload.append({
                     "name": name,
-                    "type": safe_type, # Bây giờ nó sẽ ra đúng 'weapon', 'consumable'...
+                    "type": safe_type,
                     "description": getattr(item_obj, 'description', 'Chưa rõ công dụng.'),
                     "quote": getattr(item_obj, 'quote', ''),
                     "image_b64": image_to_base64_with_default(getattr(item_obj, 'image_path', None), is_item=True)
                 })
-                game_logger.info(f"Tên vật phẩm: {getattr(item_obj, 'name', name)}, loại: {safe_type}")
                 
         return payload
     except Exception as e:
         print(f"❌ Lỗi tải túi đồ: {e}")
         return []
-
+    
 def parse_story_into_segments(full_text):
     """Cắt text dựa trên tag [NPC_TALK: Tên] và [PLAYER_TALK] từ LLM"""
     pattern = r'\[(NPC_TALK|PLAYER_TALK)(?::\s*([^\]]*))?\](.*?)\[/\1\]'
@@ -220,14 +217,12 @@ async def verify_ollama_model(model_name: str) -> bool:
         return False
     return False
 
-# 🌟 Bổ sung tham số is_new_game=False
 async def background_post_turn_processing(player_input, story_response, is_new_game=False):
     """Hàm này sẽ chạy ngầm sau khi Text đã được ném về Unity"""
     orc = app.state.orchestrator
     try:
-        # 🌟 NẾU LÀ GAME MỚI -> ÉP KAGGLE VẼ ẢNH ĐỊA ĐIỂM XUẤT PHÁT
         if is_new_game:
-            curr_loc = orc.get_current_location()
+            curr_loc = orc.get_current_location() # Dùng hàm bọc
             if curr_loc:
                 if not curr_loc.image_path:
                     game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh địa điểm xuất phát: {curr_loc.name}")
@@ -239,12 +234,11 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
                     if img_path:
                         curr_loc.image_path = img_path
                 
-                # 🌟 ĐƯA LỆNH LƯU DATABASE VÀO ĐÂY (Lúc này object đã có đầy đủ ảnh)
-                await orc.add_location_to_db(curr_loc)
+                await orc.add_location_to_db(curr_loc) # Dùng hàm bọc
 
-                npcs = orc.get_all_npcs()
-                for npc in npcs :
-                    if not npc.image_path:
+                npcs = orc.player_state.currentNPCs 
+                for npc in npcs:
+                    if not getattr(npc, 'image_path', None):
                         game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh NPC: {npc.name}")
                         npc_img = await orc.image_manager.get_or_create_npc_image(
                             npc_name=npc.name,
@@ -253,17 +247,16 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
                         if npc_img:
                             npc.image_path = npc_img
                     
-                    # Giờ thì lưu thoải mái không sợ lỗi Khóa Ngoại nữa!
-                    await orc.add_npc_to_db(npc)
+                    await orc.db.add_npc_to_db(npc)
 
-        # Vẫn cho chạy trích xuất ngầm bình thường để bắt NPC/Item từ đoạn Prologue
+        # 🌟 GỌI QUA HÀM BỌC (Đã có chữ 'return' nên không còn bị crash NoneType)
         ep_data, scene_emotion = await orc.state_process_background_tasks(player_input, story_response)
         orc.current_emotion = scene_emotion
 
-        await orc.quest_evaluate_turn(player_input, story_response)
+        await orc.quest_evaluate_turn(player_input, story_response) # Dùng hàm bọc
 
-        encountered = [n.name for n in orc.get_current_npcs()]
-        await orc.memory_save_turn(
+        encountered = [n.name for n in orc.get_current_npcs()] # Dùng hàm bọc
+        await orc.memory_save_turn( # Dùng hàm bọc
             player_input=player_input,
             story_response=story_response,
             episode_data=ep_data,
@@ -400,6 +393,12 @@ async def poll_updates():
         equipped_weapon = orc.get_equipped_weapon()
         weapon_name = equipped_weapon.name if equipped_weapon else "Tay không"
 
+        t_stats = orc.player_state.stats.total_stats
+        strength_val = t_stats.get("strength", 0)
+        agility_val = t_stats.get("agility", 0)
+        defense_val = t_stats.get("defense", 0)
+        intelligence_val = t_stats.get("intelligence", 0)
+
         active_quest = orc.get_active_quest()
         quest_payload = None
         if active_quest:
@@ -424,6 +423,10 @@ async def poll_updates():
             "hp": current_hp,              # MỚI
             "max_hp": max_hp,              # MỚI
             "weapon": weapon_name,         # MỚI
+            "strength": strength_val,
+            "agility": agility_val,
+            "defense": defense_val,
+            "intelligence": intelligence_val,
             "emotion": emotion,
             "active_quest": quest_payload,
             "is_processing_bg": getattr(orc, "is_processing_bg", False)
@@ -623,14 +626,30 @@ async def load_game(slot: str = Form(...)):
 # ==========================================
 
 @app.post("/api/inventory/use")
-async def use_item(item_name: str = Form(...)):
-    """API để Unity ra lệnh dùng vật phẩm (Hồi máu, giải độc...)"""
+async def use_item(item_name: str = Form(...), action_detail: str = Form("")):
+    """API để Unity ra lệnh dùng vật phẩm (Hỗ trợ cả Use thường và Use bằng AI)"""
     try:
         orc = app.state.orchestrator
-        inv_manager = orc.player_state.inventory_manager
-        # Gọi thẳng logic đã viết rất chuẩn của bạn
-        result_msg = inv_manager.use_consumable(item_name, orc.player_state)
-        return JSONResponse(content={"success": True, "message": result_msg})
+        item_obj = orc.player_state.get_item_by_name(item_name)
+        
+        if not item_obj:
+            return JSONResponse(content={"success": False, "message": "Vật phẩm không tồn tại trong túi đồ!"})
+        
+        if item_obj.item_type == "consumable" and not action_detail.strip():
+            # Gọi trực tiếp qua PlayerState để nó cộng Máu và Stats
+            orc.player_state.use_consumables(item_obj)
+            return JSONResponse(content={"success": True, "message": f"Bạn đã sử dụng {item_name} thành công!"})
+        
+        target_items = [item_obj]
+        action_text = action_detail if action_detail.strip() else f"Sử dụng {item_name}"
+        use_result = await orc.item_sys.use(
+            item_list=target_items,
+            action_details=action_text
+        )
+        msg = use_result[1] if isinstance(use_result, tuple) else str(use_result)
+        success = use_result[0] if isinstance(use_result, tuple) else True
+        
+        return JSONResponse(content={"success": success, "message": msg})
     except Exception as e:
         game_logger.error(f"Lỗi dùng vật phẩm: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -640,9 +659,11 @@ async def equip_item(item_name: str = Form(...)):
     """API để Unity ra lệnh trang bị vũ khí"""
     try:
         orc = app.state.orchestrator
-        inv_manager = orc.player_state.inventory_manager
-        result_msg = inv_manager.equip_weapon(item_name)
-        return JSONResponse(content={"success": True, "message": result_msg})
+        item_obj = orc.player_state.get_item_by_name(item_name)
+        if not item_obj or item_obj.item_type != "weapon":
+            return JSONResponse(content={"success": False, "message": "Không thể trang bị vật phẩm này."})
+        orc.player_state.equip_weapon(item_obj) 
+        return JSONResponse(content={"success": True, "message": f"Đã trang bị {item_name}!"})
     except Exception as e:
         game_logger.error(f"Lỗi trang bị: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -651,26 +672,24 @@ async def equip_item(item_name: str = Form(...)):
 async def craft_item(items_str: str = Form(...), action_detail: str = Form(...)):
     """
     API để Unity ra lệnh chế tạo. 
-    - items_str: chuỗi các tên vật phẩm cách nhau bằng dấu phẩy (VD: 'Thanh gỗ, Đá nhọn')
-    - action_detail: mô tả ý định ghép (VD: 'Dùng dây leo buộc đá vào gỗ')
+    - items_str: chuỗi các tên vật phẩm cách nhau bằng dấu phẩy
+    - action_detail: mô tả ý định ghép
     """
     try:
         orc = app.state.orchestrator
-        inv_manager = orc.player_state.inventory_manager
         target_items = []
         
         # Tách chuỗi để lấy ra các Object Item thật từ Balo
         for name in items_str.split(","):
             if not name.strip(): continue
-            item_obj = inv_manager.get_item_by_name(name.strip())
+            item_obj = orc.player_state.get_item_by_name(name.strip())
             if item_obj:
                 target_items.append(item_obj)
 
         if len(target_items) < 1:
             return JSONResponse(content={"success": False, "message": "⚠️ Vật phẩm không tồn tại trong túi đồ!"})
 
-        # Gọi ItemAgent xử lý (Tốn API LLM)
-        craft_result = await orc.item_sys.interact(
+        craft_result = await orc.item_sys.craft(
             item_list=target_items,
             action_details=action_detail,
             image_manager=orc.image_manager
@@ -679,7 +698,7 @@ async def craft_item(items_str: str = Form(...), action_detail: str = Form(...))
     except Exception as e:
         game_logger.error(f"Lỗi chế tạo: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
-
+    
 if __name__ == "__main__":
     import uvicorn
     # QUAN TRỌNG: Phải set reload=False khi đóng gói hoặc chạy qua Unity để tránh lỗi vòng lặp tiến trình
