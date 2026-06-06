@@ -2,10 +2,10 @@ import os
 import shutil
 import json
 from engine.Utils.logger import game_logger
-from engine.Orchestration import GameOrchestrator
+
 
 class SaveManager:
-    def __init__(self, orchestrator: GameOrchestrator):
+    def __init__(self, orchestrator):
         self.orc = orchestrator
 
     def serialize_runtime_state(self) -> dict:
