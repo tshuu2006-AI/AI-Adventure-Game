@@ -11,10 +11,18 @@ from engine.DataManager.PlayerState import PlayerState
 class StoryDirector:
     """
     Quản lý toàn bộ quá trình sáng tạo nội dung của AI trên Cloud (Groq).
-    Bao gồm: Viết cốt truyện, tạo menu lựa chọn, và thiết kế bối cảnh thế giới.
+    Đóng vai trò là Game Master (GM) tổng hợp dữ liệu từ các hệ thống khác
+    để viết cốt truyện, tạo menu lựa chọn, và thiết kế bối cảnh thế giới.
     """
 
     def __init__(self, groq_api_key: str, pm: PromptManager):
+        """
+        Khởi tạo hệ thống Đạo diễn Cốt truyện và các Cloud Agents.
+
+        Args:
+            groq_api_key (str): Khóa API để kết nối với dịch vụ Groq (chạy Llama/Qwen).
+            pm (PromptManager): Trình quản lý Prompt nạp từ file YAML.
+        """
         self.pm = pm
 
         # CHÚ Ý LỰA CHỌN MODEL ĐỂ TỐI ƯU CHI PHÍ & TỐC ĐỘ:
@@ -35,11 +43,21 @@ class StoryDirector:
                            player_state: PlayerState,
                            npcs_context: List[NPC],
                            hybrid_rag_context: str,
-                           system_directive: str) -> \
-            AsyncGenerator[str, None]:
+                           system_directive: str) -> AsyncGenerator[str, None]:
         """
-        Nhận toàn bộ Bối cảnh + RAG + Hành động của người chơi để sinh cốt truyện (Streaming).
-        Hàm này trả về một Generator để GameOrchestrator có thể in từng chữ ra màn hình.
+        Nhận toàn bộ Bối cảnh, RAG, Hành động của người chơi và Chỉ thị hệ thống
+        để sinh cốt truyện tiếp theo (Streaming).
+
+        Args:
+            player_input (str): Lệnh hoặc câu thoại người chơi vừa nhập.
+            world_state (WorldState): Trạng thái thế giới hiện tại (World Bible).
+            player_state (PlayerState): Trạng thái của người chơi (vị trí, nhiệm vụ, v.v.).
+            npcs_context (List[NPC]): Danh sách các NPC đang có mặt xung quanh.
+            hybrid_rag_context (str): Văn bản tổng hợp từ Ký ức ngắn hạn (Window) và dài hạn (FAISS).
+            system_directive (str): Chỉ thị bắt buộc từ hệ thống (VD: "Ép đồ bị hỏng", "Chuyển map").
+
+        Yields:
+            str: Từng cụm ký tự (chunk) của đoạn truyện để in ra màn hình theo thời gian thực (hiệu ứng gõ chữ).
         """
         full_user_input = f"[Context]:\n{hybrid_rag_context}\n\n[Player action]: {player_input}"
 
@@ -52,7 +70,7 @@ class StoryDirector:
             npc_context_str = "Nobody is near"
 
         active_quest = player_state.active_quest
-        objectives = active_quest.objectives.copy()
+        objectives = active_quest.objectives.copy() if active_quest else []
 
         for i in range(len(objectives)):
             if active_quest.is_finished[i]:
@@ -72,14 +90,13 @@ class StoryDirector:
         game_logger.debug(
             f"[StoryDirector] Bắt đầu sinh luồng truyện (Streaming) cho hành động: '{player_input[:50]}...'")
 
-
         # Kích hoạt StoryAgent sinh chữ
         stream = self.story_agent.generate_story(
             world_theme=world_state.theme_and_tone,
             world_conflict=world_state.core_conflict,
             world_vocabulary=world_state.dynamic_vocabulary,
-            current_location=player_state.currentLocation.name,
-            npc_context = npc_context_str,
+            current_location=player_state.currentLocation.name if player_state.currentLocation else "Không xác định",
+            npc_context=npc_context_str,
             rag_context=hybrid_rag_context,  # Đã bao gồm cả FAISS và Cửa sổ trượt 4 lượt
             system_directive=system_directive,
             user_input=full_user_input,
@@ -92,18 +109,29 @@ class StoryDirector:
             yield chunk
 
     async def generate_player_choices(self, current_location_name: str, encountered_npc_name: str,
-                                      recent_story_text: str, active_quest: Quest, quest_items) -> list:
+                                      recent_story_text: str, active_quest: Quest, quest_items: List) -> list:
         """
-        Dựa vào kết quả đoạn truyện vừa sinh ra để làm ra 3-4 lựa chọn tiếp theo.
+        Dựa vào đoạn truyện vừa được kể xong để suy luận và tạo ra 3-4 gợi ý hành động
+        (menu options) khả thi cho người chơi.
+
+        Args:
+            current_location_name (str): Tên địa điểm người chơi đang đứng.
+            encountered_npc_name (str): Tên NPC đang tương tác (nếu có).
+            recent_story_text (str): Đoạn truyện Game Master vừa kể xong.
+            active_quest (Quest): Nhiệm vụ người chơi đang theo dõi (để tạo lựa chọn bám sát quest).
+            quest_items (List): Danh sách các vật phẩm nhiệm vụ người chơi đang sở hữu.
+
+        Returns:
+            list: Danh sách các dictionary, mỗi dict chứa thông tin về một lựa chọn (id, action_text, style).
         """
         game_logger.info("[StoryDirector] Đang tính toán các lựa chọn tiếp theo...")
 
         npc_name = encountered_npc_name if encountered_npc_name else "Không có"
 
-        objectives = active_quest.objectives.copy()
+        objectives = active_quest.objectives.copy() if active_quest else []
 
         for i in range(len(objectives)):
-            if active_quest.is_finished[i]:
+            if active_quest and active_quest.is_finished[i]:
                 objectives[i] = "[completed]"
 
         active_quest_context = ""
@@ -111,18 +139,18 @@ class StoryDirector:
             active_quest_context += f'Name: {active_quest.name}\n Description: {active_quest.description}\n Objectives:\n {"\n".join(objectives)}'
 
         items = quest_items
-        quest_items = []
+        formatted_quest_items = []
         for i, item in enumerate(items):
             item_str = f"Item#{i}:\n - Name: {item.name}\n - Description: {item.description}"
-            quest_items.append(item_str)
-        quest_items_str = "\n".join(quest_items)
+            formatted_quest_items.append(item_str)
+        quest_items_str = "\n".join(formatted_quest_items)
 
         choices_data = await self.choice_agent.generate_choices(
             current_location=current_location_name,
             npc_name=npc_name,
-            recent_story_summary=recent_story_text,  # Đưa đoạn truyện vừa kể vào đây để AI ra lựa chọn sát thực tế,
-            active_quest_context = active_quest_context,
-            quest_items = quest_items_str
+            recent_story_summary=recent_story_text,  # Đưa đoạn truyện vừa kể vào đây để AI ra lựa chọn sát thực tế
+            active_quest_context=active_quest_context,
+            quest_items=quest_items_str
         )
 
         choices_list = choices_data.get('choices', [])
@@ -131,7 +159,18 @@ class StoryDirector:
         return choices_list
 
     # ---- CÁC HÀM KHỞI TẠO GAME BỎ VÀO ĐÂY ----
-    async def create_world_bible(self, player_idea: str, path='./data/world_bible.json') -> dict:
+    async def create_world_bible(self, player_idea: str, path: str = './data/world_bible.json') -> dict:
+        """
+        Khởi tạo "Kinh thánh thế giới" (World Bible) dựa trên ý tưởng một câu của người chơi,
+        sau đó lưu xuống tệp JSON để tái sử dụng.
+
+        Args:
+            player_idea (str): Ý tưởng bối cảnh từ người chơi (VD: "Thế giới hậu tận thế zombie").
+            path (str, optional): Đường dẫn lưu file json. Mặc định là './data/world_bible.json'.
+
+        Returns:
+            dict: Toàn bộ cấu trúc từ điển chứa World Bible (theme, luật lệ, từ vựng...).
+        """
         game_logger.info("[StoryDirector] Đang tạo World Bible từ ý tưởng người chơi...")
         world_bible = await self.world_generator.generate_bible(player_idea=player_idea)
 
@@ -145,20 +184,46 @@ class StoryDirector:
         return world_bible
 
 
-    async def create_starting_location(self, world_name, world_type, theme):
-        game_logger.info(f"[StoryDirector] Đang khởi tạo địa điểm xuất phát cho thế giới '{world_name}'...")
-        return await self.location_agent.initialize_location(world_name, world_type, theme)
+    async def create_starting_location(self, world_state: WorldState) -> Location:
+        """
+        Khởi tạo địa điểm xuất phát đầu tiên cho người chơi dựa trên bối cảnh thế giới.
+
+        Args:
+            world_state (WorldState): Thông tin thế giới
+
+        Returns:
+            Location: Đối tượng Location chứa thông tin về điểm khởi đầu.
+        """
+        game_logger.info(f"[StoryDirector] Đang khởi tạo địa điểm xuất phát cho thế giới")
+        return await self.location_agent.initialize_location(world_state=world_state)
 
 
-    async def initialize_key_npcs(self, world_name, world_type, world_theme, world_conflict, world_mission):
-        game_logger.info(f"[StoryDirector] Đang khởi tạo các npc quan trọng cho thế giới '{world_name}'...")
-        return await self.npc_agent.initialize_npcs(world_name = world_name,
-                                                    world_type = world_type,
-                                                    world_theme = world_theme,
-                                                    world_conflict=world_conflict,
-                                                    world_mission = world_mission)
+    async def initialize_key_npcs(self, world_state: WorldState) -> list:
+        """
+        Khởi tạo các NPC quan trọng (Key NPCs) ngay từ lúc bắt đầu game để tạo động lực và xung đột.
 
-    async def initialize_story(self, starting_location: Location, world_bible_dir: str):
+        Args:
+            world_state (WorldState): Thông tin thế giới
+
+        Returns:
+            list: Danh sách chứa dictionary thông tin của các NPC khởi đầu.
+        """
+        game_logger.info(f"[StoryDirector] Đang khởi tạo các npc quan trọng cho thế giới")
+        return await self.npc_agent.initialize_npcs(world_state=world_state)
+
+
+    async def initialize_story(self, starting_location: Location, world_bible_dir: str) -> AsyncGenerator[str, None]:
+        """
+        Sinh đoạn văn bản mở màn (Prologue) dạng luồng (Streaming) khi người chơi bắt đầu game mới,
+        nhằm giới thiệu bối cảnh, mục tiêu và đưa người chơi vào địa điểm xuất phát.
+
+        Args:
+            starting_location (Location): Đối tượng địa điểm nơi người chơi thức dậy/bắt đầu.
+            world_bible_dir (str): Đường dẫn tới file world_bible.json để nạp luật thế giới.
+
+        Yields:
+            str: Từng cụm ký tự (chunk) của đoạn truyện mở đầu.
+        """
         try:
             with open(world_bible_dir, "r", encoding='utf-8') as file:
                 world_bible = json.load(file)

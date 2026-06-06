@@ -1,4 +1,5 @@
 from engine.DataManager.PlayerState import PlayerState
+from engine.DataManager.ImageManager import ImageManager
 from engine.Utils.PromptManager import PromptManager
 from world.Entity import BaseItem
 from typing import Dict, Any, List, Tuple
@@ -7,24 +8,98 @@ from engine.Utils.logger import game_logger
 from engine.Agents.LocalAgents import ItemAgent
 from static.config import ITEM_AGENT_MODEL
 
-class ItemProcessor:
-    """Xử lý toàn bộ logic liên quan đến tương tác vật phẩm (Tiêu chuẩn & Sáng tạo)"""
 
-    def __init__(self, player_state: PlayerState,
-                 gemini_api_key: str,
-                 pm: PromptManager):
+class ItemProcessor:
+    """
+    Xử lý toàn bộ logic liên quan đến tương tác vật phẩm (Tiêu chuẩn & Sáng tạo).
+    Đóng vai trò là cầu nối giữa hành động của người chơi (Craft/Use), dữ liệu túi đồ (Inventory)
+    và bộ não đánh giá logic vật lý/phép thuật (ItemAgent - LLM).
+    """
+
+    def __init__(self, player_state: PlayerState, gemini_api_key: str, pm: PromptManager):
+        """
+        Khởi tạo bộ xử lý vật phẩm.
+
+        Args:
+            player_state (PlayerState): Trạng thái hiện tại của người chơi (để truy xuất túi đồ).
+            gemini_api_key (str): Khóa API để khởi tạo Local Agent (Gemini) làm trọng tài logic.
+            pm (PromptManager): Trình quản lý prompt để lấy các kịch bản nạp cho LLM.
+        """
         # Cần local_agents (Gemini) để gọi AI check logic vật lý khi dùng đồ sáng tạo
-        self.item_agent = ItemAgent(pm = pm,
-                                    model_name = ITEM_AGENT_MODEL,
-                                    gemini_api_key= gemini_api_key)
+        self.item_agent = ItemAgent(pm=pm,
+                                    model_name=ITEM_AGENT_MODEL,
+                                    gemini_api_key=gemini_api_key)
         self.player_state = player_state
+
+
+    def _validate_items(self, item_list: List[BaseItem], action_name: str) -> Tuple[bool, Any]:
+        """
+        Kiểm tra danh sách vật phẩm người chơi muốn tương tác có hợp lệ và tồn tại hay không.
+        Đồng thời chặn việc người chơi tự ý tiêu hủy/chế tạo vật phẩm nhiệm vụ (Quest Item).
+
+        Args:
+            item_list (List[BaseItem]): Danh sách các đối tượng vật phẩm truyền vào.
+            action_name (str): Tên hành động (VD: 'chế tạo', 'sử dụng') để in ra thông báo lỗi cho mượt.
+
+        Returns:
+            Tuple[bool, Any]:
+                - (True, List[BaseItem]): Nếu tất cả vật phẩm đều hợp lệ và có trong túi đồ.
+                - (False, str): Nếu thiếu đồ hoặc dùng sai đồ nhiệm vụ, kèm chuỗi thông báo lỗi.
+        """
+        valid_items = []
+        item_names = [item.name for item in item_list]
+
+        for name in item_names:
+            item = self.player_state.get_item_by_name(name)
+            if not item:
+                return False, f"[HỆ THỐNG]: Bạn không có vật phẩm '{name}' trong túi đồ."
+            if item.item_type == "quest":
+                return False, f"[HỆ THỐNG]: Không thể {action_name} vật phẩm nhiệm vụ '{name}'."
+            valid_items.append(item)
+
+        if not valid_items:
+            return False, f"[HỆ THỐNG]: Không có vật phẩm để {action_name}."
+
+        return True, valid_items
+
+
+    def _convert_to_string(self, item_list: List[BaseItem]) -> str:
+        """
+        Chuyển đổi danh sách các object vật phẩm thành một chuỗi văn bản (String)
+        chứa đầy đủ thuộc tính để nạp làm context cho Prompt của LLM.
+
+        Args:
+            item_list (List[BaseItem]): Danh sách các vật phẩm cần chuyển đổi.
+
+        Returns:
+            str: Chuỗi văn bản chứa thông tin vật phẩm (VD: "name: X - description: Y...").
+        """
+        items = []
+        for item in item_list:
+            # Quét tất cả thuộc tính (key) và giá trị (value) của object hiện tại
+            attrs = [f"{key}: {value}" for key, value in vars(item).items() if key != 'id']
+
+            # Ghép các thuộc tính của 1 vật phẩm lại, ngăn cách bằng dấu '-'
+            items.append(" - ".join(attrs))
+
+        items_str = "\n".join(items)
+        return items_str
+
 
     def _parse_craft_result(self, json_data: dict) -> Dict[str, Any]:
         """
-        Xử lý chuỗi JSON từ LLM và khởi tạo trực tiếp Object Vật phẩm.
-        Trả về: dict chứa trạng thái thành công, lý do, và Object Vật phẩm thực tế.
-        """
+        Xử lý chuỗi JSON kết quả trả về từ LLM sau hành động chế tạo (Craft)
+        và ép kiểu để khởi tạo trực tiếp thành các Object Vật phẩm tương ứng (Weapon, Consumable...).
 
+        Args:
+            json_data (dict): Dữ liệu từ thông điệp JSON do AI Agent sinh ra.
+
+        Returns:
+            Dict[str, Any]: Từ điển chứa:
+                - 'success' (bool): Logic chế tạo có thành công hay không.
+                - 'reasoning' (str): Lời giải thích vật lý/phép thuật từ AI.
+                - 'new_item' (BaseItem | None): Object vật phẩm mới được sinh ra (nếu thành công).
+        """
         success = bool(json_data.get("success", False))
         reasoning = str(json_data.get("reasoning", "Không rõ nguyên lý."))
 
@@ -75,7 +150,7 @@ class ItemProcessor:
             try:
                 effect = raw_new_item.get("effect", {})
             except (ValueError, TypeError):
-                effect = 0
+                effect = {}
 
             new_item_obj = ConsumableItem(
                 id=None,
@@ -96,84 +171,97 @@ class ItemProcessor:
         return {
             "success": True,
             "reasoning": reasoning,
-            "new_item": new_item_obj
+            "new_item": new_item_obj,
+            "lost_items": json_data.get("lost_items", [])  # <--- THÊM DÒNG NÀY ĐỂ HỨNG DỮ LIỆU
         }
 
 
-    async def craft(self, item_list: List[BaseItem], action_details: str, image_manager=None) -> str:
+    async def craft(self, item_list: List[BaseItem], action_details: str, image_manager: ImageManager = None) -> str:
+        """
+        Thực thi quy trình chế tạo (Crafting) dựa trên sự đánh giá logic của AI.
+        Chỉ tiêu hao/hủy bỏ những vật phẩm được AI chỉ định trong mảng 'lost_items'.
+        """
+        is_valid, items_to_craft = self._validate_items(item_list=item_list, action_name='chế tạo')
+        if not is_valid:
+            return items_to_craft
 
-        # 1. Kiểm tra xem người chơi có thực sự sở hữu các món đồ này không
-        items_to_craft = []
-        item_names = [item.name for item in item_list]
-
-        for name in item_names:
-            item = self.player_state.get_item_by_name(name)
-            if not item:
-                return f"[HỆ THỐNG]: Bạn không có vật phẩm '{name}' trong túi đồ."
-            if item.item_type == "quest":
-                return f"[HỆ THỐNG]: Không thể dùng vật phẩm nhiệm vụ '{name}' để chế tạo."
-            items_to_craft.append(item)
-
-        if len(items_to_craft) == 0:
-            return "[HỆ THỐNG]: Không có vật phẩm để chế tạo."
-
-        items = []
-        for item in items_to_craft:
-            # Quét tất cả thuộc tính (key) và giá trị (value) của object hiện tại
-            attrs = [f"{key}: {value}" for key, value in vars(item).items() if key != 'id']
-
-            # Ghép các thuộc tính của 1 vật phẩm lại, ngăn cách bằng dấu '-'
-            items.append(" - ".join(attrs))
-
-        evaluation_json = await self.item_agent.interact(action_details=action_details,
-                                                items_list=items)
-
+        items_str = self._convert_to_string(items_to_craft)
+        evaluation_json = await self.item_agent.craft(action_details=action_details, items_str=items_str)
         evaluation = self._parse_craft_result(evaluation_json)
 
-        if not evaluation.get("success"):
-            return f"[CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning', 'Sự kết hợp này hoàn toàn vô lý.')}"
+        lost_item_names = evaluation.get("lost_items", [])
 
-        # 3. NẾU THÀNH CÔNG: Xóa đồ cũ, Sinh đồ mới
+        # ==========================================
+        # BƯỚC 1: XÓA ĐỒ BỊ MẤT / TIÊU HAO (CỐT LÕI)
+        # Chỉ xóa những món có tên trong danh sách lost_items
+        # (Áp dụng chung cho cả trường hợp Thành công lẫn Thất bại)
+        # ==========================================
         for old_item in items_to_craft:
-            self.player_state.remove_item(old_item)  # Hàm đã có sẵn trong InventoryManager
-            # (Tùy chọn) Xóa ảnh cũ trên ổ cứng bằng ImageManager
+            if old_item.name in lost_item_names:
+                self.player_state.inventory_manager.remove_item(old_item)
 
+        # ==========================================
+        # BƯỚC 2: XỬ LÝ KHI CHẾ TẠO THẤT BẠI
+        # ==========================================
+        if not evaluation.get("success"):
+            if lost_item_names:
+                lost_str = ", ".join(lost_item_names)
+                game_logger.info(f"[ITEM_MANAGER][CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning')} (Hậu quả: Bạn đã làm hỏng/mất {lost_str})")
+                return f"[CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning')} (Hậu quả: Bạn đã làm hỏng/mất {lost_str})"
+
+            game_logger.infor(f"ITEM_MANAGER][CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning')} (May mắn là bạn chưa làm hỏng nguyên liệu nào)")
+            return f"[CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning')} (May mắn là bạn chưa làm hỏng nguyên liệu nào)"
+
+        # ==========================================
+        # BƯỚC 3: XỬ LÝ KHI CHẾ TẠO THÀNH CÔNG
+        # ==========================================
         new_item_obj = evaluation.get("new_item")
 
         if image_manager and new_item_obj:
             game_logger.info(f"[Crafting] Đang vẽ ảnh cho vật phẩm mới: {new_item_obj.name}...")
-            # Lệnh await này sẽ chặn lại, chờ Kaggle vẽ xong mới đi tiếp
             img_path = await image_manager.get_or_create_item_image(new_item_obj.name)
             new_item_obj.image_path = img_path
 
-        self.player_state.add_item(new_item_obj)
+        # Thêm vật phẩm mới tạo vào túi đồ
+        self.player_state.inventory_manager.add_item(new_item_obj)
+
+        # Tạo chuỗi thông báo
         crafted_names = ", ".join([item.name for item in items_to_craft])
+        lost_str = ", ".join(lost_item_names) if lost_item_names else "Không tiêu hao gì"
+        game_logger.info(f"ITEM_MANAGER][CHẾ TẠO THÀNH CÔNG]: Bạn đã dùng {crafted_names} để tạo ra [{new_item_obj.name}]. {evaluation.get('reasoning')} (Đã tiêu hao: {lost_str})")
+        return f"[CHẾ TẠO THÀNH CÔNG]: Bạn đã dùng {crafted_names} để tạo ra [{new_item_obj.name}]. {evaluation.get('reasoning')} (Đã tiêu hao: {lost_str})"
 
-        return f"[CHẾ TẠO THÀNH CÔNG]: Bạn đã kết hợp {crafted_names} thành [{new_item_obj.name}]. {evaluation.get('reasoning')}"
 
+    async def use(self, item_list: List[BaseItem], action_details: str) -> Tuple[bool, str]:
+        """
+        Đánh giá và thực thi hành động sử dụng (Use) vật phẩm của người chơi lên môi trường hoặc lên bản thân.
 
-    async def use(self, item_list: List[BaseItem], action_details) -> Tuple[bool, str]:
-        items_to_use = []
-        item_names = [item.name for item in item_list]
+        Args:
+            item_list (List[BaseItem]): Danh sách vật phẩm được mang ra sử dụng.
+            action_details (str): Miêu tả chi tiết hành động (VD: "Ném bình máu vào vách đá", "Uống lọ thuốc giải").
 
-        for name in item_names:
-            item = self.player_state.get_item_by_name(name)
-            if not item:
-                return False, f"[HỆ THỐNG]: Bạn không có vật phẩm '{name}' trong túi đồ."
-            if item.item_type == "quest":
-                return f"[HỆ THỐNG]: Không thể dùng vật phẩm nhiệm vụ '{name}'."
-            items_to_use.append(item)
+        Returns:
+            Tuple[bool, str]:
+                - bool: True nếu hành động hợp lý về mặt vật lý/phép thuật, False nếu vô lý.
+                - str: Lời giải thích/nhận xét từ AI (Reasoning) làm cơ sở cho StoryAgent kể chuyện.
+        """
+        is_valid, items_to_use = self._validate_items(item_list=item_list,
+                                        action_name='sử dụng')
+        if not is_valid:
+            return False, items_to_use # items_to_use lúc này chứa chuỗi báo lỗi
 
-        if len(items_to_use) == 0:
-            return "[HỆ THỐNG]: Không có vật phẩm để sử dụng."
-
-        items = []
-        for item in items_to_use:
-            # Quét tất cả thuộc tính (key) và giá trị (value) của object hiện tại
-            attrs = [f"{key}: {value}" for key, value in vars(item).items() if key != 'id']
-
-            # Ghép các thuộc tính của 1 vật phẩm lại, ngăn cách bằng dấu '-'
-            items.append(" - ".join(attrs))
+        items_str = self._convert_to_string(item_list=items_to_use)
 
         evaluation_json = await self.item_agent.use(action_details=action_details,
-                                                         items_list=items)
+                                                    items_str=items_str)
+
+        success = evaluation_json.get('success', False)
+        reasoning = evaluation_json.get("reasoning", "Không có chuyện gì xảy ra.")
+        lost_item_names = evaluation_json.get("lost_items", [])
+
+        # XÓA CÁC VẬT PHẨM BỊ HỎNG / TIÊU HAO (Bất kể thành công hay thất bại)
+        for item in items_to_use:
+            if item.name in lost_item_names:
+                self.player_state.inventory_manager.remove_item(item)
+
+        return success, reasoning

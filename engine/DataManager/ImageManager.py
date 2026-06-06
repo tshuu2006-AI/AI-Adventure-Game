@@ -33,7 +33,7 @@ class ImageManager:
         os.makedirs(self.item_folder, exist_ok=True)
         game_logger.debug("[ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.")
 
-    def _get_safe_filename(self, name: str) -> str:
+    def get_safe_filename(self, name: str) -> str:
         """
         Mã hóa tên thực thể thành chuỗi MD5 để tạo tên file an toàn.
         Giúp tránh lỗi hệ thống tệp khi tên chứa tiếng Việt có dấu hoặc ký tự đặc biệt.
@@ -59,7 +59,7 @@ class ImageManager:
         Returns:
             str: Đường dẫn vật lý đến file ảnh, hoặc None nếu quá trình sinh ảnh thất bại.
         """
-        filename = self._get_safe_filename(f"loc_{location_name}")
+        filename = self.get_safe_filename(f"loc_{location_name}")
         filepath = os.path.join(self.loc_folder, filename)
 
         if os.path.exists(filepath):
@@ -91,7 +91,7 @@ class ImageManager:
         Returns:
             str: Đường dẫn vật lý đến file ảnh, hoặc None nếu thất bại.
         """
-        filename = self._get_safe_filename(f"npc_{npc_name}")
+        filename = self.get_safe_filename(f"npc_{npc_name}")
         filepath = os.path.join(self.npc_folder, filename)
 
         if os.path.exists(filepath):
@@ -122,7 +122,7 @@ class ImageManager:
         Returns:
             str: Đường dẫn vật lý đến file ảnh, hoặc chuỗi rỗng ("") nếu thất bại.
         """
-        filename = self._get_safe_filename(f"item_{item_name}")
+        filename = self.get_safe_filename(f"item_{item_name}")
         filepath = os.path.join(self.item_folder, filename)
 
         if os.path.exists(filepath):

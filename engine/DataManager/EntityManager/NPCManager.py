@@ -2,7 +2,7 @@
 from engine.DataManager.EntityManager.BaseManager import BaseManager
 from world.Entity import NPC
 from engine.Utils.logger import game_logger
-from typing import List, Tuple
+from typing import List
 class NPCManager(BaseManager):
     """
     Lớp quản lý table NPCs

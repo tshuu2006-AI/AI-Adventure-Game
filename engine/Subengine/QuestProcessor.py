@@ -143,7 +143,7 @@ class QuestProcessor:
 
         # 2. Gọi Agent sinh cốt truyện chiến dịch
         quest_data = await self.quest_agent.initialize_main_quest(
-            world_name=world_state.name,
+            world_name=world_state.world_name,
             world_theme=world_state.theme_and_tone,
             world_conflict=world_state.core_conflict,
             world_mission=world_state.world_mission,
@@ -151,7 +151,7 @@ class QuestProcessor:
         )
 
         # 3. Trích xuất dữ liệu an toàn
-        title = quest_data.get("title", f"Hành trình tại {world_state.name}")
+        title = quest_data.get("title", f"Hành trình tại {world_state.world_name}")
         description = quest_data.get("description", "Vận mệnh của bạn chưa được định đoạt.")
         objectives = quest_data.get("objectives", ["Sống sót"])
         give_by = quest_data.get("give_by", "Vận mệnh")

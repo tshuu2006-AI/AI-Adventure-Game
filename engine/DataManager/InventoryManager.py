@@ -1,5 +1,6 @@
 """Manage the data flow of inventory"""
 from world.Entity import BaseItem, ConsumableItem, QuestItem, MiscellaneousItem, WeaponItem
+from engine.DataManager.ImageManager import ImageManager
 import os
 from typing import List
 
@@ -13,6 +14,15 @@ class InventoryManager:
         """
         Khởi tạo hệ thống quản lý túi đồ với các ngăn chứa riêng biệt cho từng loại vật phẩm.
         """
+        self.quest_item_inventory = []
+        self.weapon_item_inventory = []
+        self.consumable_item_inventory = []
+        self.interactive_item_inventory = []
+
+        self.equipped_weapon = None
+
+
+    def clear(self):
         self.quest_item_inventory = []
         self.weapon_item_inventory = []
         self.consumable_item_inventory = []
@@ -74,54 +84,6 @@ class InventoryManager:
                 return item
         return None
 
-
-    def get_item_by_name(self, item_name: str):
-        """
-        Tìm kiếm vật phẩm theo tên (không phân biệt hoa/thường) trên tất cả các ngăn chứa.
-
-        Args:
-            item_name (str): Tên vật phẩm cần tìm.
-
-        Returns:
-            BaseItem hoặc None: Đối tượng vật phẩm nếu tìm thấy, ngược lại trả về None.
-        """
-        target = item_name.lower()
-
-        return (self._search_list(self.consumable_item_inventory, target=target) or
-                self._search_list(self.weapon_item_inventory, target=target) or
-                self._search_list(self.interactive_item_inventory, target=target) or
-                self._search_list(self.quest_item_inventory, target=target))
-
-    def get_all_item_names(self) -> str:
-        """
-        Lấy danh sách tên của tất cả vật phẩm hiện có trong túi đồ.
-
-        Returns:
-            str: Chuỗi chứa tên các vật phẩm cách nhau bằng dấu phẩy, hoặc thông báo nếu túi đồ trống.
-        """
-        all_items = (self.quest_item_inventory +
-                     self.weapon_item_inventory +
-                     self.consumable_item_inventory +
-                     self.interactive_item_inventory)
-
-        if not all_items: return "Túi đồ trống."
-        return ", ".join([item.name for item in all_items])
-
-
-    def get_all_item(self) -> List[BaseItem]:
-        """
-        Lấy toàn bộ đối tượng vật phẩm hiện có trong túi đồ.
-
-        Returns:
-            List[BaseItem]: Danh sách gộp của tất cả vật phẩm.
-        """
-        all_items = (self.quest_item_inventory +
-                     self.weapon_item_inventory +
-                     self.consumable_item_inventory +
-                     self.interactive_item_inventory)
-
-        return all_items
-
     # ==========================================
     # NHÓM 3: CÁC HÀM THỰC THI LOGIC GAME
     # ==========================================
@@ -159,14 +121,6 @@ class InventoryManager:
         return result_msg
 
 
-    def get_quest_items(self, quest):
-        quest_items = []
-        for item in self.quest_item_inventory:
-            if item.quest == quest:
-                quest_items.append(item)
-
-        return quest_items
-
 
     # ==========================================
     # NHÓM 4: CÁC HÀM HỖ TRỢ LƯU TRỮ
@@ -188,7 +142,7 @@ class InventoryManager:
             "equipped_weapon": self.equipped_weapon.name if self.equipped_weapon else None
         }
 
-    def load_state(self, data: dict, image_manager):
+    def load_state(self, data: dict, image_manager: ImageManager):
         """
         Khôi phục trạng thái túi đồ từ dữ liệu file save (Deserialization).
 
@@ -219,7 +173,7 @@ class InventoryManager:
             elif item_type == "consumable":
                 restored_item = ConsumableItem(
                     id=item_id, name=item_name, description=item_desc,
-                    effect=item_data.get("effect", 0)
+                    effect=item_data.get("effect", {})
                 )
             elif item_type == "quest":
                 restored_item = QuestItem(
@@ -229,7 +183,7 @@ class InventoryManager:
             else:
                 restored_item = MiscellaneousItem(id=item_id, name=item_name, description=item_desc)
 
-            img_filename = image_manager._get_safe_filename(f"item_{item_name}")
+            img_filename = image_manager.get_safe_filename(f"item_{item_name}")
             full_img_path = os.path.join(image_manager.item_folder, img_filename)
             restored_item.image_path = full_img_path if os.path.exists(full_img_path) else item_data.get("image_path")
 
@@ -238,3 +192,68 @@ class InventoryManager:
         equipped_name = data.get("equipped_weapon")
         if equipped_name:
             self.equip_weapon(equipped_name)
+
+
+    #=========================================================
+    #=                       GETTER                          =
+    #=========================================================
+    def get_quest_items(self, quest):
+        quest_items = []
+        for item in self.quest_item_inventory:
+            if item.quest == quest:
+                quest_items.append(item)
+
+        return quest_items
+
+
+    def get_item_by_name(self, item_name: str):
+        """
+        Tìm kiếm vật phẩm theo tên (không phân biệt hoa/thường) trên tất cả các ngăn chứa.
+
+        Args:
+            item_name (str): Tên vật phẩm cần tìm.
+
+        Returns:
+            BaseItem hoặc None: Đối tượng vật phẩm nếu tìm thấy, ngược lại trả về None.
+        """
+        target = item_name.lower()
+
+        return (self._search_list(self.consumable_item_inventory, target=target) or
+                self._search_list(self.weapon_item_inventory, target=target) or
+                self._search_list(self.interactive_item_inventory, target=target) or
+                self._search_list(self.quest_item_inventory, target=target))
+
+    def get_all_item_names(self) -> str:
+        """
+        Lấy danh sách tên của tất cả vật phẩm hiện có trong túi đồ.
+
+        Returns:
+            str: Chuỗi chứa tên các vật phẩm cách nhau bằng dấu phẩy, hoặc thông báo nếu túi đồ trống.
+        """
+        all_items = (self.quest_item_inventory +
+                     self.weapon_item_inventory +
+                     self.consumable_item_inventory +
+                     self.interactive_item_inventory)
+
+        if not all_items: return "Túi đồ trống."
+        return ", ".join([item.name for item in all_items])
+
+
+    def get_all_items(self) -> List[BaseItem]:
+        """
+        Lấy toàn bộ đối tượng vật phẩm hiện có trong túi đồ.
+
+        Returns:
+            List[BaseItem]: Danh sách gộp của tất cả vật phẩm.
+        """
+        all_items = (self.quest_item_inventory +
+                     self.weapon_item_inventory +
+                     self.consumable_item_inventory +
+                     self.interactive_item_inventory)
+
+        return all_items
+
+
+    def get_equipped_weapon(self):
+        return self.equipped_weapon
+

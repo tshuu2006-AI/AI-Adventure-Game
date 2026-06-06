@@ -252,8 +252,6 @@ MemoryExtractor:
     Player: {player_input}
     GameMaster: {story_response}
     
-    
-    
 
 ItemAgent:
   systemGenerate: |
@@ -287,35 +285,88 @@ ItemAgent:
 
   systemCraft: |
     Role: Game Crafting Engine. Language: Vietnamese.
-    Task: Evaluate if the player can logically combine the provided items based on real-world physics or mild fantasy logic or use the items logically.
+    Task: Strictly evaluate if provided items can logically combine.
     
     RULES:
-    1. STRICT LOGIC: Can a "Thanh gỗ" + "Đá nhọn" make a "Giáo đá"? Yes. Can a "Thanh gươm" + "Bánh mì" make anything? No. Fail logically.
-    2. BASE ATTRIBUTES: If SUCCESS, you MUST determine the NEW item's "name" (string), "type" (MUST be exactly 'weapon' or 'miscellaneous'), and "description" (string).
-    3. TYPE-SPECIFIC ATTRIBUTES: You MUST include additional keys inside the "new_item" object depending ONLY on the chosen "type":
-       - If 'weapon': Add "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties, e.g., {"strength": 3, "agility": -1, ,"defense": 0}), "status_effect" (string, e.g., "burn", "poison", "stun", or null), and "proc_chance" (float between 0.0 and 1.0).
-       - If 'miscellaneous': No additional keys are needed beyond the base attributes.
-    4. Output STRICTLY JSON. Do not include markdown blocks (like ```json).
+    1. RUTHLESS LOGIC: Gỗ + Đá nhọn = THẤT BẠI (thiếu dây buộc). Gươm + Bánh mì = THẤT BẠI. Phải có đủ công cụ hoặc chất kết dính.
+    2. ITEM LOSS (TRỪNG PHẠT): Nếu người chơi ghép đồ vô lý một cách ngu ngốc hoặc nguy hiểm (VD: đập ngọc tảng, ném thuốc nổ vào lửa), nguyên liệu có thể bị hỏng/vỡ. Liệt kê tên các vật phẩm bị hỏng vào mảng "lost_items".
+    3. If SUCCESS, create "new_item" with "name", "type" (exactly 'weapon', 'consumable', or 'miscellaneous'), and "description". If the ingredient items are consumed by the process, put the name of those items in "lost_items".
+    4. TYPE-SPECIFIC KEYS in "new_item":
+       - 'weapon': Add "base_damage" (int), "modifiers" (dict, e.g., {"strength":2, "agility": -5, "intelligence": 0, "defense":1}), "status_effect" (str/null), "proc_chance" (float 0.0-1.0).
+       - 'consumable': Add "effect" (dict, e.g., {"hp":50, "agility":1, "strength":2, "intelligence": 0, "defense":1}).
+       - 'miscellaneous': No extra keys.
+    5. Output STRICTLY JSON. NO markdown blocks (```json).
+    6. the lost items'name must be identical to the names of provided items.
     
-    Format Example (Keys inside new_item MUST change depending on the chosen type):
+    Format SUCCESS:
     {
       "success": true,
-      "reasoning": "Nhựa cây có tính kết dính, kết hợp với thanh gỗ và đá nhọn tạo thành một vũ khí hoàn chỉnh.",
+      "reasoning": "Dây leo giúp buộc chặt đá vào gỗ thành vũ khí.",
       "new_item": {
-        "name": "Giáo đá thô sơ",
-        "type": "weapon",
-        "description": "Một mũi giáo được buộc chặt bằng nhựa cây, tuy thô kệch nhưng khá nguy hiểm.",
-        "base_damage": 15,
-        "modifiers": {"strength": 2, "agility": -1, "defense": 0},
-        "status_effect": "bleed",
-        "proc_chance": 0.15
-      }
+        "name": "Giáo đá", "type": "weapon", "description": "Thô sơ nhưng sắc bén.",
+        "base_damage": 15, "modifiers": {"strength": 2}, "status_effect": "bleed", "proc_chance": 0.15
+      },
+      "lost_items": ["Dây leo", "Cành gỗ", "Đá nhọn"]
     }
+    
+    Format FAILURE:
+    {"success": false, "reasoning": "Thiếu dây buộc để ghép đá và gỗ.", "new_item": null, "lost_items": ["Dây leo", "Cành gỗ"]}
 
   userCraft: |
+    [Intent]: {action_details}
+    [Items]: {items_list}
+    Evaluate strictly.
+    
+    
+
+  systemUse: |
+    Role: Game Physics & Logic Engine. Language: Vietnamese.
+    Task: Strictly evaluate if the player's action using specific items in the current environment is logically, physically, or magically possible.
+    
+    RULES:
+    1. RUTHLESS LOGIC & CONTEXT: 
+       - Môi trường: Dùng "Đuốc" để "Thắp sáng" dưới đáy hồ = THẤT BẠI. 
+       - Độ cứng/Vật lý: Dùng "Kiếm sắt" để "Chém đứt xích thép" = THẤT BẠI (kiếm sẽ mẻ/gãy). Dùng "Búa tạ" để "Đập vỡ bình thủy tinh" = THÀNH CÔNG.
+       - Mục đích: Dùng "Chìa khóa đồng" để "Mở rương sắt" = THẤT BẠI nếu sai khớp.
+    2. MULTIPLE ITEMS: Nếu người chơi dùng nhiều item cùng lúc, chúng phải phối hợp hợp lý.
+    3. ITEM LOSS MECHANIC (TIÊU HAO & TRỪNG PHẠT): Bất kỳ vật phẩm nào bị tiêu hao sau khi dùng (VD: uống bình máu, ăn thức ăn, ném lựu đạn) HOẶC bị hỏng/phá hủy do hành động vô lý (VD: dùng kiếm chém đá, ném sách vào lửa) ĐỀU PHẢI được đưa vào mảng "lost_items". Các công cụ dùng xong không hỏng (VD: búa đập đồ, chìa khóa mở cửa) thì để mảng rỗng [].
+    4. EXACT NAMING: Tên vật phẩm trong "lost_items" PHẢI trùng khớp tuyệt đối với tên trong [Items Used].
+    5. Output STRICTLY JSON. NO markdown blocks (```json).
+    
+    Format SUCCESS (Ví dụ: Dùng đồ tiêu hao -> Bị mất):
+    {
+      "success": true,
+      "reasoning": "Bạn tu ực hết bình máu, vết thương dần khép miệng lại. Chiếc vỏ bình rỗng bị vứt sang một bên.",
+      "lost_items": ["Bình máu nhỏ"]
+    }
+    
+    Format SUCCESS (Ví dụ: Dùng công cụ -> Không bị mất):
+    {
+      "success": true,
+      "reasoning": "Bạn vung búa tạ đập mạnh, chiếc rương gỗ mục nát vỡ tan tành lộ ra đồ vật bên trong.",
+      "lost_items": []
+    }
+    
+    Format FAILURE (Ví dụ: Hành động vô lý -> Hỏng đồ):
+    {
+      "success": false,
+      "reasoning": "Bạn điên cuồng dùng kiếm sắt chém vào tảng đá tảng. Đá không xước một mảng nhưng thanh kiếm của bạn đã gãy vụn.",
+      "lost_items": ["Kiếm sắt"]
+    }
+    
+    Format FAILURE (Ví dụ: Hành động sai -> Không hỏng đồ):
+    {
+      "success": false,
+      "reasoning": "Bạn cố nhét chìa khóa đồng vào ổ khóa của rương thép nhưng nó không vừa. Bạn đành rút ra.",
+      "lost_items": []
+    }
+
+  userUse: |
+    [Environment Context]: {context}
     [Player Intent]: {action_details}
-    [Items to combine]: {items_list}
-    Evaluate.
+    [Items Used]: {items_list}
+    
+    Evaluate the usage logic strictly based on physics and context.
   
     
 

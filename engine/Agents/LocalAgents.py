@@ -321,13 +321,13 @@ class ItemAgent(BaseLocalAgent):
 
         return new_item
 
-    async def interact(self, action_details: str, items_list: list[str]) -> dict:
+    async def craft(self, action_details: str, items_str: str) -> dict:
         """
-        Đánh giá tính logic và khả thi khi người chơi kết hợp nhiều vật phẩm với nhau hoặc sử dụng sáng tạo.
+        Đánh giá tính logic và khả thi khi người chơi kết hợp nhiều vật phẩm với nhau
 
         Args:
             action_details (str): Ý định hoặc cách thức người chơi muốn kết hợp.
-            items_list (list[str]): Chuỗi mô tả các vật phẩm nguyên liệu.
+            items_str (str): Chuỗi mô tả các vật phẩm nguyên liệu.
 
         Returns:
             dict: Kết quả chế tạo (success, reasoning, và thông tin new_item nếu thành công).
@@ -335,7 +335,29 @@ class ItemAgent(BaseLocalAgent):
         sys_prompt = self.pm.get_prompt('ItemAgent', 'systemCraft')
         user_prompt = self.pm.get_prompt('ItemAgent', 'userCraft',
                                          action_details=action_details,
-                                         items_list=items_list)
+                                         items_list=items_str)
+
+        return await self._generate_json(
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt
+        )
+
+
+    async def use(self, action_details: str, items_str: str) -> dict:
+        """
+        Đánh giá tính logic và khả thi khi người chơi kết hợp nhiều vật phẩm với nhau
+
+        Args:
+            action_details (str): Ý định hoặc cách thức người chơi muốn kết hợp.
+            items_str (str): Chuỗi mô tả các vật phẩm nguyên liệu.
+
+        Returns:
+            dict: Kết quả chế tạo (success, reasoning, và thông tin new_item nếu thành công).
+        """
+        sys_prompt = self.pm.get_prompt('ItemAgent', 'systemUse')
+        user_prompt = self.pm.get_prompt('ItemAgent', 'userUse',
+                                         action_details=action_details,
+                                         items_list=items_str)
 
         return await self._generate_json(
             system_prompt=sys_prompt,
