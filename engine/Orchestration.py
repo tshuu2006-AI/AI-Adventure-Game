@@ -111,6 +111,8 @@ class GameOrchestrator:
                 )
             else:
                 npc_obj = npc_data
+                npc_obj.location = starting_loc.name 
+                npc_obj.id = None
             
             npc_objects.append(npc_obj)
             self.player_state.add_npc(npc_obj)

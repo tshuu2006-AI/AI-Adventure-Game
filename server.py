@@ -236,8 +236,9 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
                 
                 await orc.add_location_to_db(curr_loc) # Dùng hàm bọc
 
-                npcs = orc.player_state.currentNPCs 
+                npcs = orc.get_current_npcs() 
                 for npc in npcs:
+                    npc.location = curr_loc.name # Ép vị trí lần nữa cho chắc chắn
                     if not getattr(npc, 'image_path', None):
                         game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh NPC: {npc.name}")
                         npc_img = await orc.image_manager.get_or_create_npc_image(
@@ -246,8 +247,7 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
                         )
                         if npc_img:
                             npc.image_path = npc_img
-                    
-                    await orc.db.add_npc_to_db(npc)
+                    await orc.add_npc_to_db(npc)
 
         # 🌟 GỌI QUA HÀM BỌC (Đã có chữ 'return' nên không còn bị crash NoneType)
         ep_data, scene_emotion = await orc.state_process_background_tasks(player_input, story_response)
