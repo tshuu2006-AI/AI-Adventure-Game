@@ -158,7 +158,8 @@ class PlayerState:
             # 🌟 BỔ SUNG LƯU TRỮ NHIỆM VỤ VÀ CON TRỞ NHIỆM VỤ CHÍNH/ĐANG LÀM
             "quests": [serialize_quest(q) for q in self.quests],
             "active_quest_id": self.active_quest.id if getattr(self, 'active_quest', None) else None,
-            "main_quest_id": self.main_quest.id if getattr(self, 'main_quest', None) else None
+            "main_quest_id": self.main_quest.id if getattr(self, 'main_quest', None) else None,
+            "stats_data": getattr(self, 'stats_manager').to_dict() if hasattr(self, 'stats_manager') else {}
         }
 
     async def load_state(self, data: dict, db_manager, image_manager):
@@ -225,6 +226,9 @@ class PlayerState:
         
         main_id = data.get("main_quest_id")
         self.main_quest = next((q for q in self.quests if q.id == main_id), None)
+
+        if hasattr(self, 'stats_manager'):
+            self.stats_manager.load_state(data.get("stats_data", {}))
         
         # Cập nhật lại list item móc với nhiệm vụ
         self.update_quest_items()

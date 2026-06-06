@@ -154,7 +154,7 @@ class InventoryManager:
         if not item or item not in self.consumable_item_inventory:
             return "Vật phẩm này không tồn tại hoặc không thể tiêu thụ."
 
-        result_msg = item.apply_effect(player_state)
+        result_msg = player_state.use_consumables(item)
         self.remove_item(item)
         return result_msg
 
