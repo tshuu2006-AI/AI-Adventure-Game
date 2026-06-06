@@ -117,8 +117,9 @@ class GameOrchestrator:
             npc_objects.append(npc_obj)
             self.player_state.add_npc(npc_obj)
 
-        await self.quest_sys.initialize_main_quest(world_state= self.world_state,
-                                                   starting_npcs=starting_npcs)
+        main_quest = await self.quest_sys.initialize_main_quest(world_state= self.world_state,
+                                                                starting_npcs=starting_npcs)
+        self.player_state.set_main_quest(main_quest=main_quest)
 
         # Sinh truyện mở màn
         story_response = ""
@@ -474,8 +475,7 @@ class GameOrchestrator:
         await self.db.add_npc_to_db(npc_obj = npc)
 
     async def quest_evaluate_turn(self, player_input: str, story_response: str):
-        await self.quest_sys.evaluate_turn(player_input=player_input,
-                                           story_response=story_response)
+        await self.quest_sys.evaluate_turn(player_input=player_input, story_response=story_response)
 
     async def state_process_background_tasks(self, player_input: str, story_response:str):
         return await self.state_sys.process_background_tasks(player_input=player_input,
@@ -511,7 +511,7 @@ class GameOrchestrator:
         await self.save_manager.save_game(slot_name=slot_name)
 
     async def load_game(self, slot_name:str):
-        await self.save_manager.load_game(slot_name=slot_name)
+        return await self.save_manager.load_game(slot_name=slot_name)
 
     #====================================================
     #=                    GETTER                        =

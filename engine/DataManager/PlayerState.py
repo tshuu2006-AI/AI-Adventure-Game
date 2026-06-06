@@ -298,6 +298,10 @@ class PlayerState:
     def set_location(self, location: Location):
         self.currentLocation = location
 
+    def set_main_quest(self, main_quest: Quest):
+        self.active_quest = main_quest
+        self.main_quest = main_quest
+
     def add_npc(self, npc: NPC):
         self.currentNPCs.append(npc)
 

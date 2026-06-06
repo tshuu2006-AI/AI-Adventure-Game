@@ -209,7 +209,7 @@ class ItemProcessor:
                 game_logger.info(f"[ITEM_MANAGER][CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning')} (Hậu quả: Bạn đã làm hỏng/mất {lost_str})")
                 return f"[CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning')} (Hậu quả: Bạn đã làm hỏng/mất {lost_str})"
 
-            game_logger.infor(f"ITEM_MANAGER][CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning')} (May mắn là bạn chưa làm hỏng nguyên liệu nào)")
+            game_logger.info(f"ITEM_MANAGER][CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning')} (May mắn là bạn chưa làm hỏng nguyên liệu nào)")
             return f"[CHẾ TẠO THẤT BẠI]: {evaluation.get('reasoning')} (May mắn là bạn chưa làm hỏng nguyên liệu nào)"
 
         # ==========================================
