@@ -1,7 +1,7 @@
 import time
-
+from typing import List
 from engine.Subengine import ItemProcessor
-from world.Entity import NPC, Quest, Location, ConsumableItem
+from world.Entity import NPC, Quest, Location, ConsumableItem, BaseItem, WeaponItem
 import os
 from engine.DataManager.DatabaseManager import DatabaseManager
 from engine.DataManager.PlayerState import PlayerState
@@ -66,7 +66,7 @@ class GameOrchestrator:
                                         pm=self.pm)
 
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)
-        self.save_manager = SaveManager()
+        self.save_manager = SaveManager(self)
         self.last_choices = []
 
         game_logger.info("Hệ thống đã sẵn sàng!")
@@ -493,10 +493,26 @@ class GameOrchestrator:
             encountered_npc_names=encountered_npc_names
         )
 
-    def use_consumables(self, consumable_item: ConsumableItem):
-        self.player_state.use_consumables(consumable_item
+    async def use(self, item_list: List[BaseItem], action_details:str):
+        return await self.item_sys.use(item_list=item_list, action_details=action_details)
 
-                                          )
+    def use_consumables(self, consumable_item: ConsumableItem):
+        self.player_state.use_consumables(consumable_item)
+
+    def equip_weapon(self, weapon: WeaponItem):
+        self.player_state.equip_weapon(weapon=weapon)
+
+    async def craft(self, item_list: List[BaseItem], action_details: str):
+        return await self.item_sys.craft(item_list = item_list,
+                                         action_details = action_details,
+                                         image_manager = self.image_manager)
+
+    async def save_game(self, slot_name:str):
+        await self.save_manager.save_game(slot_name=slot_name)
+
+    async def load_game(self, slot_name:str):
+        await self.save_manager.load_game(slot_name=slot_name)
+
     #====================================================
     #=                    GETTER                        =
     #====================================================
@@ -508,6 +524,9 @@ class GameOrchestrator:
 
     def get_current_location_name(self):
         return self.player_state.get_current_location_name()
+
+    def get_item_by_name(self, item_name:str):
+        return self.player_state.get_item_by_name(item_name=item_name)
 
     def get_current_npcs(self):
         return self.player_state.get_current_npcs()
