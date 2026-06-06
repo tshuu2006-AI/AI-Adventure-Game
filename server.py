@@ -13,6 +13,7 @@ os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
 import base64
 import re
 from dotenv import load_dotenv
+from engine.Utils.TextFormatter import TextFormatter
 
 env_path = os.path.join(SAVE_DIR, '.env')
 if os.path.exists(env_path):
@@ -23,7 +24,6 @@ else:
 from fastapi import FastAPI, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-# Import Orchestrator từ cấu trúc mới
 from engine.Orchestration import GameOrchestrator
 from engine.Utils.logger import game_logger
 from world.Entity import NPC
@@ -54,18 +54,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.state.orchestrator = GameOrchestrator(
+    db_path=os.path.join(SAVE_DIR, "eldoria.db"),
+    db_folder=SAVE_DIR,
+    vector_model_path="all-MiniLM-L6-v2",
+    groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
+    gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
+)
+
 # Đảm bảo các thư mục cần thiết luôn tồn tại trước khi khởi tạo
 os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
-
-# Khởi tạo Bộ não trung tâm
-orchestrator = GameOrchestrator(
-    db_path=os.path.join(SAVE_DIR, "eldoria.db"),
-    db_folder=SAVE_DIR,
-    vector_model_path="all-MiniLM-L6-v2", 
-    groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")), 
-    gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
-)
 
 # ==========================================
 # CÁC HÀM TIỆN ÍCH (HELPER)
@@ -93,10 +92,10 @@ def build_inventory_payload():
     """Đồng bộ túi đồ chuẩn từ InventoryManager (Khắc phục xé chuỗi & Nhầm Type)"""
     try:
         payload = []
-        inv_manager = orchestrator.player_state.inventory_manager
+        orc = app.state.orchestrator
         
         # 1. Lấy thẳng danh sách đối tượng Item (Không lấy chuỗi String)
-        all_items = inv_manager.get_all_item()
+        all_items = orc.get_all_items()
         
         # Dùng set để ghi nhớ những món đồ đã đóng gói, tránh trùng lặp
         seen_names = set()
@@ -220,17 +219,19 @@ async def verify_ollama_model(model_name: str) -> bool:
     except Exception:
         return False
     return False
+
 # 🌟 Bổ sung tham số is_new_game=False
 async def background_post_turn_processing(player_input, story_response, is_new_game=False):
     """Hàm này sẽ chạy ngầm sau khi Text đã được ném về Unity"""
+    orc = app.state.orchestrator
     try:
         # 🌟 NẾU LÀ GAME MỚI -> ÉP KAGGLE VẼ ẢNH ĐỊA ĐIỂM XUẤT PHÁT
         if is_new_game:
-            curr_loc = orchestrator.player_state.currentLocation
+            curr_loc = orc.get_current_location()
             if curr_loc:
                 if not curr_loc.image_path:
                     game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh địa điểm xuất phát: {curr_loc.name}")
-                    img_path = await orchestrator.image_manager.get_or_create_location_image(
+                    img_path = await orc.image_manager.get_or_create_location_image(
                         location_name=curr_loc.name,
                         description=curr_loc.description,
                         atmosphere=curr_loc.atmosphere
@@ -239,12 +240,13 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
                         curr_loc.image_path = img_path
                 
                 # 🌟 ĐƯA LỆNH LƯU DATABASE VÀO ĐÂY (Lúc này object đã có đầy đủ ảnh)
-                await orchestrator.db.add_location_to_db(curr_loc)
+                await orc.add_location_to_db(curr_loc)
 
-                for npc in orchestrator.player_state.currentNPCs:
+                npcs = orc.get_all_npcs()
+                for npc in npcs :
                     if not npc.image_path:
                         game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh NPC: {npc.name}")
-                        npc_img = await orchestrator.image_manager.get_or_create_npc_image(
+                        npc_img = await orc.image_manager.get_or_create_npc_image(
                             npc_name=npc.name,
                             description=npc.description
                         )
@@ -252,27 +254,27 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
                             npc.image_path = npc_img
                     
                     # Giờ thì lưu thoải mái không sợ lỗi Khóa Ngoại nữa!
-                    await orchestrator.db.add_npc_to_db(npc)
+                    await orc.add_npc_to_db(npc)
 
         # Vẫn cho chạy trích xuất ngầm bình thường để bắt NPC/Item từ đoạn Prologue
-        ep_data, scene_emotion = await orchestrator.state_sys.process_background_tasks(player_input, story_response)
-        orchestrator.current_emotion = scene_emotion
+        ep_data, scene_emotion = await orc.state_process_background_tasks(player_input, story_response)
+        orc.current_emotion = scene_emotion
 
-        await orchestrator.quest_sys.evaluate_turn(player_input, story_response)
+        await orc.quest_evaluate_turn(player_input, story_response)
 
-        encountered = [n.name for n in orchestrator.player_state.currentNPCs]
-        await orchestrator.memory_sys.save_turn(
+        encountered = [n.name for n in orc.get_current_npcs()]
+        await orc.memory_save_turn(
             player_input=player_input,
             story_response=story_response,
             episode_data=ep_data,
-            current_location_name=orchestrator.player_state.currentLocation.name,
+            current_location_name=orc.get_current_location_name(),
             encountered_npc_names=encountered
         )
         game_logger.info("Hoàn tất xử lý ngầm (State & Memory)!")
     except Exception as e:
         game_logger.error(f"Lỗi chạy ngầm: {e}", exc_info=True)
     finally:
-        orchestrator.is_processing_bg = False
+        orc.is_processing_bg = False
 
 # ==========================================
 # UNITY SYSTEM ENDPOINTS
@@ -291,92 +293,35 @@ async def shutdown():
 # API ENDPOINTS CHÍNH
 # ==========================================
 
+
 @app.post("/api/new_game")
 async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = BackgroundTasks()):
-    """Khởi tạo Game Loop mới giống hệt run() trong Orchestration"""
+    """Khởi tạo Game Loop mới siêu gọn nhẹ"""
     try:
-        orchestrator.is_processing_bg = True
-        orchestrator.player_state.currentNPCs = []
-        orchestrator.player_state.inventory = [] # Dọn list cũ
-        
-        # 🌟 DỌN SẠCH KHO ĐỒ KHI TẠO GAME MỚI
-        inv_manager = orchestrator.player_state.inventory_manager
-        inv_manager.equipped_weapon = None
-        
-        old_items = list(inv_manager.get_all_item_names())
-        for old_item_name in old_items:
-            obj = inv_manager.get_item_by_name(old_item_name)
-            if obj:
-                inv_manager.remove_item(obj)
+        orc = app.state.orchestrator
+        orc.is_processing_bg = True
 
-        await orchestrator.db.connect()
-        await orchestrator.db.reset_database()
-        await orchestrator.db.create_tables()
-        orchestrator.image_manager.clear_image_folders()
+        # 1. Giao toàn bộ việc nặng (Dọn dẹp, tạo thế giới, sinh truyện) cho Orchestrator
+        story_response = await orc.setup_new_game_api(player_idea=idea)
 
-        world_bible_dir = os.path.join(orchestrator.db.db_folder, "world_bible.json")
-        world_bible = await orchestrator.story_director.create_world_bible(player_idea=idea, path=world_bible_dir)
+        # 2. Định dạng text để gửi cho Unity UI
+        segments = TextFormatter.parse_story_into_segments(story_response)
 
-        reqs = world_bible.get("system_requirements", {})
-        orchestrator.world_state.name = reqs.get("world_name", "Vùng đất vô danh")
-        orchestrator.world_state.type = reqs.get("world_type", "Fantasy")
-        orchestrator.world_state.theme_and_tone = reqs.get("theme_and_tone", "Tối tăm")
-        orchestrator.world_state.core_conflict = reqs.get("core_conflict", "Sinh tồn")
-        orchestrator.world_state.mission = reqs.get("world_mission", "Sống sót")
-        orchestrator.world_state.dynamic_vocabulary = world_bible.get("dynamic_vocabulary", {})
-        
-        starting_loc = await orchestrator.story_director.create_starting_location(
-            orchestrator.world_state.name, 
-            orchestrator.world_state.type, 
-            orchestrator.world_state.theme_and_tone
-        )
-        orchestrator.player_state.currentLocation = starting_loc
-        # await orchestrator.db.add_location_to_db(starting_loc)
-        starting_npcs = await orchestrator.story_director.initialize_key_npcs(
-            world_name=orchestrator.world_state.name,
-            world_type=orchestrator.world_state.type,
-            world_theme=orchestrator.world_state.theme_and_tone,
-            world_conflict=orchestrator.world_state.core_conflict,
-            world_mission=orchestrator.world_state.mission
-        )
-        
-        for npc_data in starting_npcs:
-            npc_obj = NPC(
-                id=None,
-                name=npc_data.get("name", "Vô danh"),
-                personality=npc_data.get("personality", "Bí ẩn"),
-                description=npc_data.get("description", "Không rõ"),
-                affectionate=npc_data.get("affectionate", 0),
-                location=starting_loc.name, #Ép location
-                status=npc_data.get("status", "Bình thường")
-            )
-            # await orchestrator.db.add_npc_to_db(npc_obj)
-            orchestrator.player_state.currentNPCs.append(npc_obj)
-
-        await orchestrator.quest_sys.initialize_main_quest(
-            world_state=orchestrator.world_state,
-            starting_npcs=orchestrator.player_state.currentNPCs
-        )
-        
-        story_response = ""
-        # 🌟 Truyền thêm tham số world_bible_dir vào đây:
-        async for chunk in orchestrator.story_director.initialize_story(starting_loc, world_bible_dir=world_bible_dir):
-            story_response += chunk
-
-        segments = parse_story_into_segments(story_response)
-
-        choices = await orchestrator.story_director.generate_player_choices(
-            current_location_name=starting_loc.name, 
-            encountered_npc_name=[], 
+        # 3. Gọi AI sinh Menu lựa chọn từ kết quả Prologue
+        choices = await orc.story_director.generate_player_choices(
+            current_location_name=orc.get_current_location_name(),
+            encountered_npc_name=[],
             recent_story_text=story_response,
-            active_quest=orchestrator.player_state.active_quest,
-            quest_items=getattr(orchestrator.player_state, 'quest_items', [])
+            active_quest=orc.player_state.active_quest,
+            quest_items=orc.player_state.quest_items
         )
-        orchestrator.last_choices = choices
+        orc.last_choices = choices
         choice_texts = [c["action_text"] for c in choices]
 
+        # 4. Kích hoạt tác vụ ngầm (Trích xuất state, tải ảnh, ...)
         bg_tasks.add_task(background_post_turn_processing, "[Bắt đầu trò chơi]", story_response, is_new_game=True)
 
+        # 5. Trả về cho Client
         return JSONResponse(content={
             "segments": segments,
             "choices": choice_texts,
@@ -391,54 +336,55 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
 
 @app.post("/api/play")
 async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = BackgroundTasks()):
-    """Xử lý lượt đi (Giống _process_game_turn)"""
+    """Xử lý lượt đi (Chuẩn Clean Code)"""
     try:
-        orchestrator.is_processing_bg = True
-        directive = await orchestrator.action_sys.get_system_directive(action)
-        hybrid_ctx, npcs_ctx = await orchestrator.memory_sys.get_hybrid_context(action, orchestrator.player_state)
+        orc = app.state.orchestrator
+        orc.is_processing_bg = True
 
-        story_response = ""
-        async for chunk in orchestrator.story_director.narrate_turn(
-                action, orchestrator.world_state, orchestrator.player_state, npcs_ctx, hybrid_ctx, directive):
-            story_response += chunk
-        
-        segments = parse_story_into_segments(story_response)
+        # 1. Giao toàn bộ việc phân tích Action, gọi RAG Memory và sinh truyện cho Orchestrator
+        story_response = await orc.generate_turn_narrative_api(action)
 
-        choices = await orchestrator.story_director.generate_player_choices(
-            current_location_name=orchestrator.player_state.currentLocation.name,
-            encountered_npc_name=[n.name for n in orchestrator.player_state.currentNPCs],
+        # 2. Phân rã văn bản (Dùng Class tiện ích)
+        segments = TextFormatter.parse_story_into_segments(story_response)
+
+        # 3. Sinh Menu Lựa chọn (Giao tiếp qua các hàm bọc an toàn)
+        choices = await orc.story_director.generate_player_choices(
+            current_location_name=orc.get_current_location_name(),
+            encountered_npc_name=orc.get_encountered_npc_names(),
             recent_story_text=story_response,
-            active_quest=orchestrator.player_state.active_quest,
-            quest_items=getattr(orchestrator.player_state, 'quest_items', [])
+            active_quest=orc.player_state.active_quest,
+            quest_items=orc.player_state.quest_items
         )
-        orchestrator.last_choices = choices
+        orc.last_choices = choices
         choice_texts = [c["action_text"] for c in choices]
 
+        # 4. Kích hoạt Background Tasks (Trích xuất state, lưu DB)
         bg_tasks.add_task(background_post_turn_processing, action, story_response)
 
         return JSONResponse(content={
             "segments": segments,
             "choices": choice_texts,
-            "bg_image_b64": "", 
+            "bg_image_b64": "",
             "char_image_b64": "",
             "inventory": []
         })
     except Exception as e:
-        game_logger.error("❌ LỖI CRASH KHI TẠO NEW GAME:", exc_info=True)
+        # Đã sửa lại nội dung log cho đúng ngữ cảnh
+        game_logger.error("❌ LỖI CRASH TẠI LƯỢT ĐI (PLAY TURN):", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
-
 
 @app.get("/api/poll_updates")
 async def poll_updates():
-    """(Req 1) API CHUYÊN DỤNG CHO UNITY GỌI NGẦM."""
     try:
-        curr_loc = orchestrator.player_state.currentLocation
+        orc = app.state.orchestrator
+        curr_loc = orc.get_current_location()
         bg_img = image_to_base64_with_default(curr_loc.image_path if curr_loc else None)
         
         # 🌟 NÂNG CẤP: Lấy ảnh của TẤT CẢ NPC trong cảnh hiện tại
         npc_images_payload = []
-        if orchestrator.player_state.currentNPCs:
-            for npc in orchestrator.player_state.currentNPCs:
+        npcs = orc.get_current_npcs()
+        if npcs:
+            for npc in npcs:
                 img_b64 = image_to_base64_with_default(npc.image_path)
                 if img_b64:
                     npc_images_payload.append({
@@ -447,14 +393,14 @@ async def poll_updates():
                     })
             
         inv_payload = build_inventory_payload()
-        emotion = getattr(orchestrator, "current_emotion", "bình thường")
+        emotion = getattr(orc, "current_emotion", "bình thường")
 
-        current_hp = orchestrator.player_state.hp
-        max_hp = orchestrator.player_state.max_hp
-        equipped_weapon = orchestrator.player_state.inventory_manager.equipped_weapon
+        current_hp = orc.get_current_hp()
+        max_hp = orc.get_max_hp()
+        equipped_weapon = orc.get_equipped_weapon()
         weapon_name = equipped_weapon.name if equipped_weapon else "Tay không"
 
-        active_quest = orchestrator.player_state.active_quest
+        active_quest = orc.get_active_quest()
         quest_payload = None
         if active_quest:
             # Lấy mảng objectives
@@ -480,7 +426,7 @@ async def poll_updates():
             "weapon": weapon_name,         # MỚI
             "emotion": emotion,
             "active_quest": quest_payload,
-            "is_processing_bg": getattr(orchestrator, "is_processing_bg", False)
+            "is_processing_bg": getattr(orc, "is_processing_bg", False)
         })
     except Exception as e:
         print(f"Lỗi poll_updates: {e}")
@@ -490,8 +436,9 @@ async def poll_updates():
 async def get_diary():
     """(Req 3) Hoàn thiện API Diary - Có thêm Nhiệm Vụ"""
     try:
-        npcs = await orchestrator.db.npc_manager.get_all()
-        locations = await orchestrator.db.location_manager.get_all()
+        orc = app.state.orchestrator
+        npcs = await orc.get_all_npcs()
+        locations = await orc.get_all_locations()
 
         npc_list = [{"name": n.name, "personality": getattr(n, 'personality', 'Chưa rõ'), "description": getattr(n, 'description', ''),
                      "affectionate": getattr(n, 'affectionate', 0), "location": getattr(n, 'location', 'Chưa rõ'), "status": getattr(n, 'status', 'Bình thường'),
@@ -501,21 +448,21 @@ async def get_diary():
                      "image_b64": image_to_base64_with_default(l.image_path)} for l in locations]
 
         quests_payload = []
-        if getattr(orchestrator.player_state, 'quests', None):
-            for q in orchestrator.player_state.quests:
-                raw_obj = getattr(q, 'objectives', getattr(q, 'objective', []))
-                if isinstance(raw_obj, str): raw_obj = [raw_obj]
-                
-                is_fin = getattr(q, 'is_finished', [0]*len(raw_obj))
+        all_quests = orc.get_all_quests()
+        for q in all_quests:
+            raw_obj = getattr(q, 'objectives', getattr(q, 'objective', []))
+            if isinstance(raw_obj, str): raw_obj = [raw_obj]
 
-                quests_payload.append({
-                    "name": getattr(q, 'name', 'Nhiệm vụ ẩn'),
-                    "description": getattr(q, 'description', ''),
-                    "objectives": raw_obj,
-                    "is_finished": is_fin,
-                    "status": getattr(q, 'status', 'available'),
-                    "is_active": (q == orchestrator.player_state.active_quest)
-                })
+            is_fin = getattr(q, 'is_finished', [0]*len(raw_obj))
+
+            quests_payload.append({
+                "name": getattr(q, 'name', 'Nhiệm vụ ẩn'),
+                "description": getattr(q, 'description', ''),
+                "objectives": raw_obj,
+                "is_finished": is_fin,
+                "status": getattr(q, 'status', 'available'),
+                "is_active": (q == orc.get_active_quest())
+            })
 
         return JSONResponse(content={"npcs": npc_list, "locations": loc_list, "quests": quests_payload})
     except Exception as e:
@@ -526,21 +473,22 @@ async def get_diary():
 async def switch_quest(quest_name: str = Form(...)):
     """API để Unity ra lệnh chuyển đổi Nhiệm vụ đang theo dõi"""
     try:
-        target = next((q for q in orchestrator.player_state.quests if q.name == quest_name), None)
+        orc = app.state.orchestrator
+        target = next((q for q in orc.get_all_quests() if q.name == quest_name), None)
         
         if not target:
             return JSONResponse(content={"success": False, "message": "Không tìm thấy nhiệm vụ."})
-        if target == orchestrator.player_state.active_quest:
+        if target == orc.get_active_quest():
             return JSONResponse(content={"success": False, "message": "Bạn đang thực hiện nhiệm vụ này rồi!"})
         
         if getattr(target, 'status', 'available') == 'available':
             target.status = 'in_progress'
         
         # Gọi hệ thống QuestProcessor chuyển đổi & Sinh lời dẫn truyện
-        transition_msg = await orchestrator.quest_sys.switch_quest(
-            target_quest=target, 
-            recent_story="Bạn mở sổ tay và quyết định thay đổi mục tiêu hành động.", 
-            current_choices=orchestrator.last_choices
+        transition_msg = await orc.switch_quest(
+            target_quest=target,
+            recent_story="Bạn mở sổ tay và quyết định thay đổi mục tiêu hành động.",
+            current_choices=orc.last_choices
         )
         return JSONResponse(content={"success": True, "message": transition_msg})
     except Exception as e:
@@ -550,9 +498,10 @@ async def switch_quest(quest_name: str = Form(...)):
 @app.get("/api/progress")
 async def get_progress():
     """API để Unity lấy tiến trình Loading (Thanh Progress bar)"""
+    orc = app.state.orchestrator
     return JSONResponse(content={
-        "message": getattr(orchestrator, "progress_msg", "Đang xử lý..."),
-        "percent": getattr(orchestrator, "progress_percent", 0.5)
+        "message": getattr(orc, "progress_msg", "Đang xử lý..."),
+        "percent": getattr(orc, "progress_percent", 0.5)
     })
 
 @app.post("/api/check_config")
@@ -590,20 +539,18 @@ async def update_settings(
     enable_image: str = Form(None),     # Bổ sung nhận lệnh bật/tắt ảnh từ Unity
     quality: str = Form(None)           # Bổ sung nhận lệnh chất lượng ảnh từ Unity
 ):
-    """Lưu và áp dụng cấu hình cài đặt từ Unity"""
-    global current_config
-    global orchestrator
 
+    orc = app.state.orchestrator
     # 1. NẾU UNITY CHỈ GỬI LỆNH ĐỔI CHẤT LƯỢNG ẢNH
     if quality is not None:
-        orchestrator.image_manager.api.quality = quality.lower()
+        orc.image_manager.api.quality = quality.lower()
         game_logger.info(f"Đã cập nhật chất lượng Ảnh thành: {quality.upper()}")
         return JSONResponse(content={"success": True, "message": "Đã đổi chất lượng Hình ảnh!"})
 
     # 2. NẾU UNITY CHỈ GỬI LỆNH BẬT/TẮT ẢNH
     if enable_image is not None:
         is_enabled = enable_image.lower() == "true"
-        orchestrator.image_manager.api.enable_image = is_enabled
+        orc.image_manager.api.enable_image = is_enabled
         trang_thai = "BẬT" if is_enabled else "TẮT"
         game_logger.info(f"Đã {trang_thai} tính năng vẽ ảnh.")
         return JSONResponse(content={"success": True, "message": f"Đã {trang_thai} tính năng Hình ảnh!"})
@@ -616,11 +563,11 @@ async def update_settings(
         current_config["local_provider"] = "ollama" if str(is_ollama).lower() == "true" else "gemini"
 
         # Khởi tạo lại AI nhưng PHẢI GIỮ LẠI trạng thái bật/tắt ảnh trước đó
-        old_enable_image = getattr(orchestrator.image_manager.api, 'enable_image', True)
-        old_quality = getattr(orchestrator.image_manager.api, 'quality', 'medium')
+        old_enable_image = getattr(orc.image_manager.api, 'enable_image', True)
+        old_quality = getattr(orc.image_manager.api, 'quality', 'medium')
 
         if mode == "custom":
-            orchestrator = GameOrchestrator(
+            app.state.orchestrator = GameOrchestrator(
                 db_path=os.path.join(SAVE_DIR, "eldoria.db"),
                 db_folder=SAVE_DIR,
                 vector_model_path="all-MiniLM-L6-v2",
@@ -628,7 +575,7 @@ async def update_settings(
                 gemini_api_key=safe_key(current_config["local_model_or_key"])
             )
         else:
-            orchestrator = GameOrchestrator(
+            app.state.orchestrator = GameOrchestrator(
                 db_path=os.path.join(SAVE_DIR, "eldoria.db"),
                 db_folder=SAVE_DIR,
                 vector_model_path="all-MiniLM-L6-v2",
@@ -637,8 +584,9 @@ async def update_settings(
             )
         
         # Nạp lại trạng thái ảnh cho Orchestrator mới
-        orchestrator.image_manager.api.enable_image = old_enable_image
-        orchestrator.image_manager.api.quality = old_quality
+        orc = app.state.orchestrator
+        orc.image_manager.api.enable_image = old_enable_image
+        orc.image_manager.api.quality = old_quality
 
         game_logger.info(f"Đã áp dụng hệ thống AI: {mode.upper()}")
         return JSONResponse(content={"success": True, "message": "Đã lưu và áp dụng cài đặt AI mới!"})
@@ -649,7 +597,8 @@ async def update_settings(
 async def save_game(slot: str = Form(...)):
     """API lưu toàn bộ Database và Memory xuống ổ cứng"""
     try:
-        await orchestrator.save_manager.save_game(orchestrator, slot_name=slot)
+        orc = app.state.orchestrator
+        await orc.save_manager.save_game(orc, slot_name=slot)
         return JSONResponse(content={"success": True, "message": f"Đã đồng bộ AI vào {slot}"})
     except Exception as e:
         game_logger.error(f"Lỗi Save API: {e}")
@@ -659,7 +608,8 @@ async def save_game(slot: str = Form(...)):
 async def load_game(slot: str = Form(...)):
     """API ghi đè Database và Memory từ file save lên hệ thống"""
     try:
-        success, msg = await orchestrator.save_manager.load_game(orchestrator, slot_name=slot)
+        orc = app.state.orchestrator
+        success, msg = await orc.save_manager.load_game(orc, slot_name=slot)
         if success:
             return JSONResponse(content={"success": True, "message": msg})
         else:
@@ -676,9 +626,10 @@ async def load_game(slot: str = Form(...)):
 async def use_item(item_name: str = Form(...)):
     """API để Unity ra lệnh dùng vật phẩm (Hồi máu, giải độc...)"""
     try:
-        inv_manager = orchestrator.player_state.inventory_manager
+        orc = app.state.orchestrator
+        inv_manager = orc.player_state.inventory_manager
         # Gọi thẳng logic đã viết rất chuẩn của bạn
-        result_msg = inv_manager.use_consumable(item_name, orchestrator.player_state)
+        result_msg = inv_manager.use_consumable(item_name, orc.player_state)
         return JSONResponse(content={"success": True, "message": result_msg})
     except Exception as e:
         game_logger.error(f"Lỗi dùng vật phẩm: {e}", exc_info=True)
@@ -688,7 +639,8 @@ async def use_item(item_name: str = Form(...)):
 async def equip_item(item_name: str = Form(...)):
     """API để Unity ra lệnh trang bị vũ khí"""
     try:
-        inv_manager = orchestrator.player_state.inventory_manager
+        orc = app.state.orchestrator
+        inv_manager = orc.player_state.inventory_manager
         result_msg = inv_manager.equip_weapon(item_name)
         return JSONResponse(content={"success": True, "message": result_msg})
     except Exception as e:
@@ -703,7 +655,8 @@ async def craft_item(items_str: str = Form(...), action_detail: str = Form(...))
     - action_detail: mô tả ý định ghép (VD: 'Dùng dây leo buộc đá vào gỗ')
     """
     try:
-        inv_manager = orchestrator.player_state.inventory_manager
+        orc = app.state.orchestrator
+        inv_manager = orc.player_state.inventory_manager
         target_items = []
         
         # Tách chuỗi để lấy ra các Object Item thật từ Balo
@@ -717,10 +670,10 @@ async def craft_item(items_str: str = Form(...), action_detail: str = Form(...))
             return JSONResponse(content={"success": False, "message": "⚠️ Vật phẩm không tồn tại trong túi đồ!"})
 
         # Gọi ItemAgent xử lý (Tốn API LLM)
-        craft_result = await orchestrator.item_sys.interact(
+        craft_result = await orc.item_sys.interact(
             item_list=target_items,
             action_details=action_detail,
-            image_manager=orchestrator.image_manager
+            image_manager=orc.image_manager
         )
         return JSONResponse(content={"success": True, "message": craft_result})
     except Exception as e:
