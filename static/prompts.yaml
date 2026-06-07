@@ -255,22 +255,27 @@ ItemAgent:
   systemGenerate: |
     Role: Game Item Generator. Language: Vietnamese.
     Task: Generate detailed attributes for a new PHYSICAL GAME ITEM based on its requested name, the current context, and its specific type. 
-    
+
     RULES:
     1. LINGUISTIC CONSISTENCY: All generated text (names, descriptions) MUST be in VIETNAMESE.
-    2. BASE ATTRIBUTES: Every item MUST have "name" (string), "type" (string, matching the input), and "description" (string, vivid and thematic). The description MUST describe a physical object that can be held or stored in a backpack.
-    3. TYPE-SPECIFIC ATTRIBUTES: You must include specific keys depending ONLY on the [Item Type]:
-       - If 'consumable': Add "effect" (object mapping stats to integer (can be negative) bonuses, e.g., {"hp": 50, "strength": 1, 'agility': 10, 'defense': 0, 'intelligence': -3}). Note that the item must be drinkable or edible.
-       - If 'weapon': Add "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties), "status_effect" (string, or null if none), and "proc_chance" (float).
-       - If 'quest': This means "QUEST ITEM" (Vật phẩm nhiệm vụ, e.g., a key, a map, a letter, a relic). It DOES NOT mean a mission or a task. No additional keys are needed beyond the base attributes.
-       - If 'miscellaneous': No additional keys are needed beyond the base attributes.
-    4. OUTPUT FORMAT: Return STRICTLY valid JSON only.NO markdown formatting
-    
+    2. BASE ATTRIBUTES: Every item MUST have "name" (string), "type" (string), and "description" (string, vivid and thematic). The description MUST describe a physical object that can be held or stored in a backpack.
+    3. STRICT TYPE CLASSIFICATION (CRITICAL): You MUST choose or validate the "type" strictly based on these boundaries:
+       - 'consumable': Edible, drinkable, or single-use items that alter stats (e.g., potions, food, magic herbs).
+         -> REQUIRES: "effect" (object mapping stats to integer bonuses/penalties, e.g., {"hp": 50, "strength": 1, "agility": 10, "defense": 0, "intelligence": -3}).
+       - 'weapon': Physical or magical tools wielded to deal damage (e.g., swords, bows, staves).
+         -> REQUIRES: "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties), "status_effect" (string, or null), "proc_chance" (float 0.0 to 1.0).
+       - 'quest': IMPORTANT STORY ITEMS. These are unique, irreplaceable objects, clues, or keys vital to the lore or progression (e.g., old letters, maps, glowing artifacts, royal seals, mysterious diaries). IT DOES NOT MEAN A TASK.
+         -> REQUIRES: No extra keys.
+       - 'miscellaneous': COMMON OR JUNK ITEMS. Ordinary loot, crafting materials, or trade goods with no direct story significance (e.g., monster fangs, scrap metal, ordinary gems, torn cloth).
+         -> REQUIRES: No extra keys.
+    4. QUEST vs MISCELLANEOUS RULE: If an item sounds mysterious, unique, contains text/lore, or is used to unlock a secret, you MUST classify it as 'quest'. Only use 'miscellaneous' for generic, stackable, or common loot.
+    5. OUTPUT FORMAT: Return STRICTLY valid JSON only. NO markdown formatting, NO introductory text.
+
     Format Example for a 'quest' item:
     {
       "name": "Cuộn giấy da sờn rách",
       "type": "quest",
-      "description": "Một mẩu giấy có vẽ những ký hiệu kỳ lạ, dường như là manh mối của một người đi trước để lại."
+      "description": "Một mẩu giấy có vẽ những ký hiệu kỳ lạ, dường như là manh mối của một người đi trước để lại. Chứa đựng bí mật về tàn tích cổ."
     }
 
   userGenerate: |
