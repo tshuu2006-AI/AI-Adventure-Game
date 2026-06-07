@@ -59,4 +59,13 @@ Create a `.env` file in the `SaveData` directory (or root directory) with the fo
 ```env
 GROQ_API_KEY=your_groq_key_here
 GEMINI_API_KEY=your_gemini_key_here
+```
+
+## 📡 Core API Endpoints
+
+* `POST /api/new_game`: Initializes the context, world bible, and starting state from a text-based idea.
+* `POST /api/play`: Receives player actions, retrieves RAG context, generates story responses, and triggers Background Tasks (State Extraction, Memory Save).
+* `GET /api/poll_updates`: Returns real-time state data (HP, Inventory, Image Base64, Active Quest) to the Client independently of the chat flow.
+* `POST /api/inventory/craft`: Combines physical items based on AI logic evaluation.
+* `POST /api/save_game` | `/api/load_game`: Manages saving/restoring the entire SQLite DB and FAISS memory to/from physical storage.
 
