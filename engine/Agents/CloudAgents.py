@@ -534,3 +534,11 @@ class QueryAgent(BaseCloudAgent):
         except Exception as e:
             self._log_error("generate_query", e)
             return ""
+
+
+class CombatAgent(BaseCloudAgent):
+    async def extract_combat(self, story_response: str) -> dict:
+        sys_prompt = self.pm.get_prompt('CombatAgent', 'system')
+        user_prompt = self.pm.get_prompt('CombatAgent', 'user', story_response=story_response)
+        result = await self._generate_json_with_retry(system_prompt = sys_prompt, user_prompt = user_prompt)
+        return result if result else {"player_hp_lost": 0, "enemy_status_updates": []}

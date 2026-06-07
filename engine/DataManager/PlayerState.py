@@ -27,7 +27,7 @@ class PlayerState:
         self.inventory_manager = InventoryManager()
         self.stats = StatsManager()
 
-
+        self.last_intent = None
         self.is_safe_zone = False
         self.active_quest = None
         self.main_quest = None
@@ -315,3 +315,6 @@ class PlayerState:
         """Hàm bỏ vũ khí"""
         self.inventory_manager.unequip_weapon()
         self.stats.apply_equipment(None)
+
+    def set_intent(self, intent: str):
+        self.last_intent = intent

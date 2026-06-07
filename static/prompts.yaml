@@ -128,16 +128,14 @@ StoryAgent:
        - Narration: no tags.
        - NPC speech: [NPC_TALK: Tên_NPC] text [/NPC_TALK]
        - Player speech: [PLAYER_TALK] text [/PLAYER_TALK]
-    6. QUEST ALIGNMENT: If an [Active Quest] is provided, subtly weave clues, atmosphere, or NPC behaviors that guide the player toward their objective. Do NOT force it, make it natural.
-    
+    6. QUEST ALIGNMENT: If an [Active Quest] is provided, SLIGHTLY and SUBTLY weave clues, atmosphere, or NPC behaviors that guide the player toward their objective. Do NOT force it, make it natural.
+    7. Only use the items provided in 'Quest Items' for the next response
     Context: {world_theme} | {world_conflict} | {world_vocabulary}
     State: Loc: {current_location} | NPC: {npc_context} | Mem: {rag_context} | Dir: {system_directive}
     Active Quest: {active_quest_context}
     Quest Items: {quest_items}
   user: |
     {user_input}
-
-
 
 SummarizeAgent:
   system: |
@@ -161,8 +159,6 @@ StateExtractor:
     5. NEW LOCATION: If the player travels to a completely new area (different from [Current Location]), output the new location's name. If staying in the same place, return null.
     6. SCENE EMOTION: Analyze the current interaction's mood. You must output exactly one of these words in Vietnamese: "bình thường", "căng thẳng", "buồn", "chiến thắng" or "rùng rợn".
     7. AFFECTION CHANGES: Detect if any NPC's attitude toward the player clearly shifted. For each such NPC, output their name, an integer delta (-20 to +20), and new_status (null if unchanged). If nothing changed, return [].
-    
-    # --- ĐÃ CẬP NHẬT LUẬT CHECKPOINT ---
     8. SAFE ZONE: Analyze if the current location and immediate situation is "safe enough" (e.g., a village, a tavern, a campfire, clearing out all enemies). If it IS a safe zone -> set "is_safe_zone": true. If the player is in combat, trapped, or in a hostile/dangerous area -> set to false.
     9. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
     
@@ -194,8 +190,10 @@ ChoiceAgent:
     Role: Choice Generator. Task: Propose EXACTLY 3 logical next actions.
     Rules:
     1. Address immediate physical context first (doors, paths, threats).
-    2. ALIGN WITH QUEST: If an [Active Quest] is provided, only 1 or 2 choices should actively pursue the quest objectives.
+    2. ALIGN WITH QUEST: If an [Active Quest] is provided, only 1 or 2 choices should actively and subtly pursue the quest objectives.
     3. 1st-person perspective ("Tôi..."). Short (<15 words). Logical to physics.
+    4. Only use the items provided in 'Quest Items' for generating choices
+    
     Output: JSON. Keys: English. Values: VIETNAMESE.
     Format: {"choices": [{"id": 1, "action_text": "text", "style": "approach style"}]}
   user: |
@@ -262,7 +260,7 @@ ItemAgent:
     1. LINGUISTIC CONSISTENCY: All generated text (names, descriptions) MUST be in VIETNAMESE.
     2. BASE ATTRIBUTES: Every item MUST have "name" (string), "type" (string, matching the input), and "description" (string, vivid and thematic). The description MUST describe a physical object that can be held or stored in a backpack.
     3. TYPE-SPECIFIC ATTRIBUTES: You must include specific keys depending ONLY on the [Item Type]:
-       - If 'consumable': Add "effect" (object mapping stats to integer (can be negative) bonuses, e.g., {"hp": 50, "strength": 1, 'agility': 10, 'defense': 0, 'intelligence': -3}).
+       - If 'consumable': Add "effect" (object mapping stats to integer (can be negative) bonuses, e.g., {"hp": 50, "strength": 1, 'agility': 10, 'defense': 0, 'intelligence': -3}). Note that the item must be drinkable or edible.
        - If 'weapon': Add "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties), "status_effect" (string, or null if none), and "proc_chance" (float).
        - If 'quest': This means "QUEST ITEM" (Vật phẩm nhiệm vụ, e.g., a key, a map, a letter, a relic). It DOES NOT mean a mission or a task. No additional keys are needed beyond the base attributes.
        - If 'miscellaneous': No additional keys are needed beyond the base attributes.

@@ -4,7 +4,7 @@ import time
 from world.Entity import Location, NPC
 from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor, ItemAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
-from engine.Agents.CloudAgents import LocationAgent, NPCAgent
+from engine.Agents.CloudAgents import LocationAgent, NPCAgent, Comb
 from static.config import STATE_EXTRACTOR_MODEL, MEMORY_EXTRACTOR_MODEL, LOCATION_AGENT_MODEL, NPC_AGENT_MODEL, ITEM_AGENT_MODEL
 from engine.DataManager.DatabaseManager import DatabaseManager
 from engine.Utils.PromptManager import PromptManager
@@ -33,6 +33,8 @@ class StateProcessor:
                                   model_name = NPC_AGENT_MODEL)
 
         self.item_agent = ItemAgent(model_name = ITEM_AGENT_MODEL, pm = pm, gemini_api_key=gemini_api_key)
+
+        self.combat_agent = CombatAgent()
 
 
     async def _update_location(self, new_location_entered_name: str, context: str) -> Location:
