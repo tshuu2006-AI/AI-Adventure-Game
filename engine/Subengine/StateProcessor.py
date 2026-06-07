@@ -34,7 +34,9 @@ class StateProcessor:
 
         self.item_agent = ItemAgent(model_name = ITEM_AGENT_MODEL, pm = pm, gemini_api_key=gemini_api_key)
 
-        self.combat_agent = CombatAgent()
+        self.combat_agent = CombatAgent(api_key=groq_api_key,
+                                        model_name= LOCATION_AGENT_MODEL,
+                                        pm = pm)
 
 
     async def _update_location(self, new_location_entered_name: str, context: str) -> Location:
