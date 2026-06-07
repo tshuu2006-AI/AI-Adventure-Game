@@ -4,7 +4,7 @@ import time
 from world.Entity import Location, NPC
 from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor, ItemAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
-from engine.Agents.CloudAgents import LocationAgent, NPCAgent, Comb
+from engine.Agents.CloudAgents import LocationAgent, NPCAgent, CombatAgent
 from static.config import STATE_EXTRACTOR_MODEL, MEMORY_EXTRACTOR_MODEL, LOCATION_AGENT_MODEL, NPC_AGENT_MODEL, ITEM_AGENT_MODEL
 from engine.DataManager.DatabaseManager import DatabaseManager
 from engine.Utils.PromptManager import PromptManager
