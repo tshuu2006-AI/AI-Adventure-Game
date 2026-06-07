@@ -1,4 +1,4 @@
-# AI-Adventure-Game - Backend Engine
+# AI-STORY-ADVENTURE - Backend Engine
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python Version">
@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/AI-Groq%20%7C%20Gemini%20%7C%20Ollama-orange" alt="LLMs">
 </p>
 
-**Eldoria AI Adventure** is a Text-based RPG Game Engine driven entirely by Artificial Intelligence. The backend is built upon a strict, modular framework (Clean Architecture), integrating RAG (Retrieval-Augmented Generation) to create long-term memory, alongside a complex Prompt Engineering system to coordinate multiple AI Agents (Game Master, Entity Extractor, Quest Judge, etc.).
+**AI STORY ADVENTURE** is a Text-based RPG Game Engine driven entirely by Artificial Intelligence. The backend is built upon a strict, modular framework (Clean Architecture), integrating RAG (Retrieval-Augmented Generation) to create long-term memory, alongside a complex Prompt Engineering system to coordinate multiple AI Agents (Game Master, Entity Extractor, Quest Judge, etc.).
 
 The system provides a high-speed RESTful API via FastAPI, designed for seamless integration with Frontends (such as Unity).
 
