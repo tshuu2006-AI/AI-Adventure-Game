@@ -318,3 +318,6 @@ class PlayerState:
 
     def set_intent(self, intent: str):
         self.last_intent = intent
+
+    def take_damage(self, amount):
+        self.stats.take_damage(amount=amount)

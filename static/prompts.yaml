@@ -160,7 +160,8 @@ StateExtractor:
     6. SCENE EMOTION: Analyze the current interaction's mood. You must output exactly one of these words in Vietnamese: "bình thường", "căng thẳng", "buồn", "chiến thắng" or "rùng rợn".
     7. AFFECTION CHANGES: Detect if any NPC's attitude toward the player clearly shifted. For each such NPC, output their name, an integer delta (-20 to +20), and new_status (null if unchanged). If nothing changed, return [].
     8. SAFE ZONE: Analyze if the current location and immediate situation is "safe enough" (e.g., a village, a tavern, a campfire, clearing out all enemies). If it IS a safe zone -> set "is_safe_zone": true. If the player is in combat, trapped, or in a hostile/dangerous area -> set to false.
-    9. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
+    9. Analyze if the player is being attacked by someone or something. if yes -> set 'is_being_attacked": true. else set to false
+    10. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
     
     Format:
     {
@@ -171,7 +172,7 @@ StateExtractor:
       "new_location_entered": "Tên địa điểm",
       "scene_emotion": "bình thường",
       "affection_changes": [...],
-      
+      "is_being_attacked": boolean,
       "is_safe_zone": boolean
     }
   user: |
@@ -487,4 +488,24 @@ QuestAgent:
     Generate the Main Quest.
     
     
+CombatAgent:
+  system: |
+    Role: Combat Analyst.
+    Task: Read the recent story and extract ONLY the damage taken by the player.
     
+    Rules:
+    1. Player's Max HP is 100.
+    2. If the player takes damage (hit, poisoned, falls, etc.), estimate the lost HP:
+       - 0: No damage
+       - 5-15: Light damage (scratch, minor fall)
+       - 16-30: Medium damage (weapon strike, monster bite)
+       - 31-50: Heavy damage (critical hit, strong magic)
+       - 51-100: Lethal/Massive damage
+    3. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
+    
+    Format:
+    {
+      "taken_damage": <integer>
+    }
+  user: |
+    [Story]: {story_response}

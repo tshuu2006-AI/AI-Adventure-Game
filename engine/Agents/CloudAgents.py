@@ -540,5 +540,6 @@ class CombatAgent(BaseCloudAgent):
     async def extract_combat(self, story_response: str) -> dict:
         sys_prompt = self.pm.get_prompt('CombatAgent', 'system')
         user_prompt = self.pm.get_prompt('CombatAgent', 'user', story_response=story_response)
-        result = await self._generate_json_with_retry(system_prompt = sys_prompt, user_prompt = user_prompt)
-        return result if result else {"player_hp_lost": 0, "enemy_status_updates": []}
+        required_keys = ["taken_damage"]
+        result = await self._generate_json_with_retry(system_prompt = sys_prompt, user_prompt = user_prompt, required_keys = required_keys)
+        return result if result else {"taken_damage": 0}

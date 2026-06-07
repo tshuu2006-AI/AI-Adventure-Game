@@ -754,6 +754,7 @@ async def use_item(item_name: str = Form(...), action_detail: str = Form("")):
 
         msg = use_result[1] if isinstance(use_result, tuple) else str(use_result)
         success = use_result[0] if isinstance(use_result, tuple) else True
+
         
         return JSONResponse(content={"success": success, "message": msg})
     except Exception as e:

@@ -196,7 +196,8 @@ class StateProcessor:
                                    items_removed: list,
                                    story_response: str,
                                    context: str,
-                                   is_safe_zone: bool):
+                                   is_safe_zone: bool,
+                                   is_being_attacked: bool):
         """Hàm chuyên xử lý logic túi đồ và tự động lưu Checkpoint (Snapshot) khi an toàn."""
 
         # ==========================================
@@ -269,6 +270,11 @@ class StateProcessor:
 
                 game_logger.debug(f"[Checkpoint] Đã lưu Snapshot an toàn trực tiếp vào Quest: '{current_quest.name}'.")
 
+        if is_being_attacked:
+            evaluate_damage = await self.combat_agent.extract_combat(story_response=story_response)
+            taken_damage = evaluate_damage.get('taken_damage', 0)
+            self.player_state.take_damage(amount = taken_damage)
+
 
     async def process_background_tasks(self, player_input: str, story_response: str):
         """Chạy song song trích xuất State"""
@@ -308,6 +314,7 @@ class StateProcessor:
         scene_emotion = state_changes.get("scene_emotion", "bình thường")
         affection_changes = state_changes.get("affection_changes", [])
         is_safe_zone = state_changes.get("is_safe_zone", True)
+        is_being_attacked = state_changes.get("is_being_attacked", False)
 
         game_logger.debug(f"[Profile] Background Tasks (State Extraction): {time.perf_counter() - start_bg:.3f}s")
 
@@ -324,7 +331,8 @@ class StateProcessor:
                                     items_removed=items_removed,
                                     context = context,
                                     story_response=story_response,
-                                    is_safe_zone=is_safe_zone),
+                                    is_safe_zone=is_safe_zone,
+                                    is_being_attacked=is_being_attacked),
             self._update_npcs(npcs_arrived = npcs_arrived,
                               npcs_left = npcs_left,
                               context = context),

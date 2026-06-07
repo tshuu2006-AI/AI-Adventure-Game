@@ -156,6 +156,8 @@ class InventoryManager:
         self.interactive_item_inventory.clear()
         self.equipped_weapon = None
 
+        equipped_name = data.get("equipped_weapon")
+
         for item_data in data.get("items", []):
             item_type = item_data.get("item_type", "miscellaneous")
             item_id = item_data.get("id")
@@ -170,6 +172,10 @@ class InventoryManager:
                     status_effect=item_data.get("status_effect"),
                     proc_chance=item_data.get("proc_chance", 0.0)
                 )
+
+                if item_name == equipped_name:
+                    self.equip_weapon(restored_item)
+
             elif item_type == "consumable":
                 restored_item = ConsumableItem(
                     id=item_id, name=item_name, description=item_desc,
@@ -188,10 +194,6 @@ class InventoryManager:
             restored_item.image_path = full_img_path if os.path.exists(full_img_path) else item_data.get("image_path")
 
             self.add_item(restored_item)
-
-        equipped_name = data.get("equipped_weapon")
-        if equipped_name:
-            self.equip_weapon(equipped_name)
 
 
     #=========================================================
@@ -235,8 +237,8 @@ class InventoryManager:
                      self.consumable_item_inventory +
                      self.interactive_item_inventory)
 
-        if not all_items: return "Túi đồ trống."
-        return ", ".join([item.name for item in all_items])
+        if not all_items: return []
+        return all_items
 
 
     def get_all_items(self) -> List[BaseItem]:
