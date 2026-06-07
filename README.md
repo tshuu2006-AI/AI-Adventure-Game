@@ -52,4 +52,11 @@ Eldoria/
 │   └── prompts.yaml     # The heart of the AI - Manages all dynamic prompts
 ├── server.py            # FastAPI Entry point, defining Endpoints
 └── tests/               # Unit testing (Pytest)
+```
+
+### 3. Environment Variables
+Create a `.env` file in the `SaveData` directory (or root directory) with the following content:
+```env
+GROQ_API_KEY=your_groq_key_here
+GEMINI_API_KEY=your_gemini_key_here
 
