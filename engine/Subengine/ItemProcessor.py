@@ -6,7 +6,6 @@ from typing import Dict, Any, List, Tuple
 from world.Entity import WeaponItem, ConsumableItem, MiscellaneousItem
 from engine.Utils.logger import game_logger
 from engine.Agents.LocalAgents import ItemAgent
-from static.config import ITEM_AGENT_MODEL
 
 
 class ItemProcessor:
@@ -16,7 +15,7 @@ class ItemProcessor:
     và bộ não đánh giá logic vật lý/phép thuật (ItemAgent - LLM).
     """
 
-    def __init__(self, player_state: PlayerState, gemini_api_key: str, pm: PromptManager):
+    def __init__(self, player_state: PlayerState, provider: str, gemini_api_key: str, pm: PromptManager):
         """
         Khởi tạo bộ xử lý vật phẩm.
 
@@ -27,8 +26,8 @@ class ItemProcessor:
         """
         # Cần local_agents (Gemini) để gọi AI check logic vật lý khi dùng đồ sáng tạo
         self.item_agent = ItemAgent(pm=pm,
-                                    model_name=ITEM_AGENT_MODEL,
-                                    gemini_api_key=gemini_api_key)
+                                    provider=provider,
+                                    api_key=gemini_api_key)
         self.player_state = player_state
 
 

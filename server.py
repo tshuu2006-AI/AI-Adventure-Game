@@ -76,9 +76,15 @@ app.state.orchestrator = GameOrchestrator(
     db_path=os.path.join(SAVE_DIR, "eldoria.db"),
     db_folder=SAVE_DIR,
     vector_model_path="all-MiniLM-L6-v2",
+    provider="gemini",
     groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
     gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
 )
+
+app.state.poll_cache = {
+    "dirty": True,   # Lần gọi đầu tiên bắt buộc phải build lại dữ liệu
+    "heavy": None    # Chứa payload ảnh và túi đồ
+}
 
 # Đảm bảo các thư mục cần thiết luôn tồn tại trước khi khởi tạo
 os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
@@ -285,6 +291,7 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
         game_logger.error(f"Lỗi chạy ngầm: {e}", exc_info=True)
     finally:
         orc.is_processing_bg = False
+        app.state.poll_cache["dirty"] = True
 
 
 # ==========================================
@@ -388,6 +395,20 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
         # 2. Phân rã văn bản (Dùng Class tiện ích)
         segments = TextFormatter.parse_story_into_segments(story_response)
 
+        current_hp = orc.get_current_hp()
+        is_dead = False
+        try:
+            combat_result = await orc.state_sys.combat_agent.extract_combat(story_response=story_response)
+            taken_damage = combat_result.get("taken_damage", 0)
+            is_being_attacked = combat_result.get("is_being_attacked", False)
+            if is_being_attacked and taken_damage > 0:
+                orc.player_state.take_damage(amount=taken_damage)
+                current_hp = orc.get_current_hp()
+                is_dead = orc.player_state.is_dead()
+                game_logger.info(f"[Combat] Nhận {taken_damage} sát thương. HP còn: {current_hp}. Chết: {is_dead}")
+        except Exception as e:
+            game_logger.error(f"[Combat] Lỗi extract combat: {e}", exc_info=True)
+
         # 3. Sinh Menu Lựa chọn (Giao tiếp qua các hàm bọc an toàn)
         choices = await orc.story_director.generate_player_choices(
             current_location_name=orc.get_current_location_name(),
@@ -407,7 +428,10 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
             "choices": choice_texts,
             "bg_image_b64": "",
             "char_image_b64": "",
-            "inventory": []
+            "inventory": [],
+            "hp": current_hp,
+            "max_hp": orc.get_max_hp(),
+            "is_dead": is_dead
         })
     except Exception as e:
         # Đã sửa lại nội dung log cho đúng ngữ cảnh
@@ -418,32 +442,62 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
 @app.get("/api/poll_updates")
 async def poll_updates():
     """
-    API Polling liên tục từ Unity để lấy dữ liệu State hiện tại (Máu, Chỉ số,
-    Túi đồ, Ảnh nền, Nhiệm vụ) độc lập với luồng Chat.
+    API Polling liên tục từ Unity để lấy dữ liệu State hiện tại.
+
+    Chiến lược cache 2 tầng:
+    - Heavy cache (bg_image, npc_images, inventory): Chỉ rebuild khi dirty=True
+      (tức là sau khi background task hoàn thành). Tránh đọc file và encode
+      base64 liên tục mỗi giây khi state không thay đổi.
+    - Light data (hp, stats, quest, emotion): Đọc trực tiếp từ RAM mỗi poll.
+      Rẻ vì chỉ là đọc attribute, không có I/O.
 
     Returns:
         JSONResponse: Payload tổng hợp mọi chỉ số và trạng thái game hiện tại.
     """
     try:
         orc = app.state.orchestrator
-        curr_loc = orc.get_current_location()
-        bg_img = image_to_base64_with_default(curr_loc.image_path if curr_loc else None)
+        poll_cache = app.state.poll_cache
 
-        # 🌟 NÂNG CẤP: Lấy ảnh của TẤT CẢ NPC trong cảnh hiện tại
-        npc_images_payload = []
-        npcs = orc.get_current_npcs()
-        if npcs:
-            for npc in npcs:
-                img_b64 = image_to_base64_with_default(npc.image_path)
-                if img_b64:
-                    npc_images_payload.append({
-                        "name": npc.name,
-                        "image_b64": img_b64
-                    })
+        # ==========================================
+        # TẦNG 1: HEAVY CACHE (ảnh + inventory)
+        # Chỉ rebuild khi dirty=True — tức là sau mỗi background task xong
+        # ==========================================
+        if poll_cache["dirty"] or poll_cache["heavy"] is None:
+            curr_loc = orc.get_current_location()
+            bg_img = image_to_base64_with_default(curr_loc.image_path if curr_loc else None)
 
-        inv_payload = build_inventory_payload()
+            npc_images_payload = []
+            npcs = orc.get_current_npcs()
+            if npcs:
+                for npc in npcs:
+                    img_b64 = image_to_base64_with_default(npc.image_path)
+                    if img_b64:
+                        npc_images_payload.append({
+                            "name": npc.name,
+                            "image_b64": img_b64
+                        })
+
+            inv_payload = build_inventory_payload()
+
+            # Lưu vào cache và đánh dấu sạch
+            poll_cache["heavy"] = {
+                "bg_image_b64": bg_img,
+                "npc_images": npc_images_payload,
+                "inventory": inv_payload,
+            }
+            poll_cache["dirty"] = False
+            game_logger.debug("[PollCache] Rebuilt heavy cache (ảnh + inventory)")
+        else:
+            # Dùng lại cache cũ — không đọc file, không encode base64
+            bg_img = poll_cache["heavy"]["bg_image_b64"]
+            npc_images_payload = poll_cache["heavy"]["npc_images"]
+            inv_payload = poll_cache["heavy"]["inventory"]
+
+        # ==========================================
+        # TẦNG 2: LIGHT DATA (đọc RAM trực tiếp)
+        # Luôn fresh mỗi poll — rẻ vì chỉ là attribute access
+        # ==========================================
         emotion = getattr(orc, "current_emotion", "bình thường")
-
         current_hp = orc.get_current_hp()
         max_hp = orc.get_max_hp()
         equipped_weapon = orc.get_equipped_weapon()
@@ -458,17 +512,15 @@ async def poll_updates():
         active_quest = orc.get_active_quest()
         quest_payload = None
         if active_quest:
-            # Lấy mảng objectives
             raw_obj = getattr(active_quest, 'objectives', getattr(active_quest, 'objective', []))
-            if isinstance(raw_obj, str): raw_obj = [raw_obj]  # Đảm bảo luôn là list
 
-            # Lấy mảng is_finished (nếu không có thì mặc định mảng toàn 0)
-            is_fin = getattr(active_quest, 'is_finished', [0] * len(raw_obj))
-
+            if isinstance(raw_obj, str): raw_obj = [raw_obj]
+            raw_is_fin = getattr(active_quest, 'is_finished', [0] * len(raw_obj))
+            is_fin = [1 if bool(x) else 0 for x in raw_is_fin]
             quest_payload = {
                 "name": active_quest.name,
-                "objectives": raw_obj,  # Gửi nguyên mảng chữ
-                "is_finished": is_fin,  # Gửi nguyên mảng số [0, 1, 0...]
+                "objectives": raw_obj,
+                "is_finished": is_fin,
                 "status": active_quest.status
             }
 
@@ -476,9 +528,9 @@ async def poll_updates():
             "bg_image_b64": bg_img,
             "npc_images": npc_images_payload,
             "inventory": inv_payload,
-            "hp": current_hp,  # MỚI
-            "max_hp": max_hp,  # MỚI
-            "weapon": weapon_name,  # MỚI
+            "hp": current_hp,
+            "max_hp": max_hp,
+            "weapon": weapon_name,
             "strength": strength_val,
             "agility": agility_val,
             "defense": defense_val,
@@ -488,7 +540,7 @@ async def poll_updates():
             "is_processing_bg": getattr(orc, "is_processing_bg", False)
         })
     except Exception as e:
-        print(f"Lỗi poll_updates: {e}")
+        game_logger.error(f"Lỗi poll_updates: {e}", exc_info=True)
         return JSONResponse(content={"bg_image_b64": "", "npc_images": [], "inventory": []})
 
 
@@ -522,7 +574,8 @@ async def get_diary():
             raw_obj = getattr(q, 'objectives', getattr(q, 'objective', []))
             if isinstance(raw_obj, str): raw_obj = [raw_obj]
 
-            is_fin = getattr(q, 'is_finished', [0] * len(raw_obj))
+            raw_is_fin = getattr(q, 'is_finished', [0] * len(raw_obj))
+            is_fin = [1 if bool(x) else 0 for x in raw_is_fin]
 
             quests_payload.append({
                 "name": getattr(q, 'name', 'Nhiệm vụ ẩn'),
@@ -682,6 +735,7 @@ async def update_settings(
                 db_path=os.path.join(SAVE_DIR, "eldoria.db"),
                 db_folder=SAVE_DIR,
                 vector_model_path="all-MiniLM-L6-v2",
+                provider=current_config["local_provider"],
                 groq_api_key=safe_key(current_config["cloud_key"]),
                 gemini_api_key=safe_key(current_config["local_model_or_key"])
             )
@@ -690,6 +744,7 @@ async def update_settings(
                 db_path=os.path.join(SAVE_DIR, "eldoria.db"),
                 db_folder=SAVE_DIR,
                 vector_model_path="all-MiniLM-L6-v2",
+                provider="gemini",
                 groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
                 gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
             )

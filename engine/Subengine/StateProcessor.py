@@ -5,7 +5,7 @@ from world.Entity import Location, NPC
 from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor, ItemAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
 from engine.Agents.CloudAgents import LocationAgent, NPCAgent, CombatAgent
-from static.config import STATE_EXTRACTOR_MODEL, MEMORY_EXTRACTOR_MODEL, LOCATION_AGENT_MODEL, NPC_AGENT_MODEL, ITEM_AGENT_MODEL
+from static.config import LOCATION_AGENT_MODEL, NPC_AGENT_MODEL, COMBAT_AGENT_MODEL
 from engine.DataManager.DatabaseManager import DatabaseManager
 from engine.Utils.PromptManager import PromptManager
 from engine.DataManager.PlayerState import PlayerState
@@ -15,14 +15,15 @@ class StateProcessor:
     def __init__(self, db: DatabaseManager,
                  player_state: PlayerState,
                  image_manager,
+                 provider: str,
                  groq_api_key: str,
                  gemini_api_key: str,
                  pm: PromptManager):
         self.db = db
         self.player_state = player_state
         self.image_manager = image_manager
-        self.state_extractor = StateExtractor(model_name = STATE_EXTRACTOR_MODEL, pm = pm, gemini_api_key=gemini_api_key)
-        self.memory_extractor = MemoryExtractor(model_name = MEMORY_EXTRACTOR_MODEL, pm = pm, gemini_api_key=gemini_api_key)
+        self.state_extractor = StateExtractor(provider=provider, pm = pm, api_key=gemini_api_key)
+        self.memory_extractor = MemoryExtractor(provider = provider, pm = pm, api_key=gemini_api_key)
 
         self.location_agent = LocationAgent(api_key = groq_api_key,
                                             pm = pm,
@@ -32,10 +33,10 @@ class StateProcessor:
                                   pm = pm,
                                   model_name = NPC_AGENT_MODEL)
 
-        self.item_agent = ItemAgent(model_name = ITEM_AGENT_MODEL, pm = pm, gemini_api_key=gemini_api_key)
+        self.item_agent = ItemAgent(provider = provider, pm = pm, api_key=gemini_api_key)
 
         self.combat_agent = CombatAgent(api_key=groq_api_key,
-                                        model_name= LOCATION_AGENT_MODEL,
+                                        model_name= COMBAT_AGENT_MODEL,
                                         pm = pm)
 
 
