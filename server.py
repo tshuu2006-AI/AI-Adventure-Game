@@ -76,6 +76,7 @@ app.state.orchestrator = GameOrchestrator(
     db_path=os.path.join(SAVE_DIR, "eldoria.db"),
     db_folder=SAVE_DIR,
     vector_model_path="all-MiniLM-L6-v2",
+    provider="gemini",
     groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
     gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
 )
@@ -734,6 +735,7 @@ async def update_settings(
                 db_path=os.path.join(SAVE_DIR, "eldoria.db"),
                 db_folder=SAVE_DIR,
                 vector_model_path="all-MiniLM-L6-v2",
+                provider=current_config["local_provider"],
                 groq_api_key=safe_key(current_config["cloud_key"]),
                 gemini_api_key=safe_key(current_config["local_model_or_key"])
             )
@@ -742,6 +744,7 @@ async def update_settings(
                 db_path=os.path.join(SAVE_DIR, "eldoria.db"),
                 db_folder=SAVE_DIR,
                 vector_model_path="all-MiniLM-L6-v2",
+                provider="gemini",
                 groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
                 gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
             )
