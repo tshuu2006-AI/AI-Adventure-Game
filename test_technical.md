@@ -111,6 +111,7 @@ tests/
 ├── unit/                     # Thư mục chứa các ca kiểm thử đơn vị độc lập
 │   ├── test_entities.py          # Kiểm tra cấu trúc khởi tạo các thực thể (NPC, Item, Quest...)
 │   ├── test_player_state.py      # Kiểm tra công thức máu, sát thương, trang bị và lưu trạng thái
+│   ├── test_combat_mechanics.py  # Kiểm tra các cơ chế chỉ số chiến đấu (Combat Stats) và tích hợp CombatAgent
 │   ├── test_memory_processor.py  # Kiểm tra thuật toán sắp xếp và chấm điểm ký ức
 │   └── test_text_formatter.py    # Kiểm tra bộ tách/định dạng các thẻ hội thoại văn bản
 │
@@ -121,4 +122,4 @@ tests/
 ```
 
 > [!NOTE]
-> Bộ kiểm thử này được thiết kế để có thể chạy hoàn toàn **Offline** mà không cần kết nối mạng hay khóa API thực tế (sử dụng 30 ca test đầu), hoặc chạy ở chế độ **Online** (kết hợp thêm 4 ca test trực tuyến cuối) khi cần xác thực tích hợp đầu-cuối với các mô hình ngôn ngữ lớn từ Google và Groq.
+> Bộ kiểm thử này được thiết kế để có thể chạy hoàn toàn **Offline** mà không cần kết nối mạng hay khóa API thực tế (sử dụng 34 ca test đầu), hoặc chạy ở chế độ **Online** (kết hợp thêm 4 ca test trực tuyến) khi cần xác thực tích hợp đầu-cuối với các mô hình ngôn ngữ lớn từ Google và Groq.
