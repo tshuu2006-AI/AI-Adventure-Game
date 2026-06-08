@@ -30,6 +30,7 @@ LOCATION_AGENT_MODEL = "qwen/qwen3-32b"
 NPC_AGENT_MODEL = "qwen/qwen3-32b"
 CHOICE_AGENT_MODEL = "qwen/qwen3-32b"
 WORLD_GENERATE_AGENT_MODEL = "qwen/qwen3-32b"
+COMBAT_AGENT_MODEL = "qwen/qwen3-32b"
 
 
 
