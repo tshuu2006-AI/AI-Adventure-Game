@@ -80,6 +80,11 @@ app.state.orchestrator = GameOrchestrator(
     gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
 )
 
+app.state.poll_cache = {
+    "dirty": True,   # Lần gọi đầu tiên bắt buộc phải build lại dữ liệu
+    "heavy": None    # Chứa payload ảnh và túi đồ
+}
+
 # Đảm bảo các thư mục cần thiết luôn tồn tại trước khi khởi tạo
 os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
