@@ -1,8 +1,8 @@
 import pytest
 import os
 from engine.Utils.PromptManager import PromptManager
-from engine.Agents.LocalAgents import IntentRouter
-from engine.Agents.CloudAgents import ChoiceAgent
+from engine.Agents.LocalAgents import IntentRouter, MusicClassifier
+from engine.Agents.CloudAgents import ChoiceAgent, QueryAgent
 from world.Entity import Quest, WeaponItem
 
 # Lấy cấu hình TEST_MODE từ conftest.py (hoặc biến môi trường trực tiếp)
@@ -39,7 +39,7 @@ async def test_online_choice_agent_groq():
     assert api_key != "DUMMY_GROQ_API_KEY", "GROQ_API_KEY đang bị gán key ảo"
 
     pm = PromptManager('./static/prompts.yaml')
-    agent = ChoiceAgent(api_key=api_key, pm=pm, model_name="llama3-8b-8192")
+    agent = ChoiceAgent(api_key=api_key, pm=pm, model_name="llama-3.3-70b-versatile")
     
     # Giả lập bối cảnh game để tạo menu lựa chọn
     result = await agent.generate_choices(
@@ -60,3 +60,38 @@ async def test_online_choice_agent_groq():
     assert "action_text" in choice
     assert "style" in choice
     print(f"\n[Online Groq] Phản hồi Choices: {result}")
+
+@pytest.mark.skipif(TEST_MODE != "online", reason="Chỉ chạy khi TEST_MODE=online và có API key thật")
+@pytest.mark.asyncio
+async def test_online_music_classifier_gemini():
+    """Kiểm thử trực tiếp MusicClassifier với Gemini API thật"""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    assert api_key is not None, "Thiếu GEMINI_API_KEY trong file .env"
+    
+    pm = PromptManager('./static/prompts.yaml')
+    classifier = MusicClassifier(pm=pm, gemini_api_key=api_key)
+    
+    # Phân tích một bối cảnh đáng sợ
+    result = await classifier.classify_emotion("Bóng tối bao trùm lấy ngóc ngách lâu đài, tiếng bước chân kẽo kẹt sau lưng và tiếng sói hú vang vọng.")
+    assert result in ["bình thường", "căng thẳng", "buồn", "vui", "sợ hãi"]
+    print(f"\n[Online Gemini] Phản hồi Cảm xúc Nhạc nền: {result}")
+
+@pytest.mark.skipif(TEST_MODE != "online", reason="Chỉ chạy khi TEST_MODE=online và có API key thật")
+@pytest.mark.asyncio
+async def test_online_query_agent_groq():
+    """Kiểm thử trực tiếp QueryAgent với Groq API thật"""
+    api_key = os.environ.get("GROQ_API_KEY")
+    assert api_key is not None, "Thiếu GROQ_API_KEY trong file .env"
+    
+    pm = PromptManager('./static/prompts.yaml')
+    agent = QueryAgent(api_key=api_key, pm=pm, model_name="llama-3.3-70b-versatile")
+    
+    result = await agent.generate_query(
+        current_location="Rừng sâu",
+        npc_names=["Elara"],
+        context="Người chơi đang đi tìm kiếm thảo dược quý để trị thương."
+    )
+    assert isinstance(result, str)
+    assert len(result) > 0
+    print(f"\n[Online Groq] Phản hồi Query: {result}")
+
