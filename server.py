@@ -463,7 +463,8 @@ async def poll_updates():
             if isinstance(raw_obj, str): raw_obj = [raw_obj]  # Đảm bảo luôn là list
 
             # Lấy mảng is_finished (nếu không có thì mặc định mảng toàn 0)
-            is_fin = getattr(active_quest, 'is_finished', [0] * len(raw_obj))
+            raw_is_fin = getattr(active_quest, 'is_finished', [0] * len(raw_obj))
+            is_fin = [1 if bool(x) else 0 for x in raw_is_fin]
 
             quest_payload = {
                 "name": active_quest.name,
@@ -522,7 +523,8 @@ async def get_diary():
             raw_obj = getattr(q, 'objectives', getattr(q, 'objective', []))
             if isinstance(raw_obj, str): raw_obj = [raw_obj]
 
-            is_fin = getattr(q, 'is_finished', [0] * len(raw_obj))
+            raw_is_fin = getattr(q, 'is_finished', [0] * len(raw_obj))
+            is_fin = [1 if bool(x) else 0 for x in raw_is_fin]
 
             quests_payload.append({
                 "name": getattr(q, 'name', 'Nhiệm vụ ẩn'),
