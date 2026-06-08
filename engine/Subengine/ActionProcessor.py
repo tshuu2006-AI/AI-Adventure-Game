@@ -39,6 +39,8 @@ class ActionProcessor:
         self.prob_have_npc = 5
         self.prob_new_location = 5
 
+        self._directives_cache = self._load_yaml()
+
     def _load_yaml(self) -> dict:
         """
         Đọc và phân tích file cấu hình YAML chứa các chỉ thị (directives) và bộ sửa đổi (modifiers).
@@ -84,7 +86,7 @@ class ActionProcessor:
         action_roll = random.randint(1, 100)
         status = "SUCCESS" if action_roll <= Success_rate else "FAILURE"
 
-        yaml_data = self._load_yaml()
+        yaml_data = self._directives_cache 
         base_directives = yaml_data.get("BaseDirectives", {})
 
         intent_dict = base_directives.get(intent)

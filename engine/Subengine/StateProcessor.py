@@ -5,7 +5,7 @@ from world.Entity import Location, NPC
 from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor, ItemAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
 from engine.Agents.CloudAgents import LocationAgent, NPCAgent, CombatAgent
-from static.config import STATE_EXTRACTOR_MODEL, MEMORY_EXTRACTOR_MODEL, LOCATION_AGENT_MODEL, NPC_AGENT_MODEL, ITEM_AGENT_MODEL
+from static.config import STATE_EXTRACTOR_MODEL, MEMORY_EXTRACTOR_MODEL, LOCATION_AGENT_MODEL, NPC_AGENT_MODEL, ITEM_AGENT_MODEL, COMBAT_AGENT_MODEL
 from engine.DataManager.DatabaseManager import DatabaseManager
 from engine.Utils.PromptManager import PromptManager
 from engine.DataManager.PlayerState import PlayerState
@@ -35,7 +35,7 @@ class StateProcessor:
         self.item_agent = ItemAgent(model_name = ITEM_AGENT_MODEL, pm = pm, gemini_api_key=gemini_api_key)
 
         self.combat_agent = CombatAgent(api_key=groq_api_key,
-                                        model_name= LOCATION_AGENT_MODEL,
+                                        model_name= COMBAT_AGENT_MODEL,
                                         pm = pm)
 
 
