@@ -1,9 +1,10 @@
 """
-Chứa các Local Agent
+Chứa các Local Agent (Hỗ trợ cả Gemini API và Ollama Local)
 """
 import json
 import re
 import logging
+import httpx
 from typing import Dict, Any, List
 
 from google import genai
@@ -12,48 +13,67 @@ from engine.DataManager.PlayerState import PlayerState
 from engine.Utils.PromptManager import PromptManager
 from engine.Utils.logger import game_logger
 from world.Entity import ConsumableItem, QuestItem, MiscellaneousItem, WeaponItem, BaseItem, Quest
+from static.config import (GEMINI_INTENT_ROUTER_MODEL, GEMINI_ITEM_AGENT_MODEL, GEMINI_MEMORY_EXTRACTOR_MODEL,
+                           GEMINI_QUEST_AGENT_MODEL, GEMINI_STATE_EXTRACTOR_MODEL,
+                           OLLAMA_INTENT_ROUTER_MODEL, OLLAMA_ITEM_AGENT_MODEL, OLLAMA_MEMORY_EXTRACTOR_MODEL,
+                           OLLAMA_QUEST_AGENT_MODEL, OLLAMA_STATE_EXTRACTOR_MODEL, GEMINI_MUSIC_CLASSIFIER,
+                           OLLAMA_MUSIC_CLASSIFIER)
 
 
 class BaseLocalAgent:
     """
-    Lớp cơ sở (Base Class) quản lý việc giao tiếp với Google Gemini API.
-    Cung cấp các phương thức dùng chung để khởi tạo client và sinh nội dung định dạng JSON.
+    Lớp cơ sở (Base Class) quản lý việc giao tiếp với LLM.
+    Hỗ trợ định tuyến luồng gọi API tới Google Gemini hoặc Ollama cục bộ.
     """
 
-    def __init__(self, pm: PromptManager, model_name: str = "gemini-3.1-flash-lite", gemini_api_key: str = None):
-        self.api_key = gemini_api_key
-        self.model_name = model_name
-        self.pm = pm
-        self.logger = logging.getLogger(self.__class__.__name__)
+    def __init__(self, pm: PromptManager,
+                 provider: str = "gemini",
+                 api_key:str = None,
+                 ollama_host: str = "http://localhost:11434"):
 
-        try:
-            if self.api_key:
-                self.client = genai.Client(api_key=self.api_key)
-            else:
-                self.client = genai.Client()
-        except Exception as e:
-            game_logger.warning(f"[Gemini] Lỗi khởi tạo Client (Kiểm tra lại GEMINI_API_KEY trong .env): {e}")
-            self.client = None
+        self.pm = pm
+        self.provider = provider.lower()
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.model_name = None
+
+        # Cấu hình Gemini
+        self.api_key = api_key
+        self.gemini_client = None
+
+        # Cấu hình Ollama
+        self.ollama_host = ollama_host
+
+        # Khởi tạo Client nếu dùng Gemini
+        if self.provider == "gemini":
+            try:
+                if self.api_key:
+                    self.gemini_client = genai.Client(api_key=self.api_key)
+                else:
+                    game_logger.error(f'[Gemini] Thiếu api key')
+            except Exception as e:
+                game_logger.warning(f"[Gemini] Lỗi khởi tạo Client: {e}")
 
 
     def _log_error(self, context: str, error: Exception):
         """Ghi log lỗi chi tiết kèm theo Stack Trace."""
         self.logger.error(f"Lỗi tại {context}: {str(error)}", exc_info=True)
 
-
     async def _generate_json(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
         """
-        Gọi API Gemini và ép kiểu dữ liệu trả về dưới dạng JSON dictionary.
-
-        Args:
-            system_prompt (str): Chỉ thị hệ thống (Rules & Role) cho LLM.
-            user_prompt (str): Dữ liệu đầu vào từ người dùng hoặc ngữ cảnh game.
-
-        Returns:
-            Dict[str, Any]: Dictionary chứa dữ liệu JSON đã được parse, hoặc dictionary rỗng nếu lỗi.
+        Gọi LLM (Gemini hoặc Ollama) và ép kiểu dữ liệu trả về dưới dạng JSON dictionary.
         """
-        if not self.client:
-            self.logger.error("[Gemini] Client chưa được khởi tạo. Không thể sinh nội dung.")
+        if self.provider == "gemini":
+            return await self._generate_json_gemini(system_prompt, user_prompt)
+        elif self.provider == "ollama":
+            return await self._generate_json_ollama(system_prompt, user_prompt)
+        else:
+            self.logger.error(f"Provider không hợp lệ: {self.provider}")
+            return {}
+
+    async def _generate_json_gemini(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+        """Xử lý luồng gọi Google Gemini API."""
+        if not self.gemini_client:
+            self.logger.error("[Gemini] Client chưa được khởi tạo.")
             return {}
 
         try:
@@ -63,34 +83,70 @@ class BaseLocalAgent:
                 temperature=0.0,
             )
 
-            response = await self.client.aio.models.generate_content(
+            response = await self.gemini_client.aio.models.generate_content(
                 model=self.model_name,
                 contents=user_prompt,
                 config=config,
             )
 
             raw_content = response.text
-
             try:
                 return json.loads(raw_content)
             except json.JSONDecodeError:
                 return self._parse_json_safely(raw_content)
 
         except Exception as e:
-            self._log_error("_generate_json (Lỗi kết nối hoặc thực thi API Gemini)", e)
+            self._log_error("_generate_json_gemini", e)
+            return {}
+
+    async def _generate_json_ollama(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+        """Xử lý luồng gọi Ollama Local API."""
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "format": "json",      # Ép Ollama trả về chuẩn JSON
+            "stream": False,
+            "options": {
+                "temperature": 0.0 # Đảm bảo tính nhất quán của output
+            }
+        }
+
+        try:
+            # Sử dụng httpx để gọi API bất đồng bộ. Đặt timeout cao vì Local LLM xử lý JSON có thể chậm.
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.ollama_host}/api/chat",
+                    json=payload,
+                    timeout=120.0
+                )
+                response.raise_for_status()
+
+                data = response.json()
+                raw_content = data.get("message", {}).get("content", "")
+
+                try:
+                    return json.loads(raw_content)
+                except json.JSONDecodeError:
+                    return self._parse_json_safely(raw_content)
+
+        except httpx.RequestError as e:
+            self._log_error(f"_generate_json_ollama (Không thể kết nối tới Ollama tại {self.ollama_host})", e)
+            return {}
+        except Exception as e:
+            self._log_error("_generate_json_ollama", e)
             return {}
 
     def _parse_json_safely(self, text: str) -> dict:
-        """
-        Phương án dự phòng để trích xuất khối JSON từ văn bản thô bằng Regex
-        trong trường hợp LLM sinh ra các ký tự thừa (như markdown code block).
-        """
+        """Trích xuất khối JSON từ văn bản thô bằng Regex."""
         try:
             match = re.search(r'\{.*\}', text, re.DOTALL)
             if match:
                 return json.loads(match.group().replace('\n', ' ').replace('\r', ''))
             else:
-                self.logger.warning(f"[_parse_ json_safely] Không tìm thấy JSON hợp lệ trong: {text[:100]}...")
+                self.logger.warning(f"[_parse_json_safely] Không tìm thấy JSON hợp lệ trong: {text[:100]}...")
                 return {}
         except json.JSONDecodeError as e:
             self._log_error(f"_parse_json_safely (Lỗi Regex JSON) | Text: {text[:100]}", e)
@@ -105,6 +161,15 @@ class IntentRouter(BaseLocalAgent):
     """
     Agent phân tích cú pháp và phân loại ý định (intent) từ hành động của người chơi.
     """
+    def __init__(self, pm: PromptManager,
+                 provider: str = "gemini",
+                 api_key: str = None,
+                 ollama_host: str = "http://localhost:11434"):
+        super().__init__(pm = pm, provider = provider, api_key = api_key, ollama_host = ollama_host)
+        if provider == 'gemini':
+            self.model_name = GEMINI_INTENT_ROUTER_MODEL
+        else:
+            self.model_name = OLLAMA_INTENT_ROUTER_MODEL
 
     async def parse_intent(self, player_input: str) -> Dict[str, Any]:
         """
@@ -134,6 +199,15 @@ class StateExtractor(BaseLocalAgent):
     """
     Agent theo dõi và trích xuất sự thay đổi trạng thái của game (Vật phẩm, NPC, Địa điểm).
     """
+    def __init__(self, pm: PromptManager,
+                 provider: str = "gemini",
+                 api_key: str = None,
+                 ollama_host: str = "http://localhost:11434"):
+        super().__init__(pm = pm, provider = provider, api_key = api_key, ollama_host = ollama_host)
+        if provider == 'gemini':
+            self.model_name = GEMINI_STATE_EXTRACTOR_MODEL
+        else:
+            self.model_name = OLLAMA_STATE_EXTRACTOR_MODEL
 
     async def extract_state(self, player_input: str, story_response: str, player_state: PlayerState) -> Dict[str, Any]:
         """
@@ -188,6 +262,15 @@ class MemoryExtractor(BaseLocalAgent):
     """
     Agent bóc tách và tóm tắt các sự kiện cốt lõi để lưu vào Vector Database.
     """
+    def __init__(self, pm: PromptManager,
+                 provider: str = "gemini",
+                 api_key: str = None,
+                 ollama_host: str = "http://localhost:11434"):
+        super().__init__(pm = pm, provider = provider, api_key = api_key, ollama_host = ollama_host)
+        if provider == 'gemini':
+            self.model_name = GEMINI_MEMORY_EXTRACTOR_MODEL
+        else:
+            self.model_name = OLLAMA_MEMORY_EXTRACTOR_MODEL
 
     async def extract_memory(self, player_input: str, story_response: str) -> dict:
         """
@@ -224,6 +307,15 @@ class MusicClassifier(BaseLocalAgent):
     """
     Agent phân tích sắc thái bối cảnh để điều phối nhạc nền của game.
     """
+    def __init__(self, pm: PromptManager,
+                 provider: str = "gemini",
+                 api_key: str = None,
+                 ollama_host: str = "http://localhost:11434"):
+        super().__init__(pm = pm, provider = provider, api_key = api_key, ollama_host = ollama_host)
+        if provider == 'gemini':
+            self.model_name = GEMINI_MUSIC_CLASSIFIER
+        else:
+            self.model_name = OLLAMA_MUSIC_CLASSIFIER
 
     async def classify_emotion(self, atmosphere_text: str) -> str:
         """
@@ -263,6 +355,15 @@ class ItemAgent(BaseLocalAgent):
     """
     Agent phụ trách sinh chỉ số cho vật phẩm mới và thẩm định logic khi người chơi chế tạo đồ.
     """
+    def __init__(self, pm: PromptManager,
+             provider: str = "gemini",
+             api_key: str = None,
+             ollama_host: str = "http://localhost:11434"):
+        super().__init__(pm = pm, provider = provider, api_key = api_key, ollama_host = ollama_host)
+        if provider == 'gemini':
+            self.model_name = GEMINI_ITEM_AGENT_MODEL
+        else:
+            self.model_name = OLLAMA_ITEM_AGENT_MODEL
 
     async def generate_item(self, context: str, item_name: str, item_type: str, quest=None) -> BaseItem:
         """
@@ -369,6 +470,15 @@ class QuestAgent(BaseLocalAgent):
     """
     Agent chuyên trách xử lý vòng đời của Nhiệm vụ (Sinh nhiệm vụ mới và Nghiệm thu).
     """
+    def __init__(self, pm: PromptManager,
+             provider: str = "gemini",
+             api_key: str = None,
+             ollama_host: str = "http://localhost:11434"):
+        super().__init__(pm = pm, provider = provider, api_key = api_key, ollama_host = ollama_host)
+        if provider == 'gemini':
+            self.model_name = GEMINI_QUEST_AGENT_MODEL
+        else:
+            self.model_name = OLLAMA_QUEST_AGENT_MODEL
 
     async def initialize_main_quest(self, world_name: str,
                                     world_theme: str,

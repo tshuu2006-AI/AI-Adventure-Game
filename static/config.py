@@ -36,16 +36,22 @@ COMBAT_AGENT_MODEL = "qwen/qwen3-32b"
 
 
 
-
-
-
 #================================================#
 #
 #       Config for LocalAgents.py
 #
 #================================================#
-INTENT_ROUTER_MODEL = "gemini-3.1-flash-lite"
-STATE_EXTRACTOR_MODEL = "gemini-3.1-flash-lite"
-MEMORY_EXTRACTOR_MODEL = "gemini-3.1-flash-lite"
-ITEM_AGENT_MODEL = "gemini-3.1-flash-lite"
-QUEST_AGENT_MODEL = "gemini-3.1-flash-lite"
+GEMINI_INTENT_ROUTER_MODEL = "gemini-3.1-flash-lite"
+GEMINI_STATE_EXTRACTOR_MODEL = "gemini-3.1-flash-lite"
+GEMINI_MEMORY_EXTRACTOR_MODEL = "gemini-3.1-flash-lite"
+GEMINI_ITEM_AGENT_MODEL = "gemini-3.1-flash-lite"
+GEMINI_QUEST_AGENT_MODEL = "gemini-3.1-flash-lite"
+GEMINI_MUSIC_CLASSIFIER = "gemini-3.1-flash-lite"
+
+
+OLLAMA_INTENT_ROUTER_MODEL = "qwen3.5:2b"
+OLLAMA_STATE_EXTRACTOR_MODEL = "qwen3.5:2b"
+OLLAMA_MEMORY_EXTRACTOR_MODEL = "qwen3.5:2b"
+OLLAMA_ITEM_AGENT_MODEL = "qwen3.5:2b"
+OLLAMA_QUEST_AGENT_MODEL = "qwen3.5:2b"
+OLLAMA_MUSIC_CLASSIFIER = "qwen3.5:2b"
