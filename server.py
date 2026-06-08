@@ -290,6 +290,7 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
         game_logger.error(f"Lỗi chạy ngầm: {e}", exc_info=True)
     finally:
         orc.is_processing_bg = False
+        app.state.poll_cache["dirty"] = True
 
 
 # ==========================================
