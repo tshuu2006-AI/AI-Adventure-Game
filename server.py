@@ -356,8 +356,8 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
         orc.last_choices = choices
         choice_texts = [c["action_text"] for c in choices]
 
-        # 4. Kích hoạt tác vụ ngầm (Trích xuất state, tải ảnh, ...)
-        bg_tasks.add_task(background_post_turn_processing, "[Bắt đầu trò chơi]", story_response, is_new_game=True)
+        # 4. Kích hoạt tác vụ ngầm (Trích xuất state, tải ảnh, ...) nay chuyển sang chạy đồng bộ
+        await background_post_turn_processing("[Bắt đầu trò chơi]", story_response, is_new_game=True)
 
         # 5. Trả về cho Client
         return JSONResponse(content={
@@ -420,18 +420,26 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
         orc.last_choices = choices
         choice_texts = [c["action_text"] for c in choices]
 
-        # 4. Kích hoạt Background Tasks (Trích xuất state, lưu DB)
-        bg_tasks.add_task(background_post_turn_processing, action, story_response)
+        # 4. Kích hoạt Background Tasks (Trích xuất state, lưu DB) nay chuyển sang chạy đồng bộ
+        await background_post_turn_processing(action, story_response)
+
+        # Kiểm tra trạng thái chiến thắng sau khi chạy xử lý ngầm (cập nhật trạng thái nhiệm vụ)
+        main_quest = getattr(orc.player_state, "main_quest", None)
+        is_victory = False
+        if main_quest and main_quest.status == "completed":
+            is_victory = True
+            game_logger.info("🏆 CHIẾN THẮNG! Người chơi đã hoàn thành chiến dịch chính.")
 
         return JSONResponse(content={
             "segments": segments,
-            "choices": choice_texts,
+            "choices": choice_texts if not is_victory else [],
             "bg_image_b64": "",
             "char_image_b64": "",
             "inventory": [],
             "hp": current_hp,
             "max_hp": orc.get_max_hp(),
-            "is_dead": is_dead
+            "is_dead": is_dead,
+            "is_victory": is_victory
         })
     except Exception as e:
         # Đã sửa lại nội dung log cho đúng ngữ cảnh
@@ -524,6 +532,11 @@ async def poll_updates():
                 "status": active_quest.status
             }
 
+        main_quest = getattr(orc.player_state, "main_quest", None)
+        is_victory = False
+        if main_quest and main_quest.status == "completed":
+            is_victory = True
+
         return JSONResponse(content={
             "bg_image_b64": bg_img,
             "npc_images": npc_images_payload,
@@ -537,11 +550,12 @@ async def poll_updates():
             "intelligence": intelligence_val,
             "emotion": emotion,
             "active_quest": quest_payload,
-            "is_processing_bg": getattr(orc, "is_processing_bg", False)
+            "is_processing_bg": getattr(orc, "is_processing_bg", False),
+            "is_victory": is_victory
         })
     except Exception as e:
         game_logger.error(f"Lỗi poll_updates: {e}", exc_info=True)
-        return JSONResponse(content={"bg_image_b64": "", "npc_images": [], "inventory": []})
+        return JSONResponse(content={"bg_image_b64": "", "npc_images": [], "inventory": [], "is_victory": False})
 
 
 @app.get("/api/diary")

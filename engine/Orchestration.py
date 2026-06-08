@@ -77,6 +77,9 @@ class GameOrchestrator:
     async def setup_new_game_api(self, player_idea: str) -> str:
         """Hàm chuyên dụng để khởi tạo New Game từ API"""
         self.player_state.clear()
+        self.memory_sys.long_term_memory.reset_vector_db()
+        self.memory_sys.short_term_memory.context_window = []
+        self.memory_sys.short_term_memory.current_structured_memory = None
 
         await self.db.connect()
         await self.db.reset_database()

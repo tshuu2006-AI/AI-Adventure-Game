@@ -2769,3 +2769,53 @@ AssertionError
 2026-06-08 22:27:50 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
 2026-06-08 22:27:50 | DEBUG    | MemoryManager:106 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
 2026-06-08 22:27:50 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 00:03:50 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-09 00:03:50 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-09 00:03:51 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-09 00:03:51 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 00:03:51 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 00:03:52 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 00:03:57 | DEBUG    | StoryDirector:39 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-09 00:03:57 | INFO     | Orchestration:75 | Hệ thống đã sẵn sàng!
+2026-06-09 00:03:57 | DEBUG    | server:489 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-09 00:03:57 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-17\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-09 00:03:57 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-09 00:03:57 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-09 00:03:57 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-09 00:03:57 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-09 00:03:57 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-09 00:03:57 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-09 00:03:57 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-09 00:03:57 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-09 00:03:58 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 00:03:58 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 4 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-09 00:03:59 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 00:03:59 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 17 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-09 00:04:02 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 00:04:02 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 00:04:02 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 00:27:30 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-09 00:27:30 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-09 00:27:31 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-09 00:27:31 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 00:27:31 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 00:27:32 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 00:27:37 | DEBUG    | StoryDirector:39 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-09 00:27:37 | INFO     | Orchestration:75 | Hệ thống đã sẵn sàng!
+2026-06-09 00:27:37 | DEBUG    | server:497 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-09 00:27:37 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-18\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-09 00:27:37 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-09 00:27:37 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-09 00:27:37 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-09 00:27:37 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-09 00:27:37 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-09 00:27:37 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-09 00:27:37 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-09 00:27:37 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-09 00:27:38 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 00:27:38 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 8 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-09 00:27:38 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 00:27:38 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 18 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-09 00:27:41 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 00:27:41 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 00:27:41 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.

@@ -1,6 +1,7 @@
 import os
 import shutil
 import json
+import asyncio
 from engine.Utils.logger import game_logger
 
 
@@ -30,21 +31,21 @@ class SaveManager:
         if hasattr(self.orc.memory_sys.long_term_memory, 'save_db'):
             self.orc.memory_sys.long_term_memory.save_db()
 
-        # 2. Copy file vật lý
+        # 2. Copy file vật lý (chạy phi chặn)
         if os.path.exists(self.orc.db.db_path):
-            shutil.copy(self.orc.db.db_path, os.path.join(slot_dir, "eldoria.db"))
+            await asyncio.to_thread(shutil.copy, self.orc.db.db_path, os.path.join(slot_dir, "eldoria.db"))
         
         # Lưu world_bible
         world_bible_path = os.path.join(self.orc.db.db_folder, "world_bible.json")
         if os.path.exists(world_bible_path):
-            shutil.copy(world_bible_path, os.path.join(slot_dir, "world_bible.json"))
-
-        idx_path = self.orc.memory_sys.long_term_memory.index_path
+            await asyncio.to_thread(shutil.copy, world_bible_path, os.path.join(slot_dir, "world_bible.json"))
 
         idx_path = self.orc.memory_sys.long_term_memory.index_path
         meta_path = self.orc.memory_sys.long_term_memory.meta_path
-        if os.path.exists(idx_path): shutil.copy(idx_path, os.path.join(slot_dir, "vector_index.bin"))
-        if os.path.exists(meta_path): shutil.copy(meta_path, os.path.join(slot_dir, "vector_meta.pkl"))
+        if os.path.exists(idx_path): 
+            await asyncio.to_thread(shutil.copy, idx_path, os.path.join(slot_dir, "vector_index.bin"))
+        if os.path.exists(meta_path): 
+            await asyncio.to_thread(shutil.copy, meta_path, os.path.join(slot_dir, "vector_meta.pkl"))
 
         # 3. Bật lại DB
         await self.orc.db.connect()
@@ -70,18 +71,20 @@ class SaveManager:
             self.orc.db.conn = None
 
         try:
-            shutil.copy(os.path.join(slot_dir, "eldoria.db"), self.orc.db.db_path)
+            await asyncio.to_thread(shutil.copy, os.path.join(slot_dir, "eldoria.db"), self.orc.db.db_path)
 
             src_bible = os.path.join(slot_dir, "world_bible.json")
             world_bible_path = os.path.join(self.orc.db.db_folder, "world_bible.json")
             if os.path.exists(src_bible): 
-                shutil.copy(src_bible, world_bible_path)
+                await asyncio.to_thread(shutil.copy, src_bible, world_bible_path)
 
             src_idx = os.path.join(slot_dir, "vector_index.bin")
-            if os.path.exists(src_idx): shutil.copy(src_idx, self.orc.memory_sys.long_term_memory.index_path)
+            if os.path.exists(src_idx): 
+                await asyncio.to_thread(shutil.copy, src_idx, self.orc.memory_sys.long_term_memory.index_path)
 
             src_meta = os.path.join(slot_dir, "vector_meta.pkl")
-            if os.path.exists(src_meta): shutil.copy(src_meta, self.orc.memory_sys.long_term_memory.meta_path)
+            if os.path.exists(src_meta): 
+                await asyncio.to_thread(shutil.copy, src_meta, self.orc.memory_sys.long_term_memory.meta_path)
         except Exception as e:
             game_logger.error(f"[SaveSystem] Lỗi copy đè: {e}")
             return False, f"Lỗi ghi đè tệp tin: {e}"

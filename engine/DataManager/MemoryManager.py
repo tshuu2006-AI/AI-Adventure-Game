@@ -40,9 +40,10 @@ class VectorMemory:
             # 1. Khởi tạo lại Index mới với cùng số chiều (dimension) ban đầu
             self.index = faiss.IndexIDMap(faiss.IndexFlatIP(self.dimension))
 
-            # 2. Xóa sạch metadata và reset bộ đếm ID
+            # 2. Xóa sạch metadata và reset bộ đếm ID, lượt chơi
             self.metadata = {}
             self.num_memory = 0  # Quan trọng: để ID bắt đầu lại từ 0
+            self.game_turn = 0
 
             # 3. Xóa các file vật lý trên ổ cứng để tránh nạp lại dữ liệu cũ khi khởi động lại
             if os.path.exists(self.index_path):
@@ -101,10 +102,16 @@ class VectorMemory:
                 self.index = faiss.read_index(self.index_path)
                 with open(self.meta_path, 'rb') as f:
                     self.metadata = pickle.load(f)
+                self.num_memory = len(self.metadata)
                 game_logger.info(f"[VectorDB] Khôi phục thành công {self.index.ntotal} ký ức từ ổ cứng.")
             else:
+                self.metadata = {}
+                self.num_memory = 0
+                self.game_turn = 0
                 game_logger.debug("[VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.")
         except Exception as e:
+            self.num_memory = 0
+            self.game_turn = 0
             game_logger.error(f"[VectorDB Lỗi] Không thể khôi phục dữ liệu FAISS: {e}", exc_info=True)
 
     def save_db(self) -> None:

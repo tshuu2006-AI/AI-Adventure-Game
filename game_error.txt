@@ -1,0 +1,6 @@
+Các lỗi hiện tại:
+- sau khi đã lưu game, ấn chơi game mới thì game mới này bị ảnh hưởng bởi cái lưu game, nghĩa là turn không được reset về 0 mà vẫn tiếp tục.
+- khi trang bị vật phẩm, thì tôi thấy chỉ số nó không được cố định (tôi chưa chắc về điều này)
+- có vẻ sau khi lưu vài lần thì game có bị mất trí nhớ
+- trên frontend thông báo có nhận vật phẩm nhưng trong backend không thông báo (cái này không biết có phải do gemini hết token không)
+- sau khi hoàn thành hết tất cả nhiệm vụ thì chưa thấy có cơ chế kết thúc game

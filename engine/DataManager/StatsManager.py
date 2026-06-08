@@ -102,9 +102,20 @@ class StatsManager:
 
         # Gán buff mới
         if modifiers:
+            # Bản đồ ánh xạ chuẩn hóa các key viết tắt từ LLM sang key chính thức
+            normalization_map = {
+                "str": "strength", "strength": "strength",
+                "agi": "agility", "agility": "agility",
+                "int": "intelligence", "intelligence": "intelligence",
+                "def": "defense", "defense": "defense"
+            }
             for k, v in modifiers.items():
-                if k in self.bonus_stats:
-                    self.bonus_stats[k] = v
+                standard_key = normalization_map.get(k.lower().strip())
+                if standard_key and standard_key in self.bonus_stats:
+                    try:
+                        self.bonus_stats[standard_key] = int(v)
+                    except (ValueError, TypeError):
+                        pass
 
     def heal(self, amount):
         """
