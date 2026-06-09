@@ -529,8 +529,7 @@ class QuestAgent(BaseLocalAgent):
 
         return quest
 
-    async def evaluate_quest_status(self, quest_title: str, objectives: List[str], player_input: str,
-                                    story_response: str) -> Dict[str, Any]:
+    async def evaluate_quest_status(self, quest_title: str, objectives: List[str], player_input: str, story_response: str) -> dict:
         """
         Đọc hành động của người chơi và phản hồi của cốt truyện để đánh giá xem
         mục tiêu nhiệm vụ đã được hoàn thành hay chưa.

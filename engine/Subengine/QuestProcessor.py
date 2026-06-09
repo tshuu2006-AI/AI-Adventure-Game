@@ -80,7 +80,11 @@ class QuestProcessor:
     async def evaluate_turn(self, player_input: str, story_response: str) -> bool:
 
         current_quest = self.player_state.active_quest
-        objectives = current_quest.objectives.copy()
+        if current_quest:
+            print(f"Current quest: {current_quest.name}")
+        else:
+            print(f"No quest is active")
+        objectives = current_quest.objectives.copy() if current_quest else []
 
         for i in range(len(objectives)):
             if current_quest.is_finished[i]:
@@ -156,8 +160,6 @@ class QuestProcessor:
         objectives = quest_data.get("objectives", ["Sống sót"])
         give_by = quest_data.get("give_by", "Vận mệnh")
 
-        # 4. Tạo Object Quest
-        from world.Entity import Quest
         main_quest = Quest(
             id=0,
             name=title,

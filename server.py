@@ -497,6 +497,7 @@ async def poll_updates():
 
         active_quest = orc.get_active_quest()
         quest_payload = None
+        print(f"Số lượng máu hiện tại: {orc.player_state.get_current_hp()}")
         if active_quest:
             raw_obj = getattr(active_quest, 'objectives', getattr(active_quest, 'objective', []))
 
@@ -509,6 +510,8 @@ async def poll_updates():
                 "is_finished": is_fin,
                 "status": active_quest.status
             }
+
+
 
         return JSONResponse(content={
             "bg_image_b64": bg_img,
