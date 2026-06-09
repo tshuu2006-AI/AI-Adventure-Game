@@ -487,7 +487,7 @@ async def poll_updates():
         current_hp = orc.get_current_hp()
         max_hp = orc.get_max_hp()
         equipped_weapon = orc.get_equipped_weapon()
-        weapon_name = equipped_weapon.name if equipped_weapon else "Tay không"
+        weapon_name = equipped_weapon.name if equipped_weapon else "Không có"
         weapon_img_b64 = image_to_base64_with_default(getattr(equipped_weapon, 'image_path', None) if equipped_weapon else None, is_item=True)
 
         t_stats = orc.player_state.stats.total_stats
