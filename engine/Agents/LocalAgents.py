@@ -148,13 +148,14 @@ class BaseLocalAgent:
 
         payload = {
             "model": self.model_name,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
+            "messages": [...],
             "format": "json",
             "stream": False,
-            "options": {"temperature": 0.0}
+            "options": {
+                "temperature": 0.2,
+                "keep_alive": -1,  # Giữ model trong VRAM
+                "num_ctx": 4096,
+            }
         }
 
         try:
@@ -162,7 +163,6 @@ class BaseLocalAgent:
                 response = await client.post(
                     f"{host}/api/chat",  # ← đổi self.ollama_host thành host
                     json=payload,
-                    headers=headers,
                     timeout=120.0
                 )
                 response.raise_for_status()
