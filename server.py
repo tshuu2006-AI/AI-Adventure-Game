@@ -53,8 +53,6 @@ def safe_key(key: str, env_var_name: str, skip_format_check: bool = False) -> st
             is_valid = True
         elif env_var_name == "GEMINI_API_KEY" and k.startswith("AIza") and len(k) > 30:
             is_valid = True
-        elif env_var_name == "OLLAMA_API_KEY":
-            is_valid = True
 
     if is_valid: return k
 
@@ -217,28 +215,6 @@ async def verify_gemini_key(api_key: str) -> bool:
             return True
 
         return await asyncio.to_thread(test)
-    except Exception:
-        return False
-
-
-async def verify_ollama_key(api_key: str) -> bool:
-    """
-    Xác thực Ollama API Key bằng cách thử gọi cloud endpoint với Bearer token.
-
-    Args:
-        api_key (str): Khóa API Ollama cần kiểm tra.
-
-    Returns:
-        bool: True nếu key hợp lệ, False nếu bị từ chối hoặc lỗi kết nối.
-    """
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                "https://ollama.com/api/tags",  # ← đổi /api/models thành /api/tags
-                headers={"Authorization": f"Bearer {api_key}"},
-                timeout=5.0
-            )
-            return response.status_code == 200
     except Exception:
         return False
 
@@ -680,14 +656,10 @@ async def check_config(
             content={"success": False, "message": "❌ Cloud API Key (Groq) không hợp lệ hoặc không kết nối được!"})
 
     if is_ollama.lower() == "true":
-        # Chỉ verify key, không check model
-        ollama_key = local_model_or_key.strip()
-        key_ok = await verify_ollama_key(ollama_key)
-        if not key_ok:
-            return JSONResponse(content={
-                "success": False,
-                "message": "❌ Ollama API Key không hợp lệ hoặc hết hạn!"
-            })
+        return JSONResponse(content={
+            "success": True,
+            "message": "💚 Tuyệt vời! Cả hai cấu hình đều hợp lệ và sẵn sàng sử dụng."
+        })
     else:
         local_ok = await verify_gemini_key(local_model_or_key.strip())
         if not local_ok:
@@ -752,7 +724,9 @@ async def update_settings(
                 vector_model_path="all-MiniLM-L6-v2",
                 provider=current_config["local_provider"],
                 groq_api_key=safe_key(current_config["cloud_key"], "GROQ_API_KEY"),
-                local_api_key=safe_key(current_config["local_model_or_key"], "OLLAMA_API_KEY" if is_ollama_bool else "GEMINI_API_KEY")
+                local_api_key="" if is_ollama_bool else safe_key(
+                    current_config["local_model_or_key"], "GEMINI_API_KEY"
+                )
             )
         else:
             app.state.orchestrator = GameOrchestrator(
@@ -761,9 +735,8 @@ async def update_settings(
                 vector_model_path="all-MiniLM-L6-v2",
                 provider="ollama" if is_ollama_bool else "gemini",
                 groq_api_key=safe_key(os.getenv("GROQ_API_KEY", ""), "GROQ_API_KEY"),
-                local_api_key=safe_key(
-                    os.getenv("OLLAMA_API_KEY", "") if is_ollama_bool
-                    else os.getenv("GEMINI_API_KEY", ""), "OLLAMA_API_KEY" if is_ollama_bool else "GEMINI_API_KEY"
+                local_api_key="" if is_ollama_bool else safe_key(
+                    os.getenv("GEMINI_API_KEY", ""), "GEMINI_API_KEY"
                 )
             )
 
