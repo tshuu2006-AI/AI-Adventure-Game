@@ -54,6 +54,46 @@ class BaseLocalAgent:
                 game_logger.warning(f"[Gemini] Lỗi khởi tạo Client: {e}")
 
 
+    async def _auto_pull_model_if_missing(self) -> bool:
+        """Kiểm tra và yêu cầu Ollama tự động tải model về nếu chưa có sẵn."""
+        if not self.model_name:
+            return False
+
+        try:
+            async with httpx.AsyncClient() as client:
+                # 1. Lấy danh sách model đang có trên máy
+                response = await client.get(f"{self.ollama_host}/api/tags", timeout=3.0)
+                if response.status_code == 200:
+                    available_models = [m["name"] for m in response.json().get("models", [])]
+
+                    # Cân nhắc trường hợp tên có hoặc không có tag ":latest"
+                    search_name = self.model_name if ":" in self.model_name else f"{self.model_name}:latest"
+                    if search_name in available_models or self.model_name in available_models:
+                        return True  # Đã có model, không cần tải
+
+            # 2. Nếu chưa có, gọi API yêu cầu Ollama tải về
+            game_logger.info(
+                f"[Ollama] Model '{self.model_name}' chưa có sẵn. Đang tự động tải về (Có thể mất vài phút tùy dung lượng mạng)...")
+
+            # Thời gian timeout rất cao (1800s = 30 phút) để chờ tải xong các file vài GB
+            async with httpx.AsyncClient(timeout=1800.0) as client:
+                pull_response = await client.post(
+                    f"{self.ollama_host}/api/pull",
+                    json={"name": self.model_name, "stream": False}
+                )
+
+                if pull_response.status_code == 200:
+                    game_logger.info(f"✅ [Ollama] Tải thành công model '{self.model_name}'!")
+                    return True
+                else:
+                    game_logger.error(f"❌ [Ollama] Lỗi khi tự tải model: {pull_response.text}")
+                    return False
+
+        except Exception as e:
+            game_logger.error(f"[Ollama] Lỗi hệ thống khi kiểm tra/tải model: {e}")
+            return False
+
+
     def _log_error(self, context: str, error: Exception):
         """Ghi log lỗi chi tiết kèm theo Stack Trace."""
         self.logger.error(f"Lỗi tại {context}: {str(error)}", exc_info=True)
@@ -69,6 +109,7 @@ class BaseLocalAgent:
         else:
             self.logger.error(f"Provider không hợp lệ: {self.provider}")
             return {}
+
 
     async def _generate_json_gemini(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
         """Xử lý luồng gọi Google Gemini API."""
@@ -101,6 +142,9 @@ class BaseLocalAgent:
 
     async def _generate_json_ollama(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
         """Xử lý luồng gọi Ollama Local API."""
+
+        await self._auto_pull_model_if_missing()
+
         payload = {
             "model": self.model_name,
             "messages": [
@@ -503,7 +547,7 @@ class QuestAgent(BaseLocalAgent):
 
         return result
 
-    
+
     async def generate_quests(self, location_name: str, npc_names: str, context: str) -> Quest:
         """
         Dựa vào bối cảnh, địa điểm và NPC hiện tại để sinh ra các nhiệm vụ phụ phù hợp.
