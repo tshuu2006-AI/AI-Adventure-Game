@@ -58,8 +58,6 @@ class BaseLocalAgent:
         """Kiểm tra và yêu cầu Ollama tự động tải model về nếu chưa có sẵn."""
         if not self.model_name:
             return False
-        if self.model_name.endswith(":cloud"):
-            return True
 
         try:
             async with httpx.AsyncClient() as client:
@@ -145,12 +143,8 @@ class BaseLocalAgent:
     async def _generate_json_ollama(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
         await self._auto_pull_model_if_missing()
 
-        headers = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
         # ← Thêm đoạn này: cloud model dùng host khác
-        host = "https://ollama.com" if self.model_name.endswith(":cloud") else self.ollama_host
+        host = self.ollama_host
 
         payload = {
             "model": self.model_name,
@@ -189,16 +183,33 @@ class BaseLocalAgent:
             return {}
 
     def _parse_json_safely(self, text: str) -> dict:
-        """Trích xuất khối JSON từ văn bản thô bằng Regex."""
+        """
+        Dùng thư viện chuyên dụng để 'chữa cháy' và tự động sửa các lỗi cú pháp JSON
+        (như dư dấu phẩy, thiếu ngoặc, unescaped quotes) do LLM sinh ra.
+        """
+        import re
+        import json_repair  # Thư viện tự động sửa lỗi JSON của LLM
+
         try:
-            match = re.search(r'\{.*\}', text, re.DOTALL)
-            if match:
-                return json.loads(match.group().replace('\n', ' ').replace('\r', ''))
-            else:
-                self.logger.warning(f"[_parse_json_safely] Không tìm thấy JSON hợp lệ trong: {text[:100]}...")
-                return {}
-        except json.JSONDecodeError as e:
-            self._log_error(f"_parse_json_safely (Lỗi Regex JSON) | Text: {text[:100]}", e)
+            # 1. Trích xuất khối text có vẻ giống JSON nhất (phòng trường hợp AI nói nhảm ở đầu/cuối)
+            match = re.search(r'\{.*\}|\[.*\]', text, re.DOTALL)
+            json_string = match.group() if match else text
+
+            # 2. Dùng json_repair để tự động sửa lỗi cú pháp và parse thành Dict
+            decoded_data = json_repair.loads(json_string)
+
+            # Đảm bảo kết quả trả về đúng là một Dictionary
+            if isinstance(decoded_data, dict):
+                self.logger.info("[Auto-Fix] Đã tự động sửa thành công lỗi cú pháp JSON của LLM!")
+                return decoded_data
+            elif isinstance(decoded_data, list) and len(decoded_data) > 0:
+                # Nếu AI lỡ bọc trong mảng [{...}]
+                return decoded_data[0]
+
+            return {}
+
+        except Exception as e:
+            self._log_error(f"_parse_json_safely (JSON Repair cũng bó tay) | Text: {text[:100]}...", e)
             return {}
 
 
