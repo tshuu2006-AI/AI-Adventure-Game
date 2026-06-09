@@ -2819,3 +2819,195 @@ AssertionError
 2026-06-09 00:27:41 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
 2026-06-09 00:27:41 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
 2026-06-09 00:27:41 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:07:13 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-09 12:07:13 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-09 12:07:14 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-09 12:07:14 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:07:14 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:07:15 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:07:21 | DEBUG    | StoryDirector:39 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-09 12:07:21 | INFO     | Orchestration:75 | Hệ thống đã sẵn sàng!
+2026-06-09 12:07:21 | DEBUG    | server:497 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-09 12:07:21 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-19\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-09 12:07:21 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-09 12:07:21 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-09 12:07:21 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-09 12:07:21 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-09 12:07:21 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-09 12:07:21 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-09 12:07:21 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-09 12:07:21 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-09 12:07:22 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:07:22 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 6 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-09 12:07:23 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:07:23 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 17 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-09 12:07:27 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 12:07:27 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:07:28 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:08:26 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-09 12:08:26 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-09 12:08:26 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-09 12:08:26 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:08:27 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:08:27 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:08:32 | DEBUG    | StoryDirector:39 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-09 12:08:32 | INFO     | Orchestration:75 | Hệ thống đã sẵn sàng!
+2026-06-09 12:08:32 | DEBUG    | server:497 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-09 12:08:32 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-20\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-09 12:08:32 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-09 12:08:32 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-09 12:08:32 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-09 12:08:32 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-09 12:08:32 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-09 12:08:32 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-09 12:08:32 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-09 12:08:32 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-09 12:08:33 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:08:33 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 8 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-09 12:08:34 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:08:34 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 20 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-09 12:08:37 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 12:08:37 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:08:37 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:09:05 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-09 12:09:05 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-09 12:09:06 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-09 12:09:06 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:09:06 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:09:07 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:09:11 | DEBUG    | StoryDirector:39 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-09 12:09:11 | INFO     | Orchestration:75 | Hệ thống đã sẵn sàng!
+2026-06-09 12:09:12 | DEBUG    | server:497 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-09 12:09:12 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-21\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-09 12:09:12 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-09 12:09:12 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-09 12:09:12 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-09 12:09:12 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-09 12:09:12 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-09 12:09:12 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-09 12:09:12 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-09 12:09:12 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-09 12:09:12 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:09:12 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 7 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-09 12:09:13 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:09:13 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 18 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-09 12:09:16 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 12:09:16 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:09:16 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:09:42 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 12:10:02 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 12:10:02 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:10:02 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:10:03 | DEBUG    | MemoryProcessor:135 | [MemoryProcessor] Truy vấn FAISS: 'Tôi muốn nhờ Eldrin dịch giúp trang sách ma pháp cổ này.'
+2026-06-09 12:10:03 | DEBUG    | MemoryProcessor:197 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.451s
+2026-06-09 12:10:03 | DEBUG    | MemoryProcessor:135 | [MemoryProcessor] Truy vấn FAISS: 'Tôi muốn nhờ Eldrin dịch giúp trang sách ma pháp cổ này.'
+2026-06-09 12:10:03 | INFO     | MemoryProcessor:193 | [Headroom Optimization] Chars: 944 (Compressed, Saved 10.86%, Est. Saved: 39 tokens)
+2026-06-09 12:10:03 | DEBUG    | MemoryProcessor:197 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.107s
+2026-06-09 12:10:26 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 12:10:26 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:10:26 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:10:26 | DEBUG    | MemoryProcessor:135 | [MemoryProcessor] Truy vấn FAISS: 'Tôi muốn nhờ Eldrin dịch giúp trang sách ma pháp cổ này.'
+2026-06-09 12:10:26 | DEBUG    | MemoryProcessor:197 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.291s
+2026-06-09 12:10:26 | DEBUG    | MemoryProcessor:135 | [MemoryProcessor] Truy vấn FAISS: 'Tôi muốn nhờ Eldrin dịch giúp trang sách ma pháp cổ này.'
+2026-06-09 12:10:26 | INFO     | MemoryProcessor:193 | [Headroom Optimization] Chars: 936 (Compressed, Saved 11.61%, Est. Saved: 41 tokens)
+2026-06-09 12:10:26 | DEBUG    | MemoryProcessor:197 | [Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: 0.161s
+2026-06-09 12:23:42 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-09 12:23:43 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-09 12:23:43 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-09 12:23:43 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:23:43 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:23:44 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:23:49 | DEBUG    | StoryDirector:39 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-09 12:23:49 | INFO     | Orchestration:75 | Hệ thống đã sẵn sàng!
+2026-06-09 12:23:49 | DEBUG    | server:497 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-09 12:23:49 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-22\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-09 12:23:49 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-09 12:23:49 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-09 12:23:49 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-09 12:23:49 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-09 12:23:49 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-09 12:23:49 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-09 12:23:49 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-09 12:23:49 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-09 12:23:50 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:23:50 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 3 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-09 12:23:50 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:23:50 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 20 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-09 12:23:53 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 12:23:53 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:23:53 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:34:03 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-09 12:34:03 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-09 12:34:04 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-09 12:34:04 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:34:04 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:34:05 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:34:09 | DEBUG    | StoryDirector:39 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-09 12:34:09 | INFO     | Orchestration:75 | Hệ thống đã sẵn sàng!
+2026-06-09 12:34:10 | DEBUG    | server:497 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-09 12:34:10 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-23\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-09 12:34:10 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-09 12:34:10 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-09 12:34:10 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-09 12:34:10 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-09 12:34:10 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-09 12:34:10 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-09 12:34:10 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-09 12:34:10 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-09 12:34:10 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:34:10 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 4 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-09 12:34:11 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:34:11 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 20 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-09 12:34:14 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 12:34:14 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:34:14 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:39:03 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-09 12:39:03 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-09 12:39:03 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-09 12:39:03 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:39:04 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:39:04 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:39:09 | DEBUG    | StoryDirector:39 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-09 12:39:09 | INFO     | Orchestration:75 | Hệ thống đã sẵn sàng!
+2026-06-09 12:39:09 | DEBUG    | server:497 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-09 12:39:09 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-24\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-09 12:39:09 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-09 12:39:09 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-09 12:39:09 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-09 12:39:09 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-09 12:39:09 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-09 12:39:09 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-09 12:39:09 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-09 12:39:09 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-09 12:39:10 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:39:10 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 4 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-09 12:39:11 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:39:11 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 21 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-09 12:39:13 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 12:39:13 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:39:14 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:50:42 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-09 12:50:42 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-09 12:50:43 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-09 12:50:43 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:50:43 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-09 12:50:44 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:50:49 | DEBUG    | StoryDirector:39 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-09 12:50:49 | INFO     | Orchestration:75 | Hệ thống đã sẵn sàng!
+2026-06-09 12:50:50 | DEBUG    | server:497 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-09 12:50:50 | INFO     | DatabaseManager:35 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-25\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-09 12:50:50 | INFO     | DatabaseManager:55 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-09 12:50:50 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-09 12:50:50 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-09 12:50:50 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-09 12:50:50 | DEBUG    | DatabaseManager:92 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-09 12:50:50 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-09 12:50:50 | DEBUG    | DatabaseManager:153 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-09 12:50:50 | INFO     | DatabaseManager:83 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-09 12:50:51 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:50:51 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 3 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-09 12:50:51 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-09 12:50:51 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 19 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-09 12:50:55 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-09 12:50:55 | DEBUG    | MemoryManager:111 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-09 12:50:55 | DEBUG    | MemoryProcessor:22 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.

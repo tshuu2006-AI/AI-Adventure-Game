@@ -130,6 +130,7 @@ class BaseCloudAgent:
             {"role": "user", "content": user_prompt}
         ]
 
+        import re
         for attempt in range(1, max_retries + 1):
             try:
                 # Gọi API ép buộc trả về JSON
@@ -158,8 +159,39 @@ class BaseCloudAgent:
                 await asyncio.sleep(0.5)
 
             except Exception as e:
+                # Fallback đặc biệt: Nếu lỗi do Groq không validate được JSON hoặc model không hỗ trợ
+                if "json_validate_failed" in str(e) or "validate" in str(e) or "BadRequestError" in type(e).__name__:
+                    self.logger.warning(f"[Attempt {attempt}/{max_retries}] Groq JSON validation failed. Thử lại không dùng response_format...")
+                    try:
+                        # Gọi lại API không ép buộc response_format
+                        response = await self._chat(messages=messages, temperature=temperature, stream=False)
+                        json_str = response.choices[0].message.content
+                        
+                        try:
+                            data = json.loads(json_str)
+                        except json.JSONDecodeError:
+                            # Parse bằng Regex
+                            match = re.search(r'\{.*\}', json_str, re.DOTALL)
+                            if match:
+                                data = json.loads(match.group().replace('\n', ' ').replace('\r', ''))
+                            else:
+                                raise ValueError("Không tìm thấy cấu trúc JSON bằng Regex.")
+
+                        if not isinstance(data, dict):
+                            raise ValueError(f"Kết quả không phải JSON object: {type(data)}")
+
+                        missing_keys = [key for key in required_keys if key not in data]
+                        if missing_keys:
+                            raise ValueError(f"Thiếu các key: {missing_keys}")
+
+                        return data
+                    except Exception as retry_err:
+                        self.logger.error(f"[Attempt {attempt}/{max_retries}] Thử lại không dùng response_format thất bại: {retry_err}")
+
                 self._log_error(f"Lỗi API trong lúc sinh JSON (Lần {attempt})", e)
-                return {}
+                if attempt == max_retries:
+                    return {}
+                await asyncio.sleep(0.5)
 
         return {}
 

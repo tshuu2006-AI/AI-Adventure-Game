@@ -71,33 +71,78 @@ class BaseLocalAgent:
             return {}
 
     async def _generate_json_gemini(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
-        """Xử lý luồng gọi Google Gemini API."""
+        """Xử lý luồng gọi Google Gemini API với cơ chế tự động thử lại (Retry) và bóc tách Regex."""
         if not self.gemini_client:
             self.logger.error("[Gemini] Client chưa được khởi tạo.")
             return {}
 
-        try:
-            config = types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-                temperature=0.0,
-            )
-
-            response = await self.gemini_client.aio.models.generate_content(
-                model=self.model_name,
-                contents=user_prompt,
-                config=config,
-            )
-
-            raw_content = response.text
+        import asyncio
+        max_retries = 3
+        
+        for attempt in range(1, max_retries + 1):
             try:
-                return json.loads(raw_content)
-            except json.JSONDecodeError:
-                return self._parse_json_safely(raw_content)
+                config = types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json",
+                    temperature=0.0,
+                )
 
-        except Exception as e:
-            self._log_error("_generate_json_gemini", e)
-            return {}
+                response = await self.gemini_client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=user_prompt,
+                    config=config,
+                )
+
+                raw_content = response.text
+                try:
+                    return json.loads(raw_content)
+                except json.JSONDecodeError:
+                    data = self._parse_json_safely(raw_content)
+                    if data:
+                        return data
+                    raise ValueError("JSON parsing failed")
+
+            except Exception as e:
+                self.logger.warning(f"[Gemini Attempt {attempt}/{max_retries}] Lỗi: {e}")
+                
+                if attempt < max_retries:
+                    # Check for rate limit / quota exhaustion (HTTP 429)
+                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                        import re
+                        match = re.search(r'retry in ([0-9.]+)s', str(e), re.IGNORECASE)
+                        if match:
+                            sleep_time = float(match.group(1)) + 0.5
+                            self.logger.info(f"[Gemini 429 Rate Limit] Đang chờ {sleep_time}s theo yêu cầu của API...")
+                        else:
+                            sleep_time = 2.0 * attempt
+                            self.logger.info(f"[Gemini Rate Limit] Đang chờ {sleep_time}s trước khi thử lại...")
+                        await asyncio.sleep(sleep_time)
+                    else:
+                        # For other exceptions, sleep a shorter time
+                        await asyncio.sleep(0.5 * attempt)
+                    
+                    # Thử lại không dùng response_mime_type làm fallback phòng khi server/model từ chối cấu hình JSON
+                    try:
+                        config_fallback = types.GenerateContentConfig(
+                            system_instruction=system_prompt,
+                            temperature=0.0,
+                        )
+                        response = await self.gemini_client.aio.models.generate_content(
+                            model=self.model_name,
+                            contents=user_prompt,
+                            config=config_fallback,
+                        )
+                        raw_content = response.text
+                        data = self._parse_json_safely(raw_content)
+                        if data:
+                            self.logger.info(f"[Gemini Fallback] Khôi phục JSON thành công ở lượt thử {attempt}")
+                            return data
+                    except Exception as fallback_err:
+                        self.logger.warning(f"[Gemini Fallback attempt {attempt}] Lỗi: {fallback_err}")
+                else:
+                    self._log_error("_generate_json_gemini thất bại sau nhiều lượt thử", e)
+
+        return {}
 
     async def _generate_json_ollama(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
         """Xử lý luồng gọi Ollama Local API."""

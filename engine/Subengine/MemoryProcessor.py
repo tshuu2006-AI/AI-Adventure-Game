@@ -7,8 +7,8 @@ from engine.Utils.PromptManager import PromptManager
 from engine.Agents.CloudAgents import QueryAgent
 from world.Entity import Memory
 from engine.Utils.logger import game_logger  # Thêm import logger
-from static.config import QUERY_AGENT_MODEL
-
+from static.config import QUERY_AGENT_MODEL, USE_HEADROOM
+from engine.Utils.Headroom import HeadroomOptimizer
 
 
 class MemoryProcessor:
@@ -18,6 +18,7 @@ class MemoryProcessor:
         self.long_term_memory = VectorMemory(model_path=vector_model_path, db_dir = db.db_folder)
         self.short_term_memory = ShortTermMemory(prompt_manager=pm)
         self.query_agent = QueryAgent(model_name = QUERY_AGENT_MODEL, api_key=groq_api_key, pm=pm)
+        self.headroom = HeadroomOptimizer(enabled=USE_HEADROOM)
         game_logger.debug("[MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.")
 
 
@@ -184,6 +185,14 @@ class MemoryProcessor:
                 f"[CÁC KÝ ỨC MÔI TRƯỜNG KHÁC (TỪ FAISS)]\n"
                 f"{faiss_structured_context}"
             )
+
+            if self.headroom.enabled:
+                self.headroom.register_in_ccr(rag_context)
+                rag_context = self.headroom.compress_rag_context(rag_context)
+                stats = self.headroom.get_stats()
+                game_logger.info(
+                    f"[Headroom Optimization] Chars: {len(rag_context)} (Compressed, Saved {stats['saving_percent']}%, Est. Saved: {stats['est_token_savings']} tokens)"
+                )
 
             game_logger.debug(f"[Profile] RAG (Hybrid DB+FAISS) hoàn tất trong: {time.perf_counter() - start_rag:.3f}s")
 
