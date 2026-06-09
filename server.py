@@ -78,7 +78,7 @@ app.state.orchestrator = GameOrchestrator(
     vector_model_path="all-MiniLM-L6-v2",
     provider="gemini",
     groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
-    gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
+    local_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
 )
 
 app.state.poll_cache = {
@@ -210,27 +210,26 @@ async def verify_gemini_key(api_key: str) -> bool:
         return False
 
 
-async def verify_ollama_model(model_name: str) -> bool:
+async def verify_ollama_key(api_key: str) -> bool:
     """
-    Kiểm tra xem một model Ollama cụ thể có đang khả dụng trên máy cục bộ hay không.
+    Xác thực Ollama API Key bằng cách thử gọi cloud endpoint với Bearer token.
 
     Args:
-        model_name (str): Tên model cần kiểm tra (ví dụ: 'llama3').
+        api_key (str): Khóa API Ollama cần kiểm tra.
 
     Returns:
-        bool: True nếu model có tồn tại, False nếu không tìm thấy hoặc service chưa bật.
+        bool: True nếu key hợp lệ, False nếu bị từ chối hoặc lỗi kết nối.
     """
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get("http://localhost:11434/api/tags", timeout=3.0)
-            if response.status_code == 200:
-                available_models = response.json().get("models", [])
-                names = [m.get("name") for m in available_models]
-                return any(model_name.lower() in name.lower() for name in names)
+            response = await client.get(
+                "https://ollama.com/api/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=5.0
+            )
+            return response.status_code == 200
     except Exception:
         return False
-    return False
-
 
 async def background_post_turn_processing(player_input, story_response, is_new_game=False):
     """
@@ -670,10 +669,14 @@ async def check_config(
             content={"success": False, "message": "❌ Cloud API Key (Groq) không hợp lệ hoặc không kết nối được!"})
 
     if is_ollama.lower() == "true":
-        local_ok = await verify_ollama_model(local_model_or_key.strip())
-        if not local_ok:
-            return JSONResponse(
-                content={"success": False, "message": "❌ Không tìm thấy mô hình Ollama này trên máy cục bộ!"})
+        # Chỉ verify key, không check model
+        ollama_key = local_model_or_key.strip()
+        key_ok = await verify_ollama_key(ollama_key)
+        if not key_ok:
+            return JSONResponse(content={
+                "success": False,
+                "message": "❌ Ollama API Key không hợp lệ hoặc hết hạn!"
+            })
     else:
         local_ok = await verify_gemini_key(local_model_or_key.strip())
         if not local_ok:
@@ -737,16 +740,20 @@ async def update_settings(
                 vector_model_path="all-MiniLM-L6-v2",
                 provider=current_config["local_provider"],
                 groq_api_key=safe_key(current_config["cloud_key"]),
-                gemini_api_key=safe_key(current_config["local_model_or_key"])
+                local_api_key=safe_key(current_config["local_model_or_key"])
             )
         else:
+            is_ollama_default = str(is_ollama).lower() == "true"
             app.state.orchestrator = GameOrchestrator(
                 db_path=os.path.join(SAVE_DIR, "eldoria.db"),
                 db_folder=SAVE_DIR,
                 vector_model_path="all-MiniLM-L6-v2",
-                provider="gemini",
+                provider="ollama" if is_ollama_default else "gemini",
                 groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
-                gemini_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
+                local_api_key=safe_key(
+                    os.getenv("OLLAMA_API_KEY", "") if is_ollama_default
+                    else os.getenv("GEMINI_API_KEY", "")
+                )
             )
 
         # Nạp lại trạng thái ảnh cho Orchestrator mới

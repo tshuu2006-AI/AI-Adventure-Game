@@ -58,6 +58,8 @@ class BaseLocalAgent:
         """Kiểm tra và yêu cầu Ollama tự động tải model về nếu chưa có sẵn."""
         if not self.model_name:
             return False
+        if self.model_name.endswith(":cloud"):
+            return True
 
         try:
             async with httpx.AsyncClient() as client:
@@ -144,6 +146,9 @@ class BaseLocalAgent:
         """Xử lý luồng gọi Ollama Local API."""
 
         await self._auto_pull_model_if_missing()
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         payload = {
             "model": self.model_name,
@@ -164,6 +169,7 @@ class BaseLocalAgent:
                 response = await client.post(
                     f"{self.ollama_host}/api/chat",
                     json=payload,
+                    headers=headers,
                     timeout=120.0
                 )
                 response.raise_for_status()

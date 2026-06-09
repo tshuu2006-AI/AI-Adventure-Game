@@ -24,7 +24,7 @@ from engine.Subengine.ItemProcessor import ItemProcessor
 
 
 class GameOrchestrator:
-    def __init__(self, db_path, db_folder, vector_model_path, provider, groq_api_key, gemini_api_key):
+    def __init__(self, db_path, db_folder, vector_model_path, provider, groq_api_key, local_api_key):
         game_logger.info("Đang khởi tạo hệ thống Eldoria Game Engine...")
 
         self.pm = PromptManager('./static/prompts.yaml')
@@ -34,7 +34,7 @@ class GameOrchestrator:
         self.image_api = ImageAPI()
         self.image_manager = ImageManager(api=self.image_api, base_folder=db_folder)
         self.audio_manager = AudioManager()
-        self.music_classifier = MusicClassifier(pm = self.pm, provider=provider, api_key=gemini_api_key)
+        self.music_classifier = MusicClassifier(pm = self.pm, provider=provider, api_key=local_api_key)
         self.current_emotion = "bình thường"
         self.is_processing_bg = False
 
@@ -48,24 +48,24 @@ class GameOrchestrator:
                                         player_state=self.player_state,
                                         pm=self.pm,
                                         provider = provider,
-                                        gemini_api_key = gemini_api_key)
+                                        local_api_key = local_api_key)
 
         self.state_sys = StateProcessor(db=self.db,
                                         player_state=self.player_state,
                                         image_manager=self.image_manager,
                                         groq_api_key=groq_api_key,
                                         provider = provider,
-                                        gemini_api_key=gemini_api_key,
+                                        local_api_key=local_api_key,
                                         pm=self.pm)
 
         self.item_sys = ItemProcessor(player_state=self.player_state,
                                       provider = provider,
-                                      gemini_api_key = gemini_api_key,
+                                      local_api_key= local_api_key,
                                       pm = self.pm)
 
         self.quest_sys = QuestProcessor(player_state=self.player_state,
                                         provider = provider,
-                                        gemini_api_key=gemini_api_key,
+                                        local_api_key=local_api_key,
                                         pm=self.pm)
 
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)

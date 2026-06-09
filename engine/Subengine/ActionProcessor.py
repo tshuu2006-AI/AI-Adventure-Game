@@ -19,11 +19,11 @@ class ActionProcessor:
                  player_state: PlayerState,
                  pm: PromptManager,
                  provider:str,
-                 gemini_api_key: str,
+                 local_api_key: str,
                  yaml_path: str = "static/action_directives.yaml"):
         self.db = db
         self.player_state = player_state
-        self.intent_parser = IntentRouter(pm=pm, provider = provider, api_key=gemini_api_key)
+        self.intent_parser = IntentRouter(pm=pm, provider = provider, api_key=local_api_key)
         self.yaml_path = yaml_path
 
         self.prob_have_npc = 5

@@ -12,9 +12,9 @@ class QuestProcessor:
     Phiên bản kiến trúc Unified Quest Log (Một danh sách nhiệm vụ duy nhất).
     """
 
-    def __init__(self, player_state: PlayerState, provider:str, pm: PromptManager, gemini_api_key: str):
+    def __init__(self, player_state: PlayerState, provider:str, pm: PromptManager, local_api_key: str):
         self.player_state = player_state
-        self.quest_agent = QuestAgent(pm=pm, provider = provider, api_key=gemini_api_key)
+        self.quest_agent = QuestAgent(pm=pm, provider = provider, api_key=local_api_key)
 
     def _handle_status(self, objective_status: List[bool]):
         for boolean in objective_status:

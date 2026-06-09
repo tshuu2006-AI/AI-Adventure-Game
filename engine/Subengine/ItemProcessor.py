@@ -15,19 +15,19 @@ class ItemProcessor:
     và bộ não đánh giá logic vật lý/phép thuật (ItemAgent - LLM).
     """
 
-    def __init__(self, player_state: PlayerState, provider: str, gemini_api_key: str, pm: PromptManager):
+    def __init__(self, player_state: PlayerState, provider: str, local_api_key: str, pm: PromptManager):
         """
         Khởi tạo bộ xử lý vật phẩm.
 
         Args:
             player_state (PlayerState): Trạng thái hiện tại của người chơi (để truy xuất túi đồ).
-            gemini_api_key (str): Khóa API để khởi tạo Local Agent (Gemini) làm trọng tài logic.
+            local_api_key (str): Khóa API để khởi tạo Local Agent (Gemini) làm trọng tài logic.
             pm (PromptManager): Trình quản lý prompt để lấy các kịch bản nạp cho LLM.
         """
         # Cần local_agents (Gemini) để gọi AI check logic vật lý khi dùng đồ sáng tạo
         self.item_agent = ItemAgent(pm=pm,
                                     provider=provider,
-                                    api_key=gemini_api_key)
+                                    api_key=local_api_key)
         self.player_state = player_state
 
 

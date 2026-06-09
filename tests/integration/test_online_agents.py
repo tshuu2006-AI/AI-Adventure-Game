@@ -3,7 +3,6 @@ import os
 from engine.Utils.PromptManager import PromptManager
 from engine.Agents.LocalAgents import IntentRouter, MusicClassifier
 from engine.Agents.CloudAgents import ChoiceAgent, QueryAgent
-from world.Entity import Quest, WeaponItem
 
 # Lấy cấu hình TEST_MODE từ conftest.py (hoặc biến môi trường trực tiếp)
 TEST_MODE = os.environ.get("TEST_MODE", "offline").lower()
@@ -17,7 +16,7 @@ async def test_online_intent_router_gemini():
     assert api_key != "DUMMY_GEMINI_API_KEY", "GEMINI_API_KEY đang bị gán key ảo"
 
     pm = PromptManager('./static/prompts.yaml')
-    router = IntentRouter(pm=pm, gemini_api_key=api_key)
+    router = IntentRouter(pm=pm, api_key=api_key)
     
     # Gửi câu lệnh hành động thực tế của người chơi
     player_input = "Tôi muốn mở chiếc hòm gỗ cổ xưa kia"
@@ -69,7 +68,7 @@ async def test_online_music_classifier_gemini():
     assert api_key is not None, "Thiếu GEMINI_API_KEY trong file .env"
     
     pm = PromptManager('./static/prompts.yaml')
-    classifier = MusicClassifier(pm=pm, gemini_api_key=api_key)
+    classifier = MusicClassifier(pm=pm, api_key=api_key)
     
     # Phân tích một bối cảnh đáng sợ
     result = await classifier.classify_emotion("Bóng tối bao trùm lấy ngóc ngách lâu đài, tiếng bước chân kẽo kẹt sau lưng và tiếng sói hú vang vọng.")
