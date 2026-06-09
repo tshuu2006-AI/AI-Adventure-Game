@@ -234,7 +234,7 @@ async def verify_ollama_key(api_key: str) -> bool:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                "https://ollama.com/api/models",
+                "https://ollama.com/api/tags",  # ← đổi /api/models thành /api/tags
                 headers={"Authorization": f"Bearer {api_key}"},
                 timeout=5.0
             )

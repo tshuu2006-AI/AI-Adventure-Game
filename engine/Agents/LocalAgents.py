@@ -143,12 +143,14 @@ class BaseLocalAgent:
             return {}
 
     async def _generate_json_ollama(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
-        """Xử lý luồng gọi Ollama Local API."""
-
         await self._auto_pull_model_if_missing()
+
         headers = {}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
+
+        # ← Thêm đoạn này: cloud model dùng host khác
+        host = "https://ollama.com" if self.model_name.endswith(":cloud") else self.ollama_host
 
         payload = {
             "model": self.model_name,
@@ -156,18 +158,15 @@ class BaseLocalAgent:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "format": "json",      # Ép Ollama trả về chuẩn JSON
+            "format": "json",
             "stream": False,
-            "options": {
-                "temperature": 0.0 # Đảm bảo tính nhất quán của output
-            }
+            "options": {"temperature": 0.0}
         }
 
         try:
-            # Sử dụng httpx để gọi API bất đồng bộ. Đặt timeout cao vì Local LLM xử lý JSON có thể chậm.
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{self.ollama_host}/api/chat",
+                    f"{host}/api/chat",  # ← đổi self.ollama_host thành host
                     json=payload,
                     headers=headers,
                     timeout=120.0
