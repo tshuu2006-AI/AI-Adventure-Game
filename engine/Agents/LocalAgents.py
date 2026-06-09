@@ -54,46 +54,6 @@ class BaseLocalAgent:
                 game_logger.warning(f"[Gemini] Lỗi khởi tạo Client: {e}")
 
 
-    async def _auto_pull_model_if_missing(self) -> bool:
-        """Kiểm tra và yêu cầu Ollama tự động tải model về nếu chưa có sẵn."""
-        if not self.model_name:
-            return False
-
-        try:
-            async with httpx.AsyncClient() as client:
-                # 1. Lấy danh sách model đang có trên máy
-                response = await client.get(f"{self.ollama_host}/api/tags", timeout=3.0)
-                if response.status_code == 200:
-                    available_models = [m["name"] for m in response.json().get("models", [])]
-
-                    # Cân nhắc trường hợp tên có hoặc không có tag ":latest"
-                    search_name = self.model_name if ":" in self.model_name else f"{self.model_name}:latest"
-                    if search_name in available_models or self.model_name in available_models:
-                        return True  # Đã có model, không cần tải
-
-            # 2. Nếu chưa có, gọi API yêu cầu Ollama tải về
-            game_logger.info(
-                f"[Ollama] Model '{self.model_name}' chưa có sẵn. Đang tự động tải về (Có thể mất vài phút tùy dung lượng mạng)...")
-
-            # Thời gian timeout rất cao (1800s = 30 phút) để chờ tải xong các file vài GB
-            async with httpx.AsyncClient(timeout=1800.0) as client:
-                pull_response = await client.post(
-                    f"{self.ollama_host}/api/pull",
-                    json={"name": self.model_name, "stream": False}
-                )
-
-                if pull_response.status_code == 200:
-                    game_logger.info(f"✅ [Ollama] Tải thành công model '{self.model_name}'!")
-                    return True
-                else:
-                    game_logger.error(f"❌ [Ollama] Lỗi khi tự tải model: {pull_response.text}")
-                    return False
-
-        except Exception as e:
-            game_logger.error(f"[Ollama] Lỗi hệ thống khi kiểm tra/tải model: {e}")
-            return False
-
-
     def _log_error(self, context: str, error: Exception):
         """Ghi log lỗi chi tiết kèm theo Stack Trace."""
         self.logger.error(f"Lỗi tại {context}: {str(error)}", exc_info=True)
@@ -109,7 +69,6 @@ class BaseLocalAgent:
         else:
             self.logger.error(f"Provider không hợp lệ: {self.provider}")
             return {}
-
 
     async def _generate_json_gemini(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
         """Xử lý luồng gọi Google Gemini API."""
@@ -140,76 +99,57 @@ class BaseLocalAgent:
             self._log_error("_generate_json_gemini", e)
             return {}
 
-    async def _generate_json_ollama(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
-        await self._auto_pull_model_if_missing()
-
-        # ← Thêm đoạn này: cloud model dùng host khác
-        host = self.ollama_host
-
+    async def _generate_json_ollama(self, system_prompt: str, user_prompt: str) -> dict:
         payload = {
             "model": self.model_name,
-            "messages": [...],
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
             "format": "json",
-            "stream": False,
-            "options": {
-                "temperature": 0.2,
-                "keep_alive": -1,  # Giữ model trong VRAM
-                "num_ctx": 4096,
-            }
+            "stream": True,  # ← Đổi thành True
+            "options": {"temperature": 0.0, "keep_alive": -1, "num_ctx": 4096}
         }
 
+        full_text = ""
+        token_count = 0
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream("POST", f"{self.ollama_host}/api/chat", json=payload) as response:
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    try:
+                        chunk = json.loads(line)
+                        token = chunk.get("message", {}).get("content", "")
+                        full_text += token
+                        token_count += 1
+
+                        # Heartbeat mỗi 10 token — biết model vẫn đang chạy
+                        if token_count % 10 == 0:
+                            game_logger.debug(f"[Ollama] Đang sinh... {token_count} tokens")
+
+                        if chunk.get("done"):
+                            break
+                    except json.JSONDecodeError:
+                        continue
+
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{host}/api/chat",  # ← đổi self.ollama_host thành host
-                    json=payload,
-                    timeout=120.0
-                )
-                response.raise_for_status()
-
-                data = response.json()
-                raw_content = data.get("message", {}).get("content", "")
-
-                try:
-                    return json.loads(raw_content)
-                except json.JSONDecodeError:
-                    return self._parse_json_safely(raw_content)
-
-        except httpx.RequestError as e:
-            self._log_error(f"_generate_json_ollama (Không thể kết nối tới Ollama tại {self.ollama_host})", e)
-            return {}
-        except Exception as e:
-            self._log_error("_generate_json_ollama", e)
-            return {}
+            return json.loads(full_text)
+        except json.JSONDecodeError:
+            return self._parse_json_safely(full_text)
 
     def _parse_json_safely(self, text: str) -> dict:
-        """
-        Dùng thư viện chuyên dụng để 'chữa cháy' và tự động sửa các lỗi cú pháp JSON
-        (như dư dấu phẩy, thiếu ngoặc, unescaped quotes) do LLM sinh ra.
-        """
-        import re
-        import json_repair  # Thư viện tự động sửa lỗi JSON của LLM
-
+        """Trích xuất khối JSON từ văn bản thô bằng Regex."""
         try:
-            # 1. Trích xuất khối text có vẻ giống JSON nhất (phòng trường hợp AI nói nhảm ở đầu/cuối)
-            match = re.search(r'\{.*\}|\[.*\]', text, re.DOTALL)
-            json_string = match.group() if match else text
-
-            # 2. Dùng json_repair để tự động sửa lỗi cú pháp và parse thành Dict
-            decoded_data = json_repair.loads(json_string)
-
-            # Đảm bảo kết quả trả về đúng là một Dictionary
-            if isinstance(decoded_data, dict):
-                self.logger.info("[Auto-Fix] Đã tự động sửa thành công lỗi cú pháp JSON của LLM!")
-                return decoded_data
-            elif isinstance(decoded_data, list) and len(decoded_data) > 0:
-                # Nếu AI lỡ bọc trong mảng [{...}]
-                return decoded_data[0]
-
-            return {}
-
-        except Exception as e:
-            self._log_error(f"_parse_json_safely (JSON Repair cũng bó tay) | Text: {text[:100]}...", e)
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match:
+                return json.loads(match.group().replace('\n', ' ').replace('\r', ''))
+            else:
+                self.logger.warning(f"[_parse_json_safely] Không tìm thấy JSON hợp lệ trong: {text[:100]}...")
+                return {}
+        except json.JSONDecodeError as e:
+            self._log_error(f"_parse_json_safely (Lỗi Regex JSON) | Text: {text[:100]}", e)
             return {}
 
 
