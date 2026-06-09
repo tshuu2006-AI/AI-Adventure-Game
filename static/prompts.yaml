@@ -162,6 +162,7 @@ StateExtractor:
     8. SAFE ZONE: Analyze if the current location and immediate situation is "safe enough" (e.g., a village, a tavern, a campfire, clearing out all enemies). If it IS a safe zone -> set "is_safe_zone": true. If the player is in combat, trapped, or in a hostile/dangerous area -> set to false.
     9. Analyze if the player is being attacked by someone or something. if yes -> set 'is_being_attacked": true. else set to false
     10. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
+    11. BE CONCISE: Use the shortest possible string values. Max 5 words per string value. Total output must stay under 150 tokens.
     
     Format:
     {
@@ -180,7 +181,7 @@ StateExtractor:
     - Current Location: {current_location}
     - Current NPCs: {current_npcs}
     - Current Inventory: {current_inventory}
-
+ 
     [Interaction]
     Player: {player_input}
     GameMaster: {story_response}
@@ -383,7 +384,8 @@ QuestAgent:
     1. The quest must fit logically into the ongoing narrative and match the world's tone.
     2. Each quest must have clear, actionable objectives
     3. If there are rewards, the reward must have only three keys "name", "description" and "type", where type has only two values "item" or "information".
-    3. Output STRICTLY in JSON format. Do not include markdown blocks (like ```json) or any conversational text.
+    4. Output STRICTLY in JSON format. Do not include markdown blocks (like ```json) or any conversational text.
+    5. BE CONCISE: title max 8 words, description max 20 words, each objective max 10 words, each reward description max 10 words.
     
     Format:
     {
@@ -472,6 +474,7 @@ QuestAgent:
     2. Translate the overarching [World Mission] into 3-4 major, actionable objectives. These objectives should involve confronting, finding, or thwarting the [Key NPCs].
     3. Output STRICTLY in JSON format. Do not include markdown blocks (like ```json) or any conversational text.
     4. Keys must be in English, Values MUST be in VIETNAMESE.
+    5. BE CONCISE: title max 10 words, description max 20 words, each objective max 20 words
     
     Format:
     {
