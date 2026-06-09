@@ -41,17 +41,28 @@ from groq import Groq
 from google import genai
 
 
-def safe_key(key: str) -> str:
-    """
-    Xử lý API Key an toàn để tránh lỗi rỗng (empty string) làm crash thư viện.
+def safe_key(key: str, env_var_name: str, skip_format_check: bool = False) -> str:
+    """Xử lý API Key an toàn (Tầng 1: Lọc rác bằng cấu trúc chuỗi)."""
+    k = key.strip() if key else ""
+    is_valid = False
 
-    Args:
-        key (str): Chuỗi API key được truyền vào.
+    if k and k not in ["null", "None", "DUMMY_KEY_TO_PREVENT_BUG"]:
+        if skip_format_check:
+            is_valid = True
+        elif env_var_name == "GROQ_API_KEY" and k.startswith("gsk_") and len(k) > 40:
+            is_valid = True
+        elif env_var_name == "GEMINI_API_KEY" and k.startswith("AIza") and len(k) > 30:
+            is_valid = True
+        elif env_var_name == "OLLAMA_API_KEY":
+            is_valid = True
 
-    Returns:
-        str: Chuỗi gốc nếu hợp lệ, ngược lại trả về một chuỗi giả định để tránh lỗi.
-    """
-    return key if key and key.strip() else "DUMMY_KEY_TO_PREVENT_BUG"
+    if is_valid: return k
+
+    fallback_key = os.getenv(env_var_name)
+    if fallback_key and fallback_key.strip():
+        return fallback_key.strip()
+
+    return "DUMMY_KEY_TO_PREVENT_BUG"
 
 
 app = FastAPI()
@@ -77,8 +88,8 @@ app.state.orchestrator = GameOrchestrator(
     db_folder=SAVE_DIR,
     vector_model_path="all-MiniLM-L6-v2",
     provider="gemini",
-    groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
-    local_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""))
+    groq_api_key=safe_key(os.getenv("GROQ_API_KEY", ""), "GROQ_API_KEY"),
+    local_api_key=safe_key(os.getenv("GEMINI_API_KEY", ""), "GEMINI_API_KEY")
 )
 
 app.state.poll_cache = {
@@ -709,6 +720,7 @@ async def update_settings(
 
     orc = app.state.orchestrator
     # 1. NẾU UNITY CHỈ GỬI LỆNH ĐỔI CHẤT LƯỢNG ẢNH
+    is_ollama_bool = str(is_ollama).lower() == "true"
     if quality is not None:
         orc.image_manager.api.quality = quality.lower()
         game_logger.info(f"Đã cập nhật chất lượng Ảnh thành: {quality.upper()}")
@@ -727,7 +739,7 @@ async def update_settings(
         current_config["mode"] = mode
         current_config["cloud_key"] = cloud_key.strip() if cloud_key else ""
         current_config["local_model_or_key"] = local_model_or_key.strip() if local_model_or_key else ""
-        current_config["local_provider"] = "ollama" if str(is_ollama).lower() == "true" else "gemini"
+        current_config["local_provider"] = "ollama" if is_ollama_bool else "gemini"
 
         # Khởi tạo lại AI nhưng PHẢI GIỮ LẠI trạng thái bật/tắt ảnh trước đó
         old_enable_image = getattr(orc.image_manager.api, 'enable_image', True)
@@ -739,20 +751,19 @@ async def update_settings(
                 db_folder=SAVE_DIR,
                 vector_model_path="all-MiniLM-L6-v2",
                 provider=current_config["local_provider"],
-                groq_api_key=safe_key(current_config["cloud_key"]),
-                local_api_key=safe_key(current_config["local_model_or_key"])
+                groq_api_key=safe_key(current_config["cloud_key"], "GROQ_API_KEY"),
+                local_api_key=safe_key(current_config["local_model_or_key"], "OLLAMA_API_KEY" if is_ollama_bool else "GEMINI_API_KEY")
             )
         else:
-            is_ollama_default = str(is_ollama).lower() == "true"
             app.state.orchestrator = GameOrchestrator(
                 db_path=os.path.join(SAVE_DIR, "eldoria.db"),
                 db_folder=SAVE_DIR,
                 vector_model_path="all-MiniLM-L6-v2",
-                provider="ollama" if is_ollama_default else "gemini",
-                groq_api_key=safe_key(os.getenv("GROQ_API_KEY", "")),
+                provider="ollama" if is_ollama_bool else "gemini",
+                groq_api_key=safe_key(os.getenv("GROQ_API_KEY", ""), "GROQ_API_KEY"),
                 local_api_key=safe_key(
-                    os.getenv("OLLAMA_API_KEY", "") if is_ollama_default
-                    else os.getenv("GEMINI_API_KEY", "")
+                    os.getenv("OLLAMA_API_KEY", "") if is_ollama_bool
+                    else os.getenv("GEMINI_API_KEY", ""), "OLLAMA_API_KEY" if is_ollama_bool else "GEMINI_API_KEY"
                 )
             )
 
