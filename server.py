@@ -488,6 +488,7 @@ async def poll_updates():
         max_hp = orc.get_max_hp()
         equipped_weapon = orc.get_equipped_weapon()
         weapon_name = equipped_weapon.name if equipped_weapon else "Tay không"
+        weapon_img_b64 = image_to_base64_with_default(getattr(equipped_weapon, 'image_path', None) if equipped_weapon else None, is_item=True)
 
         t_stats = orc.player_state.stats.total_stats
         strength_val = t_stats.get("strength", 0)
@@ -520,6 +521,7 @@ async def poll_updates():
             "hp": current_hp,
             "max_hp": max_hp,
             "weapon": weapon_name,
+            "weapon_image_b64": weapon_img_b64,
             "strength": strength_val,
             "agility": agility_val,
             "defense": defense_val,
@@ -823,6 +825,20 @@ async def equip_item(item_name: str = Form(...)):
         return JSONResponse(content={"success": True, "message": f"Đã trang bị {item_name}!"})
     except Exception as e:
         game_logger.error(f"Lỗi trang bị: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    
+@app.post("/api/inventory/unequip")
+async def unequip_item():
+    """API để Unity ra lệnh tháo vũ khí đang trang bị"""
+    try:
+        orc = app.state.orchestrator
+        # Gọi thẳng vào hệ thống quản lý túi đồ để gỡ vũ khí
+        if hasattr(orc.player_state.inventory_manager, 'equipped_weapon'):
+            orc.player_state.inventory_manager.equipped_weapon = None
+            
+        return JSONResponse(content={"success": True, "message": "Đã tháo trang bị thành công!"})
+    except Exception as e:
+        game_logger.error(f"Lỗi tháo trang bị: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/api/inventory/craft")
