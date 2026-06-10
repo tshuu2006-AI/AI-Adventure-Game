@@ -24,6 +24,9 @@ class DatabaseManager:
 
     async def connect(self):
         """Mở kết nối tới SQLite với WAL mode để hỗ trợ đọc/ghi đồng thời tốt hơn"""
+        if self.conn is not None:
+            game_logger.debug("[Database] Kết nối đã tồn tại, bỏ qua connect().")
+            return
         self.conn = await aiosqlite.connect(self.db_path)
         await self.conn.execute('PRAGMA journal_mode=WAL;')
         await self.conn.execute('PRAGMA foreign_keys = ON;')  # Bật khóa ngoại để bảo vệ toàn vẹn dữ liệu
