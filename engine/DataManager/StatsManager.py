@@ -115,7 +115,7 @@ class StatsManager:
         """
         self.current_hp = min(self.max_hp, self.current_hp + amount)
 
-    def take_damage(self, amount) -> int:
+    def take_damage(self, amount, k = 100) -> int:
         """
         Tính toán và chịu lượng sát thương thực tế sau khi đã giảm trừ qua Giáp (Defense).
         Luôn đảm bảo sát thương nhận vào tối thiểu là 1 để tránh kẹt game.
@@ -131,7 +131,8 @@ class StatsManager:
 
         # Sát thương thực = Sát thương gánh chịu - Giáp
         # Giới hạn mức sát thương tối thiểu là 1 để tránh việc "đánh không lủng giáp" gây kẹt game
-        actual_damage = max(1, amount - 0.5 * total_def)
+        r = k / (k + total_def)
+        actual_damage = r * amount
 
         # Trừ máu
         self.current_hp = round(max(0, self.current_hp - actual_damage))

@@ -76,8 +76,8 @@ class GameOrchestrator:
 
     async def setup_new_game_api(self, player_idea: str) -> str:
         """Hàm chuyên dụng để khởi tạo New Game từ API"""
-        self.player_state.clear()
 
+        self.player_state.clear()
         await self.db.connect()
         await self.db.reset_database()
         await self.db.create_tables()
