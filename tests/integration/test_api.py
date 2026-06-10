@@ -111,7 +111,7 @@ def test_inventory_equip_endpoint_not_found(mock_orchestrator):
     # Trả về None khi không tìm thấy vật phẩm
     mock_orchestrator.get_item_by_name.return_value = None
     
-    response = client.post("/api/inventory/equip", data={"item_name": "Kiếm rỉ"})
+    response = client.post("/api/inventory/equip", data={"items_str": "Kiếm rỉ"})
     assert response.status_code == 200
     assert response.json()["success"] is False
     assert "Không thể trang bị" in response.json()["message"]

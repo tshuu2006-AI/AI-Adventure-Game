@@ -66,7 +66,7 @@ def test_equip_and_change_weapon():
 
 def test_use_consumables():
     state = PlayerState()
-    # Nhận sát thương thô 30 -> thực tế = 30 - 2.5 = 27.5 -> HP = round(100 - 27.5) = 72
+    # Nhận sát thương thô 30 -> thực tế = 30 * 100/105 = 28.57 -> HP = round(100 - 28.57) = 71
     state.take_damage(30) 
     
     # Bình máu hồi 20 HP
@@ -76,9 +76,9 @@ def test_use_consumables():
     state.add_item(potion)
     assert potion in state.get_all_items()
     
-    # Sử dụng (72 + 20 = 92 HP)
+    # Sử dụng (71 + 20 = 91 HP)
     state.use_consumables(potion)
-    assert state.stats.current_hp == 92
+    assert state.stats.current_hp == 91
     # Đã dùng xong thì phải bị loại bỏ khỏi túi đồ
     assert potion not in state.get_all_items()
 

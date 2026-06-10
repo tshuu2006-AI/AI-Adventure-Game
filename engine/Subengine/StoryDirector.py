@@ -145,7 +145,8 @@ class StoryDirector:
 
         active_quest_context = ""
         if active_quest:
-            active_quest_context += f'Name: {active_quest.name}\n Description: {active_quest.description}\n Objectives:\n {"\n".join(objectives)}'
+            objectives_str = "\n".join(objectives)
+            active_quest_context += f'Name: {active_quest.name}\n Description: {active_quest.description}\n Objectives:\n {objectives_str}'
 
         items = quest_items
         formatted_quest_items = []

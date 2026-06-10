@@ -103,7 +103,12 @@ class ItemProcessor:
         reasoning = str(json_data.get("reasoning", "Không rõ nguyên lý."))
 
         if not success:
-            return {"success": False, "reasoning": reasoning, "new_item": None}
+            return {
+                "success": False,
+                "reasoning": reasoning,
+                "new_item": None,
+                "lost_items": json_data.get("lost_items", [])
+            }
 
         raw_new_item = json_data.get("new_item", {})
         if not isinstance(raw_new_item, dict) or not raw_new_item:
