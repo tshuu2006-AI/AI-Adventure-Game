@@ -232,13 +232,14 @@ class ItemProcessor:
         return f"[CHẾ TẠO THÀNH CÔNG]: Bạn đã dùng {crafted_names} để tạo ra [{new_item_obj.name}]. {evaluation.get('reasoning')} (Đã tiêu hao: {lost_str})"
 
 
-    async def use(self, item_list: List[BaseItem], action_details: str) -> Tuple[bool, str]:
+    async def use(self, item_list: List[BaseItem], action_details: str, context: str) -> Tuple[bool, str]:
         """
         Đánh giá và thực thi hành động sử dụng (Use) vật phẩm của người chơi lên môi trường hoặc lên bản thân.
 
         Args:
             item_list (List[BaseItem]): Danh sách vật phẩm được mang ra sử dụng.
             action_details (str): Miêu tả chi tiết hành động (VD: "Ném bình máu vào vách đá", "Uống lọ thuốc giải").
+            context (str): Ngữ cảnh để đánh giá độ hợp lí của hành động
 
         Returns:
             Tuple[bool, str]:
@@ -251,16 +252,15 @@ class ItemProcessor:
             return False, items_to_use # items_to_use lúc này chứa chuỗi báo lỗi
 
         items_str = self._convert_to_string(item_list=items_to_use)
-        loc_name = self.player_state.currentLocation.name if self.player_state.currentLocation else "Không rõ"
-        env_context = f"Địa điểm hiện tại: {loc_name}"
 
         evaluation_json = await self.item_agent.use(action_details=action_details,
                                                     items_str=items_str,
-                                                    context=env_context)
+                                                    context=context)
 
         success = evaluation_json.get('success', False)
         reasoning = evaluation_json.get("reasoning", "Không có chuyện gì xảy ra.")
         lost_item_names = evaluation_json.get("lost_items", [])
+        msg = f"Người chơi đã {'thành công' if success else 'thất bại'} khi {action_details} vì {reasoning}. Hãy sinh ra các kết quả/hệ quả tương ứng."
 
         game_logger.info(f'[ITEMPROCESSOR]: LOẠI BỎ CÁC VẬT PHẨM {lost_item_names} SAU KHI SỬ DỤNG')
         # XÓA CÁC VẬT PHẨM BỊ HỎNG / TIÊU HAO (Bất kể thành công hay thất bại)
@@ -268,4 +268,4 @@ class ItemProcessor:
             if item.name in lost_item_names:
                 self.player_state.inventory_manager.remove_item(item)
 
-        return success, reasoning
+        return success, msg

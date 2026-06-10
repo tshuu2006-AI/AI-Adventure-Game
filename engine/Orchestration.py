@@ -71,6 +71,7 @@ class GameOrchestrator:
         self.story_director = StoryDirector(groq_api_key=groq_api_key, pm=self.pm)
         self.save_manager = SaveManager(self)
         self.last_choices = []
+        self.last_response = ""
 
         game_logger.info("Hệ thống đã sẵn sàng!")
 
@@ -139,6 +140,7 @@ class GameOrchestrator:
         async for chunk in self.story_director.initialize_story(starting_loc, world_bible_dir=world_bible_dir):
             story_response += chunk
 
+        self.last_response = story_response
         return story_response
 
     def get_encountered_npc_names(self) -> list:
@@ -156,6 +158,7 @@ class GameOrchestrator:
                 action, self.world_state, self.player_state, npcs_ctx, hybrid_ctx, directive):
             story_response += chunk
 
+        self.last_response = story_response
         return story_response
 
 
@@ -506,8 +509,8 @@ class GameOrchestrator:
             encountered_npc_names=encountered_npc_names
         )
 
-    async def use(self, item_list: List[BaseItem], action_details:str):
-        return await self.item_sys.use(item_list=item_list, action_details=action_details)
+    async def use(self, item_list: List[BaseItem], action_details:str, context:str):
+        return await self.item_sys.use(item_list=item_list, action_details=action_details, context=context)
 
     def use_consumables(self, consumable_item: ConsumableItem):
         self.player_state.use_consumables(consumable_item)
@@ -515,8 +518,8 @@ class GameOrchestrator:
     def equip_weapon(self, weapon: WeaponItem):
         self.player_state.equip_weapon(weapon=weapon)
     
-    def ụnequip_weapon(self, weapon: WeaponItem):
-        self.player_state.unequip_weapon(weapon=weapon)
+    def unequip_weapon(self):
+        self.player_state.unequip_weapon()
 
     async def craft(self, item_list: List[BaseItem], action_details: str):
         return await self.item_sys.craft(item_list = item_list,
