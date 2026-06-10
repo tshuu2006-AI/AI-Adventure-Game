@@ -266,11 +266,11 @@ ItemAgent:
          -> REQUIRES: "effect" (object mapping stats to integer bonuses/penalties, e.g., {"hp": 50, "strength": 1, "agility": 10, "defense": 0, "intelligence": -3}).
        - 'weapon': Physical or magical tools wielded to deal damage (e.g., swords, bows, staves).
          -> REQUIRES: "base_damage" (integer), "modifiers" (object mapping stats to integer bonuses/penalties), "status_effect" (string, or null), "proc_chance" (float 0.0 to 1.0).
-       - 'quest': IMPORTANT STORY ITEMS. These are unique, irreplaceable objects, clues, or keys vital to the lore or progression (e.g., old letters, maps, glowing artifacts, royal seals, mysterious diaries). IT DOES NOT MEAN A TASK.
+       - 'quest': IMPORTANT STORY ITEMS. These are unique, irreplaceable objects, clues, or keys vital to the lore or progression. IT DOES NOT MEAN A TASK.
          -> REQUIRES: No extra keys.
-       - 'miscellaneous': COMMON OR JUNK ITEMS. Ordinary loot, crafting materials, or trade goods with no direct story significance (e.g., monster fangs, scrap metal, ordinary gems, torn cloth).
+       - 'miscellaneous': COMMON OR JUNK ITEMS. Ordinary loot, crafting materials, or trade goods with no direct story significance.
          -> REQUIRES: No extra keys.
-    4. QUEST vs MISCELLANEOUS RULE: If an item sounds mysterious, unique, contains text/lore, or is used to unlock a secret, you MUST classify it as 'quest'. Only use 'miscellaneous' for generic, stackable, or common loot.
+    4. QUEST vs MISCELLANEOUS RULE: If an item is mysterious, unique, contains text/lore, or is used to unlock a secret, you MUST classify it as 'quest'. Only use 'miscellaneous' for generic, stackable, or common loot.
     5. OUTPUT FORMAT: Return STRICTLY valid JSON only. NO markdown formatting, NO introductory text.
 
     Format Example for a 'quest' item:
@@ -497,14 +497,14 @@ CombatAgent:
     Task: Read the recent story and extract ONLY the damage taken by the player.
     
     Rules:
-    1. Player's Max HP is 100.
-    2. If the player takes damage (hit, poisoned, falls, etc.), estimate the lost HP:
+    1. If the player takes damage (hit, poisoned, falls, etc.), estimate the lost HP:
        - 0: No damage
        - 5-15: Light damage (scratch, minor fall)
        - 16-30: Medium damage (weapon strike, monster bite)
        - 31-50: Heavy damage (critical hit, strong magic)
-       - 51-100: Lethal/Massive damage
-    3. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
+       - 51-110: Lethal/Massive damage
+       - 110-150: Almost die immediately
+    2. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
     
     Format:
     {
