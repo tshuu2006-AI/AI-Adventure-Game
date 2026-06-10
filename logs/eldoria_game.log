@@ -2666,3 +2666,75 @@ AssertionError
 2026-06-10 15:00:17 | INFO     | QuestProcessor:36 | [QuestSystem] Đang chuyển đổi nhiệm vụ: 'Nhiệm vụ 1' ➔ 'Nhiệm vụ 2'
 2026-06-10 15:00:18 | DEBUG    | QuestProcessor:89 | [QuestSystem] Đang nghiệm thu tiến độ nhiệm vụ: Tìm đá quý
 2026-06-10 15:00:18 | INFO     | QuestProcessor:131 | [QuestSystem] 🎯 Hoàn thành mục tiêu: 'Tìm đá đỏ'
+2026-06-10 15:53:27 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-10 15:53:27 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-10 15:53:27 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-10 15:53:27 | DEBUG    | MemoryManager:106 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-10 15:53:28 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-10 15:53:28 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-10 15:53:33 | DEBUG    | StoryDirector:42 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-10 15:53:33 | INFO     | Orchestration:76 | Hệ thống đã sẵn sàng!
+2026-06-10 15:53:34 | DEBUG    | server:443 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-10 15:53:34 | DEBUG    | server:471 | [Poll] HP hiện tại: 85
+2026-06-10 15:53:36 | WARNING  | StateProcessor:276 | [Combat] Người chơi bị tấn công! Nhận 20 sát thương.
+2026-06-10 15:53:36 | INFO     | StateProcessor:283 | [Combat] HP hiện tại: 82/100
+2026-06-10 15:53:36 | INFO     | DatabaseManager:39 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-35\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-10 15:53:36 | INFO     | DatabaseManager:59 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-10 15:53:36 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-10 15:53:36 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-10 15:53:36 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-10 15:53:36 | DEBUG    | DatabaseManager:96 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-10 15:53:36 | DEBUG    | DatabaseManager:157 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-10 15:53:36 | DEBUG    | DatabaseManager:157 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-10 15:53:36 | INFO     | DatabaseManager:87 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-10 15:53:37 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-10 15:53:37 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 4 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-10 15:53:38 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-10 15:53:38 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 18 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-10 15:53:39 | INFO     | ItemProcessor:197 | [ITEMPROCESSOR]: LOẠI BỎ CÁC VẬT PHẨM ['Sắt vụn', 'Gỗ vụn'] SAU KHI CHẾ TẠO 
+2026-06-10 15:53:39 | INFO     | ItemProcessor:236 | ITEM_MANAGER][CHẾ TẠO THÀNH CÔNG]: Bạn đã dùng Sắt vụn, Gỗ vụn để tạo ra [Búa sắt]. Sự kết hợp hợp lý giữa sắt và gỗ để rèn búa sắt. (Đã tiêu hao: Sắt vụn, Gỗ vụn)
+2026-06-10 15:53:39 | INFO     | ItemProcessor:197 | [ITEMPROCESSOR]: LOẠI BỎ CÁC VẬT PHẨM ['Sắt vụn'] SAU KHI CHẾ TẠO 
+2026-06-10 15:53:39 | INFO     | ItemProcessor:214 | [ITEM_MANAGER][CHẾ TẠO THẤT BẠI]: Lửa quá nóng làm chảy sắt vụn thành tro. (Hậu quả: Bạn đã làm hỏng/mất Sắt vụn)
+2026-06-10 15:53:40 | INFO     | ItemProcessor:270 | [ITEMPROCESSOR]: LOẠI BỎ CÁC VẬT PHẨM ['Thuốc giải độc'] SAU KHI SỬ DỤNG
+2026-06-10 15:53:40 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-10 15:53:40 | DEBUG    | MemoryManager:106 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-10 15:53:40 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-10 15:53:41 | INFO     | QuestProcessor:36 | [QuestSystem] Đang chuyển đổi nhiệm vụ: 'Nhiệm vụ 1' ➔ 'Nhiệm vụ 2'
+2026-06-10 15:53:42 | DEBUG    | QuestProcessor:89 | [QuestSystem] Đang nghiệm thu tiến độ nhiệm vụ: Tìm đá quý
+2026-06-10 15:53:42 | INFO     | QuestProcessor:131 | [QuestSystem] 🎯 Hoàn thành mục tiêu: 'Tìm đá đỏ'
+2026-06-10 15:55:15 | INFO     | Orchestration:28 | Đang khởi tạo hệ thống Eldoria Game Engine...
+2026-06-10 15:55:15 | DEBUG    | ImageManager:34 | [ImageManager] Đã khởi tạo các thư mục bộ nhớ đệm ảnh.
+2026-06-10 15:55:15 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: all-MiniLM-L6-v2...
+2026-06-10 15:55:15 | DEBUG    | MemoryManager:106 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-10 15:55:15 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-10 15:55:16 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-10 15:55:21 | DEBUG    | StoryDirector:42 | [StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).
+2026-06-10 15:55:21 | INFO     | Orchestration:76 | Hệ thống đã sẵn sàng!
+2026-06-10 15:55:21 | DEBUG    | server:443 | [PollCache] Rebuilt heavy cache (ảnh + inventory)
+2026-06-10 15:55:21 | DEBUG    | server:471 | [Poll] HP hiện tại: 85
+2026-06-10 15:55:24 | WARNING  | StateProcessor:276 | [Combat] Người chơi bị tấn công! Nhận 20 sát thương.
+2026-06-10 15:55:24 | INFO     | StateProcessor:283 | [Combat] HP hiện tại: 82/100
+2026-06-10 15:55:24 | INFO     | DatabaseManager:39 | [Database] Đã mở kết nối bất đồng bộ tới C:\Users\baoph\AppData\Local\Temp\pytest-of-baoph\pytest-36\test_database_manager_lifecycl0\data_test\WorldTest.db
+2026-06-10 15:55:24 | INFO     | DatabaseManager:59 | [Database] Khởi tạo các bảng SQL thành công!
+2026-06-10 15:55:24 | DEBUG    | BaseManager:76 | [Locations] Đã lưu thành công 'Eldoria Great Hall'.
+2026-06-10 15:55:24 | DEBUG    | BaseManager:76 | [NPCs] Đã lưu thành công 'Priest Joseph'.
+2026-06-10 15:55:24 | INFO     | NPCManager:56 | [NPCManager] 🩸 Cập nhật Priest Joseph: Thể trạng -> 'Tired', Thiện cảm (+5)
+2026-06-10 15:55:24 | DEBUG    | DatabaseManager:96 | [Database] Đã ghi một ký ức mới vào Turn 2.
+2026-06-10 15:55:24 | DEBUG    | DatabaseManager:157 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Joseph'
+2026-06-10 15:55:24 | DEBUG    | DatabaseManager:157 | [Database] Đang tìm kiếm fallback SQL với từ khóa: 'Hall'
+2026-06-10 15:55:24 | INFO     | DatabaseManager:87 | [Database] Đã dọn dẹp sạch sẽ toàn bộ dữ liệu SQLite!
+2026-06-10 15:55:28 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-10 15:55:28 | INFO     | ActionProcessor:148 | [Combat] Weapon: tay không | Damage: 3 | Proc: False(None) | HP: 100/100 | Roll: SUCCESS
+2026-06-10 15:55:28 | DEBUG    | ActionProcessor:43 | [ActionManager] Đã tải thành công file action_directives.yaml!
+2026-06-10 15:55:28 | INFO     | ActionProcessor:148 | [Combat] Weapon: Thánh kiếm | Damage: 18 | Proc: True(burn) | HP: 30/100 | Roll: FAILURE
+2026-06-10 15:55:29 | INFO     | ItemProcessor:197 | [ITEMPROCESSOR]: LOẠI BỎ CÁC VẬT PHẨM ['Sắt vụn', 'Gỗ vụn'] SAU KHI CHẾ TẠO 
+2026-06-10 15:55:29 | INFO     | ItemProcessor:236 | ITEM_MANAGER][CHẾ TẠO THÀNH CÔNG]: Bạn đã dùng Sắt vụn, Gỗ vụn để tạo ra [Búa sắt]. Sự kết hợp hợp lý giữa sắt và gỗ để rèn búa sắt. (Đã tiêu hao: Sắt vụn, Gỗ vụn)
+2026-06-10 15:55:30 | INFO     | ItemProcessor:197 | [ITEMPROCESSOR]: LOẠI BỎ CÁC VẬT PHẨM ['Sắt vụn'] SAU KHI CHẾ TẠO 
+2026-06-10 15:55:30 | INFO     | ItemProcessor:214 | [ITEM_MANAGER][CHẾ TẠO THẤT BẠI]: Lửa quá nóng làm chảy sắt vụn thành tro. (Hậu quả: Bạn đã làm hỏng/mất Sắt vụn)
+2026-06-10 15:55:31 | INFO     | ItemProcessor:270 | [ITEMPROCESSOR]: LOẠI BỎ CÁC VẬT PHẨM ['Thuốc giải độc'] SAU KHI SỬ DỤNG
+2026-06-10 15:55:31 | INFO     | MemoryManager:20 | [VectorDB] Đang khởi tạo Embedding Model từ: dummy_path...
+2026-06-10 15:55:31 | DEBUG    | MemoryManager:106 | [VectorDB] Không tìm thấy CSDL FAISS cũ. Khởi tạo Ký ức mới hoàn toàn.
+2026-06-10 15:55:31 | DEBUG    | MemoryProcessor:21 | [MemoryProcessor] Đã khởi tạo hệ thống xử lý Ký ức.
+2026-06-10 15:55:32 | INFO     | QuestProcessor:36 | [QuestSystem] Đang chuyển đổi nhiệm vụ: 'Nhiệm vụ 1' ➔ 'Nhiệm vụ 2'
+2026-06-10 15:55:33 | DEBUG    | QuestProcessor:89 | [QuestSystem] Đang nghiệm thu tiến độ nhiệm vụ: Tìm đá quý
+2026-06-10 15:55:33 | INFO     | QuestProcessor:131 | [QuestSystem] 🎯 Hoàn thành mục tiêu: 'Tìm đá đỏ'
