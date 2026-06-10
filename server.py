@@ -202,13 +202,16 @@ async def verify_gemini_key(api_key: str) -> bool:
         return False
 
 
-async def background_post_turn_processing(player_input, story_response, is_new_game=False):
+async def background_post_turn_processing(task_session_id, player_input, story_response):
     """
     Hàm này sẽ chạy ngầm sau khi Text đã được ném về Unity.
     Đảm nhiệm việc trích xuất state, sinh/tải ảnh, đánh giá quest và lưu VectorDB.
     """
     orc = app.state.orchestrator
     try:
+        if getattr(orc, "game_session_id", 0) != task_session_id:
+            game_logger.info("🛑 [Background] Hủy tác vụ chạy ngầm vì Session đã cũ (Người chơi đã New Game hoặc thoát Home).")
+            return
         # ==========================================
         # 1. ĐỒNG BỘ ĐỊA ĐIỂM (Chạy MỌI TURN để chống lỗi Foreign Key)
         # ==========================================
@@ -225,9 +228,11 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
                 if img_path:
                     curr_loc.image_path = img_path
 
+            if getattr(orc, "game_session_id", 0) != task_session_id: return
             # LUÔN LUÔN đẩy Location vào DB trước khi xử lý thứ khác
             await orc.add_location_to_db(curr_loc)
 
+        if getattr(orc, "game_session_id", 0) != task_session_id: return
         # ==========================================
         # 2. ĐỒNG BỘ NPC (Chạy MỌI TURN)
         # ==========================================
@@ -237,6 +242,8 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
                 npc.location = curr_loc.name  # Ép vị trí lần nữa cho chắc chắn
 
             if not getattr(npc, 'image_path', None):
+                if getattr(orc, "game_session_id", 0) != task_session_id: return
+
                 game_logger.info(f"🎨 Bắt đầu vẽ ảnh NPC: {npc.name}")
                 npc_img = await orc.image_manager.get_or_create_npc_image(
                     npc_name=npc.name,
@@ -245,13 +252,17 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
                 if npc_img:
                     npc.image_path = npc_img
 
+            if getattr(orc, "game_session_id", 0) != task_session_id: return
             # LUÔN LUÔN đẩy NPC vào DB
             await orc.add_npc_to_db(npc)
 
+        if getattr(orc, "game_session_id", 0) != task_session_id: return
         # ==========================================
         # 3. TRÍCH XUẤT STATE & ĐÁNH GIÁ QUEST
         # ==========================================
         ep_data, scene_emotion = await orc.state_process_background_tasks(player_input, story_response)
+        if getattr(orc, "game_session_id", 0) != task_session_id: return
+
         orc.current_emotion = scene_emotion
 
         await orc.quest_evaluate_turn(player_input, story_response)
@@ -272,8 +283,9 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
     except Exception as e:
         game_logger.error(f"❌ Lỗi chạy ngầm: {e}", exc_info=True)
     finally:
-        orc.is_processing_bg = False
-        app.state.poll_cache["dirty"] = True
+        if getattr(orc, "game_session_id", 0) == task_session_id:
+            orc.is_processing_bg = False
+            app.state.poll_cache["dirty"] = True
 
 
 # ==========================================
@@ -303,6 +315,12 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = None):
         bg_tasks = BackgroundTasks()
     orc = app.state.orchestrator
     try:
+        # Khởi tạo id
+        if not hasattr(orc, "game_session_id"):
+            orc.game_session_id = 0
+        orc.game_session_id += 1
+        current_session = orc.game_session_id
+
         if orc.is_processing_bg:
             return JSONResponse(status_code=409, content={"error": "Hệ thống đang bận, vui lòng thử lại."})
         orc.is_processing_bg = True
@@ -324,7 +342,7 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = None):
         choice_texts = [c["action_text"] for c in choices]
 
         # 4. Kích hoạt tác vụ ngầm (Trích xuất state, tải ảnh, ...)
-        bg_tasks.add_task(background_post_turn_processing, "[Bắt đầu trò chơi]", story_response)
+        bg_tasks.add_task(background_post_turn_processing, current_session, "[Bắt đầu trò chơi]", story_response)
 
         # 5. Trả về cho Client
         return JSONResponse(content={
@@ -336,7 +354,8 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = None):
         })
     except Exception as e:
         game_logger.error("❌ LỖI CRASH KHI TẠO NEW GAME:", exc_info=True)
-        orc.is_processing_bg = False
+        if getattr(orc, "game_session_id", 0) == current_session:
+            orc.is_processing_bg = False
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -350,6 +369,10 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = None):
         bg_tasks = BackgroundTasks()
     orc = app.state.orchestrator
     try:
+        if not hasattr(orc, "game_session_id"):
+            orc.game_session_id = 0
+        current_session = orc.game_session_id
+
         orc.is_processing_bg = True
 
         # 1. Giao toàn bộ việc phân tích Action, gọi RAG Memory và sinh truyện cho Orchestrator
@@ -384,7 +407,7 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = None):
         choice_texts = [c["action_text"] for c in choices]
 
         # 4. Kích hoạt Background Tasks (Trích xuất state, lưu DB)
-        bg_tasks.add_task(background_post_turn_processing, action, story_response)
+        bg_tasks.add_task(background_post_turn_processing, current_session, action, story_response)
 
         return JSONResponse(content={
             "segments": segments,
@@ -398,7 +421,8 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = None):
         })
     except Exception as e:
         game_logger.error("❌ LỖI CRASH TẠI LƯỢT ĐI (PLAY TURN):", exc_info=True)
-        orc.is_processing_bg = False
+        if getattr(orc, "game_session_id", 0) == current_session:
+            orc.is_processing_bg = False
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
