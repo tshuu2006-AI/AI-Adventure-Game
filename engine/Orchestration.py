@@ -514,6 +514,9 @@ class GameOrchestrator:
 
     def equip_weapon(self, weapon: WeaponItem):
         self.player_state.equip_weapon(weapon=weapon)
+    
+    def ụnequip_weapon(self, weapon: WeaponItem):
+        self.player_state.unequip_weapon(weapon=weapon)
 
     async def craft(self, item_list: List[BaseItem], action_details: str):
         return await self.item_sys.craft(item_list = item_list,

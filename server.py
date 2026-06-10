@@ -714,24 +714,34 @@ async def load_game(slot: str = Form(...)):
 # ==========================================
 
 @app.post("/api/inventory/use")
-async def use_item(item_name: str = Form(...), action_detail: str = Form("")):
+async def use_item(items_str: str = Form(...), action_detail: str = Form("")):
     """API để Unity ra lệnh dùng vật phẩm (Hỗ trợ cả Use thường và Use bằng AI)"""
     try:
         orc = app.state.orchestrator
-        item_obj = orc.get_item_by_name(item_name)
+        target_items = []
+        target_items_name = []
 
-        if not item_obj:
+        # Tách chuỗi để lấy ra các Object Item thật từ Balo
+        for name in items_str.split(","):
+            if not name.strip(): continue
+            target_items_name.append(name)
+            item_obj = orc.get_item_by_name(name.strip())
+            if item_obj:
+                target_items.append(item_obj)
+
+        if not target_items:
             return JSONResponse(content={"success": False, "message": "Vật phẩm không tồn tại trong túi đồ!"})
 
         if item_obj.item_type == "consumable" and not action_detail.strip():
             # Gọi trực tiếp qua PlayerState để nó cộng Máu và Stats
+            item_obj = target_items[0]
+            item_name = target_items_name[0]
             orc.use_consumables(item_obj)
 
             # --- ĐÃ BỔ SUNG LOG ---
             game_logger.info(f"[Inventory] Người chơi vừa sử dụng ngay (consumable): {item_name}")
             return JSONResponse(content={"success": True, "message": f"Bạn đã sử dụng {item_name} thành công!"})
 
-        target_items = [item_obj]
         action_text = action_detail if action_detail.strip() else f"Sử dụng {item_name}"
         use_result = await orc.use(item_list=target_items,action_details=action_text)
 
@@ -770,12 +780,12 @@ async def unequip_item():
     """API để Unity ra lệnh tháo vũ khí đang trang bị"""
     try:
         orc = app.state.orchestrator
-        # Gọi thẳng vào hệ thống quản lý túi đồ để gỡ vũ khí
-        if hasattr(orc.player_state.inventory_manager, 'equipped_weapon'):
-            orc.player_state.inventory_manager.equipped_weapon = None
+        item_obj = orc.get_equipped_weapon()
+        if not item_obj or item_obj.item_type != "weapon":
+            return JSONResponse(content={"success": False, "message": "Không thể bỏ trang bị vật phẩm này."})
 
-            # --- ĐÃ BỔ SUNG LOG ---
-            game_logger.info("[Inventory] 🛡️ Người chơi đã tháo vũ khí, chuyển về tay không.")
+        orc.unequp_weapon(item_obj)
+        game_logger.info("[Inventory] 🛡️ Người chơi đã tháo vũ khí, chuyển về tay không.")
 
         return JSONResponse(content={"success": True, "message": "Đã tháo trang bị thành công!"})
     except Exception as e:
