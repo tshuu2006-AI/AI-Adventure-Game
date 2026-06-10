@@ -308,7 +308,6 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = None):
         if orc.is_processing_bg:
             return JSONResponse(status_code=409, content={"error": "Hệ thống đang bận, vui lòng thử lại."})
         orc.is_processing_bg = True
-
         # 1. Giao toàn bộ việc nặng (Dọn dẹp, tạo thế giới, sinh truyện) cho Orchestrator
         story_response = await orc.setup_new_game_api(player_idea=idea)
 
@@ -351,8 +350,8 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = None):
     """
     if bg_tasks is None:
         bg_tasks = BackgroundTasks()
+    orc = app.state.orchestrator
     try:
-        orc = app.state.orchestrator
         orc.is_processing_bg = True
 
         # 1. Giao toàn bộ việc phân tích Action, gọi RAG Memory và sinh truyện cho Orchestrator
@@ -401,7 +400,7 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = None):
         })
     except Exception as e:
         game_logger.error("❌ LỖI CRASH TẠI LƯỢT ĐI (PLAY TURN):", exc_info=True)
-        app.state.orchestrator.is_processing_bg = False  # ← Thêm dòng này
+        orc.is_processing_bg = False
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
