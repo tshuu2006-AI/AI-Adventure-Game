@@ -324,7 +324,7 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = None):
         choice_texts = [c["action_text"] for c in choices]
 
         # 4. Kích hoạt tác vụ ngầm (Trích xuất state, tải ảnh, ...)
-        bg_tasks.add_task(background_post_turn_processing, "[Bắt đầu trò chơi]", story_response, is_new_game=True)
+        bg_tasks.add_task(background_post_turn_processing, "[Bắt đầu trò chơi]", story_response)
 
         # 5. Trả về cho Client
         return JSONResponse(content={

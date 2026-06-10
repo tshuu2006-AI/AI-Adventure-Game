@@ -265,7 +265,7 @@ class ItemProcessor:
         success = evaluation_json.get('success', False)
         reasoning = evaluation_json.get("reasoning", "Không có chuyện gì xảy ra.")
         lost_item_names = evaluation_json.get("lost_items", [])
-        msg = f"Người chơi đã {'thành công' if success else 'thất bại'} khi {action_details} vì {reasoning}. Hãy sinh ra các kết quả/hệ quả tương ứng."
+        msg = f"Người chơi đã {'thành công' if success else 'thất bại'} khi {action_details} vì {reasoning}. Hãy sinh ra các điều hướng cốt truyện với các kết quả/hệ quả tương ứng."
 
         game_logger.info(f'[ITEMPROCESSOR]: LOẠI BỎ CÁC VẬT PHẨM {lost_item_names} SAU KHI SỬ DỤNG')
         # XÓA CÁC VẬT PHẨM BỊ HỎNG / TIÊU HAO (Bất kể thành công hay thất bại)
