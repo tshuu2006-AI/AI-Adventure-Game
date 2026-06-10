@@ -36,7 +36,6 @@ from engine.Orchestration import GameOrchestrator
 from engine.Utils.logger import game_logger
 
 import asyncio
-import httpx
 from groq import Groq
 from google import genai
 
@@ -170,7 +169,7 @@ def build_inventory_payload():
 
         return payload
     except Exception as e:
-        print(f"❌ Lỗi tải túi đồ: {e}")
+        game_logger.error(f"[Inventory] ❌ Lỗi tải túi đồ payload: {e}", exc_info=True)
         return []
 
 
@@ -178,15 +177,7 @@ def build_inventory_payload():
 # BACKGROUND TASKS & UTILS
 # ==========================================
 async def verify_groq_key(api_key: str) -> bool:
-    """
-    Xác thực API Key của Groq bằng cách thử gọi hàm list models.
-
-    Args:
-        api_key (str): Khóa API Groq cần kiểm tra.
-
-    Returns:
-        bool: True nếu API key hợp lệ, False nếu không hợp lệ hoặc lỗi kết nối.
-    """
+    """Xác thực API Key của Groq bằng cách thử gọi hàm list models."""
     try:
         def test():
             client = Groq(api_key=api_key)
@@ -199,15 +190,7 @@ async def verify_groq_key(api_key: str) -> bool:
 
 
 async def verify_gemini_key(api_key: str) -> bool:
-    """
-    Xác thực API Key của Google Gemini bằng cách thử gọi hàm list models.
-
-    Args:
-        api_key (str): Khóa API Gemini cần kiểm tra.
-
-    Returns:
-        bool: True nếu API key hợp lệ, False nếu không hợp lệ.
-    """
+    """Xác thực API Key của Google Gemini bằng cách thử gọi hàm list models."""
     try:
         def test():
             client = genai.Client(api_key=api_key)
@@ -223,10 +206,6 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
     """
     Hàm này sẽ chạy ngầm sau khi Text đã được ném về Unity.
     Đảm nhiệm việc trích xuất state, sinh/tải ảnh, đánh giá quest và lưu VectorDB.
-    Args:
-    player_input (str): Lệnh hoặc câu thoại người chơi nhập.
-    story_response (str): Phản hồi cốt truyện từ Game Master.
-    is_new_game (bool, optional): Cờ xác định đây có phải là turn khởi tạo game không.
     """
     orc = app.state.orchestrator
     try:
@@ -302,21 +281,13 @@ async def background_post_turn_processing(player_input, story_response, is_new_g
 # ==========================================
 @app.get("/api/ping")
 async def ping():
-    """
-    Unity sẽ gọi hàm này liên tục để xem Server đã khởi động xong chưa.
-
-    Returns:
-        JSONResponse: Chứa trạng thái 'ok' và message phản hồi.
-    """
+    """Unity sẽ gọi hàm này liên tục để xem Server đã khởi động xong chưa."""
     return JSONResponse(content={"status": "ok", "message": "Server is ready"})
 
 
 @app.post("/api/shutdown")
 async def shutdown():
-    """
-    Tắt Server an toàn khi Unity đóng.
-    Thực thi os._exit(0) để chấm dứt ngay lập tức tiến trình FastAPI.
-    """
+    """Tắt Server an toàn khi Unity đóng."""
     os._exit(0)
 
 
@@ -324,19 +295,11 @@ async def shutdown():
 # API ENDPOINTS CHÍNH
 # ==========================================
 
-
 @app.post("/api/new_game")
 async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = BackgroundTasks()):
     """
     Khởi tạo Game Loop mới siêu gọn nhẹ từ một ý tưởng của người chơi.
     Điều phối việc sinh cốt truyện mở đầu, các lựa chọn, và tạo tác vụ nền.
-
-    Args:
-        idea (str): Ý tưởng bối cảnh game do người chơi truyền lên.
-        bg_tasks (BackgroundTasks): Công cụ của FastAPI để chạy hàm ngầm định.
-
-    Returns:
-        JSONResponse: Payload chứa các phân đoạn cốt truyện (segments), lựa chọn (choices) và trạng thái rỗng cho turn đầu.
     """
     try:
         orc = app.state.orchestrator
@@ -380,13 +343,6 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
     """
     Xử lý lượt đi (Chuẩn Clean Code). Phân tích hành động của người chơi,
     kết hợp RAG Memory để sinh phản hồi cốt truyện tiếp theo.
-
-    Args:
-        action (str): Lời thoại hoặc hành động của người chơi.
-        bg_tasks (BackgroundTasks): Tác vụ nền để xử lý state sau khi trả API.
-
-    Returns:
-        JSONResponse: Payload cốt truyện mới và các lựa chọn (choices).
     """
     try:
         orc = app.state.orchestrator
@@ -437,7 +393,6 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
             "is_dead": is_dead
         })
     except Exception as e:
-        # Đã sửa lại nội dung log cho đúng ngữ cảnh
         game_logger.error("❌ LỖI CRASH TẠI LƯỢT ĐI (PLAY TURN):", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -446,16 +401,7 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
 async def poll_updates():
     """
     API Polling liên tục từ Unity để lấy dữ liệu State hiện tại.
-
-    Chiến lược cache 2 tầng:
-    - Heavy cache (bg_image, npc_images, inventory): Chỉ rebuild khi dirty=True
-      (tức là sau khi background task hoàn thành). Tránh đọc file và encode
-      base64 liên tục mỗi giây khi state không thay đổi.
-    - Light data (hp, stats, quest, emotion): Đọc trực tiếp từ RAM mỗi poll.
-      Rẻ vì chỉ là đọc attribute, không có I/O.
-
-    Returns:
-        JSONResponse: Payload tổng hợp mọi chỉ số và trạng thái game hiện tại.
+    Chiến lược cache 2 tầng: Heavy cache & Light data.
     """
     try:
         orc = app.state.orchestrator
@@ -515,7 +461,10 @@ async def poll_updates():
 
         active_quest = orc.get_active_quest()
         quest_payload = None
-        print(f"Số lượng máu hiện tại: {orc.player_state.get_current_hp()}")
+
+        # ĐÃ SỬA: Đổi lệnh print gây lag thành lệnh debug log an toàn
+        game_logger.debug(f"[Poll] HP hiện tại: {current_hp}")
+
         if active_quest:
             raw_obj = getattr(active_quest, 'objectives', getattr(active_quest, 'objective', []))
 
@@ -528,8 +477,6 @@ async def poll_updates():
                 "is_finished": is_fin,
                 "status": active_quest.status
             }
-
-
 
         return JSONResponse(content={
             "bg_image_b64": bg_img,
@@ -557,9 +504,6 @@ async def get_diary():
     """
     (Req 3) Hoàn thiện API Diary - Có thêm Nhiệm Vụ.
     Truy xuất toàn bộ cơ sở dữ liệu về NPC, Location và Quests đã gặp/nhận được.
-
-    Returns:
-        JSONResponse: Danh sách tóm tắt toàn bộ dữ liệu từ sổ tay (Diary).
     """
     try:
         orc = app.state.orchestrator
@@ -602,16 +546,7 @@ async def get_diary():
 
 @app.post("/api/quest/switch")
 async def switch_quest(quest_name: str = Form(...)):
-    """
-    API để Unity ra lệnh chuyển đổi Nhiệm vụ đang theo dõi (Active Quest).
-    Kích hoạt việc sinh lời dẫn chuyển cảnh mượt mà từ hệ thống.
-
-    Args:
-        quest_name (str): Tên nhiệm vụ muốn chuyển sang.
-
-    Returns:
-        JSONResponse: Trạng thái chuyển và văn bản chuyển tiếp cốt truyện.
-    """
+    """API để Unity ra lệnh chuyển đổi Nhiệm vụ đang theo dõi (Active Quest)."""
     try:
         orc = app.state.orchestrator
         target = next((q for q in orc.get_all_quests() if q.name == quest_name), None)
@@ -638,12 +573,7 @@ async def switch_quest(quest_name: str = Form(...)):
 
 @app.get("/api/progress")
 async def get_progress():
-    """
-    API để Unity lấy tiến trình Loading (Thanh Progress bar) khi xử lý tác vụ dài.
-
-    Returns:
-        JSONResponse: Chứa thông điệp và phần trăm (0.0 đến 1.0) để render UI.
-    """
+    """API để Unity lấy tiến trình Loading (Thanh Progress bar) khi xử lý tác vụ dài."""
     orc = app.state.orchestrator
     return JSONResponse(content={
         "message": getattr(orc, "progress_msg", "Đang xử lý..."),
@@ -657,18 +587,7 @@ async def check_config(
         local_model_or_key: str = Form(""),
         is_ollama: str = Form("false")
 ):
-    """
-    Endpoint xử lý nút Check cấu hình từ Menu của Unity.
-    Xác minh tính hợp lệ của các API key trước khi lưu.
-
-    Args:
-        cloud_key (str): Khóa API Cloud (Groq).
-        local_model_or_key (str): Khóa API Local (Gemini) hoặc tên model Ollama.
-        is_ollama (str): Cờ boolean kiểm tra dạng text ('true'/'false').
-
-    Returns:
-        JSONResponse: Kết quả kiểm tra kèm câu thông báo.
-    """
+    """Endpoint xử lý nút Check cấu hình từ Menu của Unity."""
     if not cloud_key.strip() or not local_model_or_key.strip():
         return JSONResponse(content={"success": False, "message": "Vui lòng nhập đầy đủ cả 2 trường thông tin!"})
 
@@ -694,33 +613,22 @@ async def check_config(
 
 @app.post("/api/settings")
 async def update_settings(
-        mode: str = Form(None),  # Đổi Form(...) thành Form(None) để làm tham số tùy chọn
+        mode: str = Form(None),
         cloud_key: str = Form(None),
         local_model_or_key: str = Form(None),
         is_ollama: str = Form(None),
-        enable_image: str = Form(None),  # Bổ sung nhận lệnh bật/tắt ảnh từ Unity
-        quality: str = Form(None)  # Bổ sung nhận lệnh chất lượng ảnh từ Unity
+        enable_image: str = Form(None),
+        quality: str = Form(None)
 ):
-    """
-    Cập nhật cài đặt động của game (AI Model, Quality, Generate Image).
-    Khởi tạo lại Orchestrator nếu thay đổi Provider.
-
-    Tham số (Tất cả đều Optional):
-        mode, cloud_key, local_model_or_key, is_ollama, enable_image, quality.
-
-    Returns:
-        JSONResponse: Xác nhận cài đặt đã được áp dụng thành công.
-    """
-
+    """Cập nhật cài đặt động của game (AI Model, Quality, Generate Image)."""
     orc = app.state.orchestrator
-    # 1. NẾU UNITY CHỈ GỬI LỆNH ĐỔI CHẤT LƯỢNG ẢNH
     is_ollama_bool = str(is_ollama).lower() == "true"
+
     if quality is not None:
         orc.image_manager.api.quality = quality.lower()
         game_logger.info(f"Đã cập nhật chất lượng Ảnh thành: {quality.upper()}")
         return JSONResponse(content={"success": True, "message": "Đã đổi chất lượng Hình ảnh!"})
 
-    # 2. NẾU UNITY CHỈ GỬI LỆNH BẬT/TẮT ẢNH
     if enable_image is not None:
         is_enabled = enable_image.lower() == "true"
         orc.image_manager.api.enable_image = is_enabled
@@ -728,14 +636,12 @@ async def update_settings(
         game_logger.info(f"Đã {trang_thai} tính năng vẽ ảnh.")
         return JSONResponse(content={"success": True, "message": f"Đã {trang_thai} tính năng Hình ảnh!"})
 
-    # 3. NẾU UNITY GỬI LỆNH ĐỔI AI (LLM KEY)
     if mode is not None:
         current_config["mode"] = mode
         current_config["cloud_key"] = cloud_key.strip() if cloud_key else ""
         current_config["local_model_or_key"] = local_model_or_key.strip() if local_model_or_key else ""
         current_config["local_provider"] = "ollama" if is_ollama_bool else "gemini"
 
-        # Khởi tạo lại AI nhưng PHẢI GIỮ LẠI trạng thái bật/tắt ảnh trước đó
         old_enable_image = getattr(orc.image_manager.api, 'enable_image', True)
         old_quality = getattr(orc.image_manager.api, 'quality', 'medium')
 
@@ -762,7 +668,6 @@ async def update_settings(
                 )
             )
 
-        # Nạp lại trạng thái ảnh cho Orchestrator mới
         orc = app.state.orchestrator
         orc.image_manager.api.enable_image = old_enable_image
         orc.image_manager.api.quality = old_quality
@@ -807,15 +712,18 @@ async def use_item(item_name: str = Form(...), action_detail: str = Form("")):
     try:
         orc = app.state.orchestrator
         item_obj = orc.get_item_by_name(item_name)
-        
+
         if not item_obj:
             return JSONResponse(content={"success": False, "message": "Vật phẩm không tồn tại trong túi đồ!"})
-        
+
         if item_obj.item_type == "consumable" and not action_detail.strip():
             # Gọi trực tiếp qua PlayerState để nó cộng Máu và Stats
             orc.use_consumables(item_obj)
+
+            # --- ĐÃ BỔ SUNG LOG ---
+            game_logger.info(f"[Inventory] Người chơi vừa sử dụng ngay (consumable): {item_name}")
             return JSONResponse(content={"success": True, "message": f"Bạn đã sử dụng {item_name} thành công!"})
-        
+
         target_items = [item_obj]
         action_text = action_detail if action_detail.strip() else f"Sử dụng {item_name}"
         use_result = await orc.use(item_list=target_items,action_details=action_text)
@@ -823,7 +731,10 @@ async def use_item(item_name: str = Form(...), action_detail: str = Form("")):
         msg = use_result[1] if isinstance(use_result, tuple) else str(use_result)
         success = use_result[0] if isinstance(use_result, tuple) else True
 
-        
+        # --- ĐÃ BỔ SUNG LOG ---
+        if success:
+            game_logger.info(f"[Inventory] Người chơi tương tác với vật phẩm: '{action_text}' -> Thành công.")
+
         return JSONResponse(content={"success": success, "message": msg})
     except Exception as e:
         game_logger.error(f"Lỗi dùng vật phẩm: {e}", exc_info=True)
@@ -839,11 +750,14 @@ async def equip_item(item_name: str = Form(...)):
             return JSONResponse(content={"success": False, "message": "Không thể trang bị vật phẩm này."})
 
         orc.equip_weapon(item_obj)
+
+        # --- ĐÃ BỔ SUNG LOG ---
+        game_logger.info(f"[Inventory] ⚔️ Người chơi đã trang bị vũ khí mới: {item_name}")
         return JSONResponse(content={"success": True, "message": f"Đã trang bị {item_name}!"})
     except Exception as e:
         game_logger.error(f"Lỗi trang bị: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
-    
+
 @app.post("/api/inventory/unequip")
 async def unequip_item():
     """API để Unity ra lệnh tháo vũ khí đang trang bị"""
@@ -852,7 +766,10 @@ async def unequip_item():
         # Gọi thẳng vào hệ thống quản lý túi đồ để gỡ vũ khí
         if hasattr(orc.player_state.inventory_manager, 'equipped_weapon'):
             orc.player_state.inventory_manager.equipped_weapon = None
-            
+
+            # --- ĐÃ BỔ SUNG LOG ---
+            game_logger.info("[Inventory] 🛡️ Người chơi đã tháo vũ khí, chuyển về tay không.")
+
         return JSONResponse(content={"success": True, "message": "Đã tháo trang bị thành công!"})
     except Exception as e:
         game_logger.error(f"Lỗi tháo trang bị: {e}", exc_info=True)
@@ -861,14 +778,14 @@ async def unequip_item():
 @app.post("/api/inventory/craft")
 async def craft_item(items_str: str = Form(...), action_detail: str = Form(...)):
     """
-    API để Unity ra lệnh chế tạo. 
+    API để Unity ra lệnh chế tạo.
     - items_str: chuỗi các tên vật phẩm cách nhau bằng dấu phẩy
     - action_detail: mô tả ý định ghép
     """
     try:
         orc = app.state.orchestrator
         target_items = []
-        
+
         # Tách chuỗi để lấy ra các Object Item thật từ Balo
         for name in items_str.split(","):
             if not name.strip(): continue
@@ -883,6 +800,9 @@ async def craft_item(items_str: str = Form(...), action_detail: str = Form(...))
             item_list=target_items,
             action_details=action_detail,
         )
+
+        # --- ĐÃ BỔ SUNG LOG ---
+        game_logger.info(f"[Inventory] 🔨 Chế tạo/Ghép đồ: {items_str} -> Kết quả: {craft_result[:50]}...")
         return JSONResponse(content={"success": True, "message": craft_result})
 
     except Exception as e:
