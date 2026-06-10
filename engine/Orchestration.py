@@ -78,6 +78,16 @@ class GameOrchestrator:
         """Hàm chuyên dụng để khởi tạo New Game từ API"""
 
         self.player_state.clear()
+        if self.db.conn is not None:
+            try:
+                await self.db.conn.close()
+            except Exception:
+                pass
+            self.db.conn = None
+            self.db.npc_manager.conn = None
+            self.db.location_manager.conn = None
+            self.db.memory_manager.conn = None
+
         await self.db.connect()
         await self.db.reset_database()
         await self.db.create_tables()

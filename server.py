@@ -289,8 +289,6 @@ async def ping():
 async def shutdown():
     """Tắt Server an toàn khi Unity đóng."""
     os._exit(0)
-
-
 # ==========================================
 # API ENDPOINTS CHÍNH
 # ==========================================

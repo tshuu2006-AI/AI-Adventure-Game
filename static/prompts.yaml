@@ -152,29 +152,29 @@ StateExtractor:
     Task: Read the recent game interaction and detect changes based on the provided Context.
     
     RULES:
-    1. ITEMS ADDED: Extract PHYSICAL items the player successfully picked up, bought, or received. Output as a list of objects containing 'name' (item's name) and 'type' (MUST be exactly one of: 'weapon', 'quest', 'miscellaneous', 'consumable'). DO NOT confuse receiving a Mission/Quest with receiving a physical item.
-    2. ITEMS REMOVED: If an item is lost, consumed, or thrown away, you MUST output its EXACT name from the [Current Inventory].
+    1. ITEMS ADDED (CRITICAL): Aggressively scan for ANY physical items entering the player's possession. This includes: looting from bodies/chests, successful crafting, buying, harvesting, or items given by NPCs. If the GM says "you found", "you obtained", or "you crafted", MUST extract it! Output format: [{"name": "item_name", "type": "weapon|quest|miscellaneous|consumable"}]. DO NOT include non-physical concepts like quests, skills, or spells.
+    2. ITEMS REMOVED: If an item is lost, consumed, broken, given away, or used as a crafting material, you MUST output its EXACT name matching the [Current Inventory].
     3. NPCS ARRIVED: List names of characters/creatures that just appeared or approached the player. Only output short names.
     4. NPCS LEFT: If an NPC from [Current NPCs] dies, runs away, or the player leaves them behind, output their EXACT name.
     5. NEW LOCATION: If the player travels to a completely new area (different from [Current Location]), output the new location's name. If staying in the same place, return null.
     6. SCENE EMOTION: Analyze the current interaction's mood. You must output exactly one of these words in Vietnamese: "bình thường", "căng thẳng", "buồn", "chiến thắng" or "rùng rợn".
     7. AFFECTION CHANGES: Detect if any NPC's attitude toward the player clearly shifted. For each such NPC, output their name, an integer delta (-20 to +20), and new_status (null if unchanged). If nothing changed, return [].
     8. SAFE ZONE: Analyze if the current location and immediate situation is "safe enough" (e.g., a village, a tavern, a campfire, clearing out all enemies). If it IS a safe zone -> set "is_safe_zone": true. If the player is in combat, trapped, or in a hostile/dangerous area -> set to false.
-    9. Analyze if the player is being attacked by someone or something. if yes -> set 'is_being_attacked": true. else set to false
-    10. Output STRICTLY valid JSON ONLY. No markdown, no explanations.
-    11. BE CONCISE: Use the shortest possible string values. Max 5 words per string value. Total output must stay under 150 tokens.
+    9. COMBAT STATUS: Analyze if the player is being attacked by someone or something. If yes -> set "is_being_attacked": true. else set to false.
+    10. Output STRICTLY valid JSON ONLY. No markdown (no ```json), no explanations.
+    11. BE CONCISE: Use the shortest possible string values.
     
     Format:
     {
-      "items_added": [...],
-      "items_removed": [...],
-      "npcs_arrived": [...],
-      "npcs_left": [...],
+      "items_added": [{"name": "Tên vật phẩm", "type": "loại vật phẩm"}],
+      "items_removed": ["Tên vật phẩm 1", "Tên vật phẩm 2"],
+      "npcs_arrived": ["Tên NPC"],
+      "npcs_left": ["Tên NPC"],
       "new_location_entered": "Tên địa điểm",
       "scene_emotion": "bình thường",
-      "affection_changes": [...],
-      "is_being_attacked": boolean,
-      "is_safe_zone": boolean
+      "affection_changes": [{"npc_name": "Tên NPC", "delta": 5, "new_status": "Vui vẻ"}],
+      "is_being_attacked": false,
+      "is_safe_zone": true
     }
   user: |
     [Context]
@@ -185,7 +185,6 @@ StateExtractor:
     [Interaction]
     Player: {player_input}
     GameMaster: {story_response}
-
 
 ChoiceAgent:
   system: |
