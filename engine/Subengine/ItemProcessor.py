@@ -189,6 +189,7 @@ class ItemProcessor:
         evaluation = self._parse_craft_result(evaluation_json)
 
         lost_item_names = evaluation.get("lost_items", [])
+        game_logger.info(f'[ITEMPROCESSOR]: LOẠI BỎ CÁC VẬT PHẨM {lost_item_names} SAU KHI CHẾ TẠO ')
 
         # ==========================================
         # BƯỚC 1: XÓA ĐỒ BỊ MẤT / TIÊU HAO (CỐT LÕI)
@@ -258,6 +259,7 @@ class ItemProcessor:
         reasoning = evaluation_json.get("reasoning", "Không có chuyện gì xảy ra.")
         lost_item_names = evaluation_json.get("lost_items", [])
 
+        game_logger.info(f'[ITEMPROCESSOR]: LOẠI BỎ CÁC VẬT PHẨM {lost_item_names} SAU KHI SỬ DỤNG')
         # XÓA CÁC VẬT PHẨM BỊ HỎNG / TIÊU HAO (Bất kể thành công hay thất bại)
         for item in items_to_use:
             if item.name in lost_item_names:

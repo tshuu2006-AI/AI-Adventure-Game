@@ -1,7 +1,7 @@
 """Module điều phối việc cập nhật thông tin, trạng thái của trò chơi trong csdl"""
 import asyncio
 import time
-from world.Entity import Location, NPC
+from world.Entity import Location
 from engine.Agents.LocalAgents import StateExtractor, MemoryExtractor, ItemAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
 from engine.Agents.CloudAgents import LocationAgent, NPCAgent, CombatAgent
@@ -139,21 +139,9 @@ class StateProcessor:
             # 5. Lưu vào Database (Bảo vệ an toàn dữ liệu trả về)
             if isinstance(results, list):
                 for item in results:
-                    # Khởi tạo an toàn bằng Keyword Arguments
-                    if isinstance(item, dict):
-                        new_npc = NPC(
-                            id=None,
-                            name=item.get("name", "Vô danh"),
-                            personality=item.get("personality", "Bí ẩn"),
-                            description=item.get("description", "Không rõ"),
-                            affectionate=item.get("affectionate", 0),
-                            location=loc_name,
-                            status=item.get("status", "Bình thường")
-                        )
-                    else:
-                        new_npc = item
-                        new_npc.location = loc_name  # Cập nhật vị trí hiện tại
-                        new_npc.id = None
+                    new_npc = item
+                    new_npc.location = loc_name  # Cập nhật vị trí hiện tại
+                    new_npc.id = None
 
                     img_path = await self.image_manager.get_or_create_npc_image(
                         npc_name=new_npc.name,
@@ -168,8 +156,6 @@ class StateProcessor:
             else:
                 game_logger.error(f"[Cloud Lỗi] Định dạng trả về bulk_npcs không hợp lệ: {results}")
 
-
-
     async def _update_affection_and_status(self, affection_changes: list):
         if not affection_changes:
             return
@@ -183,6 +169,16 @@ class StateProcessor:
                 continue
 
             await self.db.update_npc_state(npc_name, affection_change=delta, new_status=new_status)
+
+            # --- THÊM LOG Ở ĐÂY ---
+            log_msg = f"[Tương tác] NPC '{npc_name}': "
+            if delta != 0:
+                d_str = f"+{delta}" if delta > 0 else str(delta)
+                log_msg += f"Tình cảm {d_str}. "
+            if new_status:
+                log_msg += f"Trạng thái mới: '{new_status}'."
+            game_logger.info(log_msg)
+            # -----------------------
 
             # Đồng bộ lại object đang sống trong PlayerState
             for npc in self.player_state.currentNPCs:
@@ -258,8 +254,6 @@ class StateProcessor:
         # ==========================================
         self.player_state.is_safe_zone = is_safe_zone
         if is_safe_zone:
-            # Tách Story Response từ biến context (do context truyền vào đang chứa cả player_input và story_response)
-
             # 2.1. Nếu đang ở trong một Nhiệm vụ phụ (Quest nhánh)
             if hasattr(self.player_state, "active_quest") and self.player_state.active_quest:
                 current_quest = self.player_state.active_quest
@@ -271,10 +265,23 @@ class StateProcessor:
 
                 game_logger.debug(f"[Checkpoint] Đã lưu Snapshot an toàn trực tiếp vào Quest: '{current_quest.name}'.")
 
+        # ==========================================
+        # 3. KIỂM TRA SÁT THƯƠNG VÀ GHI LOG MÁU
+        # ==========================================
         if is_being_attacked:
             evaluate_damage = await self.combat_agent.extract_combat(story_response=story_response)
             taken_damage = evaluate_damage.get('taken_damage', 0)
+
+            # --- THÊM LOG Ở ĐÂY ---
+            game_logger.warning(f"[Combat] Người chơi bị tấn công! Nhận {taken_damage} sát thương.")
             self.player_state.take_damage(amount = taken_damage)
+
+            current_hp = self.player_state.get_current_hp()
+            if current_hp <= 0:
+                game_logger.critical("[Combat] CẢNH BÁO: Người chơi đã gục ngã (HP = 0)!")
+            else:
+                game_logger.info(f"[Combat] HP hiện tại: {current_hp}/{self.player_state.get_max_hp()}")
+            # -----------------------
 
 
     async def process_background_tasks(self, player_input: str, story_response: str):
@@ -285,11 +292,11 @@ class StateProcessor:
                    f"Story Response: {story_response}")
 
         extract_task = [
-        self.state_extractor.extract_state(player_input=player_input,
-                                   story_response=story_response,
-                                   player_state=self.player_state),
-        self.memory_extractor.extract_memory(player_input = player_input,
-                                             story_response = story_response)
+            self.state_extractor.extract_state(player_input=player_input,
+                                       story_response=story_response,
+                                       player_state=self.player_state),
+            self.memory_extractor.extract_memory(player_input = player_input,
+                                                 story_response = story_response)
         ]
 
         results = await asyncio.gather(*extract_task, return_exceptions=True)
@@ -307,6 +314,14 @@ class StateProcessor:
         if not isinstance(state_changes, dict): state_changes = {}
         if not isinstance(atomic_memories, dict): atomic_memories = {}
 
+        # --- THÊM LOG Ở ĐÂY ---
+        episodes = atomic_memories.get("episodes", [])
+        if episodes:
+            game_logger.info(f"[Memory] Đã trích xuất thành công {len(episodes)} mảnh ký ức từ lượt đi này.")
+        else:
+            game_logger.debug("[Memory] Không có ký ức nào đáng chú ý được trích xuất trong lượt này.")
+        # -----------------------
+
         items_added = state_changes.get("items_added", [])
         items_removed = state_changes.get("items_removed", [])
         npcs_arrived = state_changes.get("npcs_arrived", [])
@@ -321,7 +336,7 @@ class StateProcessor:
 
         if new_location_entered_name:
             current_loc_name = self.player_state.currentLocation.name if self.player_state.currentLocation else ""
-            
+
             if new_location_entered_name.strip().lower() != current_loc_name.strip().lower():
                 await self._update_location(new_location_entered_name=new_location_entered_name, context=context)
             else:

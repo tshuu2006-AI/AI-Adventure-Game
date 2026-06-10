@@ -1,4 +1,3 @@
-
 from engine.DataManager.PlayerState import PlayerState
 from engine.Utils.logger import game_logger
 from engine.Agents.LocalAgents import QuestAgent
@@ -6,15 +5,17 @@ from typing import List
 from engine.Utils.PromptManager import PromptManager
 from world.Entity import Quest
 from engine.DataManager.WorldState import WorldState
+
+
 class QuestProcessor:
     """
     Hệ thống điều phối Nhiệm vụ (Quests) và Đa luồng Cốt truyện (Context Stacking).
     Phiên bản kiến trúc Unified Quest Log (Một danh sách nhiệm vụ duy nhất).
     """
 
-    def __init__(self, player_state: PlayerState, provider:str, pm: PromptManager, local_api_key: str):
+    def __init__(self, player_state: PlayerState, provider: str, pm: PromptManager, local_api_key: str):
         self.player_state = player_state
-        self.quest_agent = QuestAgent(pm=pm, provider = provider, api_key=local_api_key)
+        self.quest_agent = QuestAgent(pm=pm, provider=provider, api_key=local_api_key)
 
     def _handle_status(self, objective_status: List[bool]):
         for boolean in objective_status:
@@ -22,15 +23,18 @@ class QuestProcessor:
                 return "in_progress"
         return "completed"
 
-
-    async def switch_quest(self, target_quest: Quest, recent_story:str, current_choices: List[str], force=False):
+    async def switch_quest(self, target_quest: Quest, recent_story: str, current_choices: List[str], force=False):
         # 1. KIỂM TRA ĐIỀU KIỆN
         if not force:
             if target_quest.status in ['failed', 'completed'] or not self.player_state.is_safe_zone:
+                game_logger.warning(
+                    f"[QuestSystem] Từ chối Switch Quest '{target_quest.name}' (Status: {target_quest.status}, SafeZone: {self.player_state.is_safe_zone})")
                 return "Không thể nhận nhiệm vụ này lúc này. Hãy chắc chắn bạn đang ở khu vực an toàn."
 
         if target_quest.status == 'available' or force:
             src_quest = self.player_state.active_quest
+            game_logger.info(
+                f"[QuestSystem] Đang chuyển đổi nhiệm vụ: '{src_quest.name if src_quest else 'None'}' ➔ '{target_quest.name}'")
 
             # ==========================================
             # 2. LƯU SNAPSHOT TRƯỚC KHI RỜI ĐI
@@ -68,6 +72,7 @@ class QuestProcessor:
                 snap = target_quest.snapshot
                 self.player_state.currentLocation = snap.get("location")
                 self.player_state.currentNPCs = snap.get("npcs", [])
+                game_logger.info(f"[QuestSystem] Đã khôi phục Snapshot bối cảnh cho nhiệm vụ '{target_quest.name}'")
 
             return transitive_text
 
@@ -81,9 +86,11 @@ class QuestProcessor:
 
         current_quest = self.player_state.active_quest
         if current_quest:
-            print(f"Current quest: {current_quest.name}")
+            game_logger.debug(f"[QuestSystem] Đang nghiệm thu tiến độ nhiệm vụ: {current_quest.name}")
         else:
-            print(f"No quest is active")
+            game_logger.debug("[QuestSystem] Không có nhiệm vụ nào đang Active để nghiệm thu.")
+            return False
+
         objectives = current_quest.objectives.copy() if current_quest else []
 
         for i in range(len(objectives)):
@@ -107,11 +114,22 @@ class QuestProcessor:
             current_npcs = ", ".join([npc.name for npc in self.player_state.currentNPCs])
 
             new_quest = await self.quest_agent.generate_quests(location_name=current_loc,
-                                                         npc_names=current_npcs,
-                                                         context=story_response)
-            self.player_state.add_quest(new_quest)
+                                                               npc_names=current_npcs,
+                                                               context=story_response)
+            if new_quest:
+                self.player_state.add_quest(new_quest)
+                game_logger.info(f"[QuestSystem] ✨ Đã thêm nhiệm vụ phụ mới vào sổ tay: '{new_quest.name}'")
+            else:
+                game_logger.error("[QuestSystem] Lỗi: Agent không thể sinh được nhiệm vụ phụ mới.")
 
         objective_status = evaluation.get("objectives_status", current_quest.is_finished)
+
+        # LOG BỔ SUNG: So sánh mảng cũ và mới để xem mục tiêu nào vừa hoàn thành
+        for i, (old_status, new_status) in enumerate(zip(current_quest.is_finished, objective_status)):
+            if not old_status and new_status:
+                if i < len(current_quest.objectives):
+                    game_logger.info(f"[QuestSystem] 🎯 Hoàn thành mục tiêu: '{current_quest.objectives[i]}'")
+
         current_quest.is_finished = objective_status
 
         status = self._handle_status(objective_status)
@@ -141,7 +159,9 @@ class QuestProcessor:
         Tổng hợp thông tin, gọi Agent sinh Nhiệm vụ chính và lưu vào trạng thái người chơi.
         """
         # 1. Trích xuất danh sách Key NPCs thành chuỗi
-        key_npcs_str = "\n".join([f"name: {npc.name} - description: {npc.description} -  personality: {npc.personality}" for npc in starting_npcs])
+        key_npcs_str = "\n".join(
+            [f"name: {npc.name} - description: {npc.description} -  personality: {npc.personality}" for npc in
+             starting_npcs])
         if not key_npcs_str:
             key_npcs_str = "Chưa có thông tin về các thế lực trong thế giới này."
 
@@ -178,4 +198,3 @@ class QuestProcessor:
 
         game_logger.info(f"[QuestSystem] Đã thiết lập Hành trình chính: '{main_quest.name}'")
         return main_quest
-

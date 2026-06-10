@@ -156,15 +156,6 @@ class ActionProcessor:
         """
         Xử lý lệnh nhập của người chơi, sinh ra chỉ thị hệ thống dựa trên ý định,
         kết quả gieo xúc xắc và các yếu tố ngẫu nhiên (NPC, Location).
-
-        Khi intent là COMBAT, bổ sung thêm combat stats block vào directive
-        để StoryAgent có anchor số liệu cụ thể khi kể chuyện đánh nhau.
-
-        Args:
-            player_input (str): Chuỗi hành động người chơi nhập vào.
-
-        Returns:
-            str: Chỉ thị hệ thống (system directive) để điều hướng mạch truyện.
         """
         intent_data = await self.intent_parser.parse_intent(player_input)
         intent = intent_data.get("intent", "GENERAL_ACTION")
@@ -174,7 +165,10 @@ class ActionProcessor:
 
         valid_intents = ["MOVE", "COMBAT", "EXAMINE", "TAKE", "USE", "FLEE", "STEALTH", "TALK", "GENERAL_ACTION"]
         if intent not in valid_intents:
+            # [LOG 1] Bắt tận tay LLM sinh ra Intent rác và tự động Fallback
+            game_logger.warning(f"[ActionProcessor] ⚠️ LLM nhả Intent lạ: '{intent}'. Tự động ép về 'GENERAL_ACTION'.")
             intent = "GENERAL_ACTION"
+
         self.player_state.set_intent(intent=intent)
 
         action_roll = random.randint(1, 100)
@@ -185,23 +179,27 @@ class ActionProcessor:
 
         intent_dict = base_directives.get(intent)
         if intent_dict is None:
-            game_logger.warning(
-                f"[ActionManager] Không tìm thấy intent '{intent}' trong YAML. Bỏ qua format.")
+            game_logger.warning(f"[ActionManager] Không tìm thấy intent '{intent}' trong YAML. Bỏ qua format.")
             directive_template = ""
         else:
             directive_template = intent_dict.get(status, "")
 
+        # [LOG 2] Bơm bối cảnh Location vào Template để LLM không bị ảo giác không gian
+        # (Sử dụng getattr an toàn trong trường hợp player_state chưa kịp load location)
+        current_loc_name = getattr(self.player_state, 'current_location', 'Khu vực hiện tại')
+
         try:
-            system_directive = directive_template.format(target=target)
+            # Format truyền cả target và current_location
+            system_directive = directive_template.format(
+                target=target,
+                current_location=current_loc_name
+            )
         except KeyError as e:
-            game_logger.warning(
-                f"[ActionManager] Thiếu biến {e} trong template của intent '{intent}'.")
+            game_logger.warning(f"[ActionManager] Thiếu biến {e} trong template của intent '{intent}' (File YAML).")
             system_directive = directive_template
 
         # ==========================================
         # COMBAT STATS INJECTION
-        # Chỉ kích hoạt khi intent là COMBAT.
-        # Không cần LLM call thêm — tính toán thuần túy từ PlayerState.
         # ==========================================
         if intent == "COMBAT":
             combat_directive = self._build_combat_stats_directive(status=status)
@@ -213,19 +211,26 @@ class ActionProcessor:
 
         rng_modifiers = yaml_data.get("RNGModifiers", {})
 
-        # Kích hoạt sự kiện NPC (bỏ qua khi đang combat)
+        # ==========================================
+        # XỬ LÝ SỰ KIỆN RNG (CÓ GHI LOG ĐỊA ĐIỂM)
+        # ==========================================
+        # Kích hoạt sự kiện NPC
         if intent not in ["TALK", "COMBAT"]:
             roll_npc = random.randint(1, 100)
             if roll_npc <= self.prob_have_npc:
-                game_logger.info(f"[ActionManager] Sự kiện NPC (Roll: {roll_npc}/{self.prob_have_npc})")
+                # [LOG 3] Ghi rõ NPC xuất hiện ở đâu
+                game_logger.info(
+                    f"[ActionManager] 🎲 Kích hoạt sự kiện NPC tại '{current_loc_name}' (Roll: {roll_npc}/{self.prob_have_npc})")
                 system_directive += f"\n{rng_modifiers.get('NPC_EVENT', '')}"
                 self.prob_have_npc = 5
 
-        # Kích hoạt sự kiện Địa điểm mới (bỏ qua khi đang combat)
+        # Kích hoạt sự kiện Địa điểm mới
         if intent not in ["MOVE", "COMBAT"]:
             roll_loc = random.randint(1, 100)
             if roll_loc <= self.prob_new_location:
-                game_logger.info(f"[ActionManager] Sự kiện Địa điểm ẩn (Roll: {roll_loc}/{self.prob_new_location})")
+                # [LOG 4] Ghi rõ địa điểm ẩn được tìm thấy từ đâu
+                game_logger.info(
+                    f"[ActionManager] 🎲 Kích hoạt sự kiện Địa điểm ẩn từ '{current_loc_name}' (Roll: {roll_loc}/{self.prob_new_location})")
                 system_directive += f"\n{rng_modifiers.get('LOCATION_EVENT', '')}"
                 self.prob_new_location = 5
 

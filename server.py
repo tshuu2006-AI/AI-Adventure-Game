@@ -218,63 +218,80 @@ async def verify_gemini_key(api_key: str) -> bool:
     except Exception:
         return False
 
+
 async def background_post_turn_processing(player_input, story_response, is_new_game=False):
     """
     Hàm này sẽ chạy ngầm sau khi Text đã được ném về Unity.
     Đảm nhiệm việc trích xuất state, sinh/tải ảnh, đánh giá quest và lưu VectorDB.
-
     Args:
-        player_input (str): Lệnh hoặc câu thoại người chơi nhập.
-        story_response (str): Phản hồi cốt truyện từ Game Master.
-        is_new_game (bool, optional): Cờ xác định đây có phải là turn khởi tạo game không.
+    player_input (str): Lệnh hoặc câu thoại người chơi nhập.
+    story_response (str): Phản hồi cốt truyện từ Game Master.
+    is_new_game (bool, optional): Cờ xác định đây có phải là turn khởi tạo game không.
     """
     orc = app.state.orchestrator
     try:
-        if is_new_game:
-            curr_loc = orc.get_current_location()  # Dùng hàm bọc
+        # ==========================================
+        # 1. ĐỒNG BỘ ĐỊA ĐIỂM (Chạy MỌI TURN để chống lỗi Foreign Key)
+        # ==========================================
+        curr_loc = orc.get_current_location()
+        if curr_loc:
+            # Nếu chưa có ảnh (Địa điểm mới), tiến hành vẽ
+            if not curr_loc.image_path:
+                game_logger.info(f"🎨 Bắt đầu vẽ ảnh địa điểm: {curr_loc.name}")
+                img_path = await orc.image_manager.get_or_create_location_image(
+                    location_name=curr_loc.name,
+                    description=curr_loc.description,
+                    atmosphere=curr_loc.atmosphere
+                )
+                if img_path:
+                    curr_loc.image_path = img_path
+
+            # LUÔN LUÔN đẩy Location vào DB trước khi xử lý thứ khác
+            await orc.add_location_to_db(curr_loc)
+
+        # ==========================================
+        # 2. ĐỒNG BỘ NPC (Chạy MỌI TURN)
+        # ==========================================
+        npcs = orc.get_current_npcs()
+        for npc in npcs:
             if curr_loc:
-                if not curr_loc.image_path:
-                    game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh địa điểm xuất phát: {curr_loc.name}")
-                    img_path = await orc.image_manager.get_or_create_location_image(
-                        location_name=curr_loc.name,
-                        description=curr_loc.description,
-                        atmosphere=curr_loc.atmosphere
-                    )
-                    if img_path:
-                        curr_loc.image_path = img_path
+                npc.location = curr_loc.name  # Ép vị trí lần nữa cho chắc chắn
 
-                await orc.add_location_to_db(curr_loc)  # Dùng hàm bọc
+            if not getattr(npc, 'image_path', None):
+                game_logger.info(f"🎨 Bắt đầu vẽ ảnh NPC: {npc.name}")
+                npc_img = await orc.image_manager.get_or_create_npc_image(
+                    npc_name=npc.name,
+                    description=npc.description
+                )
+                if npc_img:
+                    npc.image_path = npc_img
 
-                npcs = orc.get_current_npcs()
-                for npc in npcs:
-                    npc.location = curr_loc.name  # Ép vị trí lần nữa cho chắc chắn
-                    if not getattr(npc, 'image_path', None):
-                        game_logger.info(f"🎨 [Turn 0] Bắt đầu vẽ ảnh NPC: {npc.name}")
-                        npc_img = await orc.image_manager.get_or_create_npc_image(
-                            npc_name=npc.name,
-                            description=npc.description
-                        )
-                        if npc_img:
-                            npc.image_path = npc_img
-                    await orc.add_npc_to_db(npc)
+            # LUÔN LUÔN đẩy NPC vào DB
+            await orc.add_npc_to_db(npc)
 
-        # 🌟 GỌI QUA HÀM BỌC (Đã có chữ 'return' nên không còn bị crash NoneType)
+        # ==========================================
+        # 3. TRÍCH XUẤT STATE & ĐÁNH GIÁ QUEST
+        # ==========================================
         ep_data, scene_emotion = await orc.state_process_background_tasks(player_input, story_response)
         orc.current_emotion = scene_emotion
 
-        await orc.quest_evaluate_turn(player_input, story_response)  # Dùng hàm bọc
+        await orc.quest_evaluate_turn(player_input, story_response)
 
-        encountered = [n.name for n in orc.get_current_npcs()]  # Dùng hàm bọc
-        await orc.memory_save_turn(  # Dùng hàm bọc
+        # ==========================================
+        # 4. LƯU KÝ ỨC (Lúc này DB đã chắc chắn có Location/NPC, an toàn 100%)
+        # ==========================================
+        encountered = [n.name for n in npcs]
+        await orc.memory_save_turn(
             player_input=player_input,
             story_response=story_response,
             episode_data=ep_data,
-            current_location_name=orc.get_current_location_name(),
+            current_location_name=curr_loc.name if curr_loc else "Unknown",
             encountered_npc_names=encountered
         )
-        game_logger.info("Hoàn tất xử lý ngầm (State & Memory)!")
+        game_logger.info("✅ Hoàn tất xử lý ngầm (State & Memory) an toàn!")
+
     except Exception as e:
-        game_logger.error(f"Lỗi chạy ngầm: {e}", exc_info=True)
+        game_logger.error(f"❌ Lỗi chạy ngầm: {e}", exc_info=True)
     finally:
         orc.is_processing_bg = False
         app.state.poll_cache["dirty"] = True

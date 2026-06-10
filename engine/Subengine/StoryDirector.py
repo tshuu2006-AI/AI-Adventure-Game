@@ -1,12 +1,14 @@
 import json
 from typing import AsyncGenerator, List
 from world.Entity import Location, Quest, NPC
-from static.config import STORY_AGENT_MODEL, CHOICE_AGENT_MODEL, LOCATION_AGENT_MODEL, WORLD_GENERATE_AGENT_MODEL, NPC_AGENT_MODEL
+from static.config import STORY_AGENT_MODEL, CHOICE_AGENT_MODEL, LOCATION_AGENT_MODEL, WORLD_GENERATE_AGENT_MODEL, \
+    NPC_AGENT_MODEL
 from engine.Agents.CloudAgents import StoryAgent, ChoiceAgent, WorldGenerateAgent, LocationAgent, NPCAgent
 from engine.Utils.logger import game_logger  # Thêm import logger
 from engine.Utils.PromptManager import PromptManager
 from engine.DataManager.WorldState import WorldState
 from engine.DataManager.PlayerState import PlayerState
+
 
 class StoryDirector:
     """
@@ -34,7 +36,8 @@ class StoryDirector:
 
         # 2. Các Agent xuất JSON: Dùng Qwen-32B để nhanh, rẻ và tuân thủ JSON tuyệt đối
         self.choice_agent = ChoiceAgent(api_key=groq_api_key, pm=self.pm, model_name=CHOICE_AGENT_MODEL)
-        self.world_generator = WorldGenerateAgent(api_key=groq_api_key, pm=self.pm, model_name=WORLD_GENERATE_AGENT_MODEL)
+        self.world_generator = WorldGenerateAgent(api_key=groq_api_key, pm=self.pm,
+                                                  model_name=WORLD_GENERATE_AGENT_MODEL)
 
         game_logger.debug("[StoryDirector] Đã khởi tạo các Cloud Agents (Llama-3 & Qwen).")
 
@@ -104,9 +107,15 @@ class StoryDirector:
             quest_items=quest_items_str
         )
 
-        # Truyền luồng stream ra ngoài
-        async for chunk in stream:
-            yield chunk
+        # Truyền luồng stream ra ngoài an toàn
+        try:
+            async for chunk in stream:
+                yield chunk
+            # --- BỔ SUNG LOG ---
+            game_logger.info("[StoryDirector] Luồng truyện (Streaming) đã hoàn tất thành công.")
+        except Exception as e:
+            game_logger.error(f"[StoryDirector] ❌ Lỗi đứt gánh khi đang Streaming cốt truyện: {e}", exc_info=True)
+            raise e
 
     async def generate_player_choices(self, current_location_name: str, encountered_npc_name: str,
                                       recent_story_text: str, active_quest: Quest, quest_items: List) -> list:
@@ -154,7 +163,13 @@ class StoryDirector:
         )
 
         choices_list = choices_data.get('choices', [])
-        game_logger.debug(f"[StoryDirector] Đã tạo thành công {len(choices_list)} lựa chọn khả thi.")
+
+        # --- BỔ SUNG CẢNH BÁO MẢNG RỖNG ---
+        if not choices_list:
+            game_logger.critical(
+                "[StoryDirector] 🚨 CẢNH BÁO: ChoiceAgent trả về danh sách lựa chọn RỖNG! Cần kiểm tra lại prompt hoặc logic fallback.")
+        else:
+            game_logger.debug(f"[StoryDirector] Đã tạo thành công {len(choices_list)} lựa chọn khả thi.")
 
         return choices_list
 
@@ -163,13 +178,6 @@ class StoryDirector:
         """
         Khởi tạo "Kinh thánh thế giới" (World Bible) dựa trên ý tưởng một câu của người chơi,
         sau đó lưu xuống tệp JSON để tái sử dụng.
-
-        Args:
-            player_idea (str): Ý tưởng bối cảnh từ người chơi (VD: "Thế giới hậu tận thế zombie").
-            path (str, optional): Đường dẫn lưu file json. Mặc định là './data/world_bible.json'.
-
-        Returns:
-            dict: Toàn bộ cấu trúc từ điển chứa World Bible (theme, luật lệ, từ vựng...).
         """
         game_logger.info("[StoryDirector] Đang tạo World Bible từ ý tưởng người chơi...")
         world_bible = await self.world_generator.generate_bible(player_idea=player_idea)
@@ -183,46 +191,24 @@ class StoryDirector:
 
         return world_bible
 
-
     async def create_starting_location(self, world_state: WorldState) -> Location:
         """
         Khởi tạo địa điểm xuất phát đầu tiên cho người chơi dựa trên bối cảnh thế giới.
-
-        Args:
-            world_state (WorldState): Thông tin thế giới
-
-        Returns:
-            Location: Đối tượng Location chứa thông tin về điểm khởi đầu.
         """
         game_logger.info(f"[StoryDirector] Đang khởi tạo địa điểm xuất phát cho thế giới")
         return await self.location_agent.initialize_location(world_state=world_state)
 
-
     async def initialize_key_npcs(self, world_state: WorldState) -> list:
         """
         Khởi tạo các NPC quan trọng (Key NPCs) ngay từ lúc bắt đầu game để tạo động lực và xung đột.
-
-        Args:
-            world_state (WorldState): Thông tin thế giới
-
-        Returns:
-            list: Danh sách chứa dictionary thông tin của các NPC khởi đầu.
         """
         game_logger.info(f"[StoryDirector] Đang khởi tạo các npc quan trọng cho thế giới")
         return await self.npc_agent.initialize_npcs(world_state=world_state)
-
 
     async def initialize_story(self, starting_location: Location, world_bible_dir: str) -> AsyncGenerator[str, None]:
         """
         Sinh đoạn văn bản mở màn (Prologue) dạng luồng (Streaming) khi người chơi bắt đầu game mới,
         nhằm giới thiệu bối cảnh, mục tiêu và đưa người chơi vào địa điểm xuất phát.
-
-        Args:
-            starting_location (Location): Đối tượng địa điểm nơi người chơi thức dậy/bắt đầu.
-            world_bible_dir (str): Đường dẫn tới file world_bible.json để nạp luật thế giới.
-
-        Yields:
-            str: Từng cụm ký tự (chunk) của đoạn truyện mở đầu.
         """
         try:
             with open(world_bible_dir, "r", encoding='utf-8') as file:
@@ -230,12 +216,17 @@ class StoryDirector:
         except Exception as e:
             game_logger.error(f"[StoryDirector Lỗi] Không thể đọc file world_bible.json: {e}", exc_info=True)
             world_bible = {}  # Fallback an toàn
+            # --- BỔ SUNG LOG CẢNH BÁO ---
+            game_logger.warning(
+                "[StoryDirector] ⚠️ Đang chạy cốt truyện mở đầu với dữ liệu Fallback (Thiếu file json)!")
 
         sys_requirements = world_bible.get("system_requirements", {})
-        world_name = sys_requirements.get("world_name", None)
-        world_mission = sys_requirements.get("world_mission", None)
-        theme_and_tone = sys_requirements.get("theme_and_tone", None)
-        core_conflict = sys_requirements.get("core_conflict", None)
+
+        # --- BỔ SUNG FALLBACK CHẤT LƯỢNG ---
+        world_name = sys_requirements.get("world_name", "Vùng Đất Lãng Quên")
+        world_mission = sys_requirements.get("world_mission", "Sống sót và tìm ra sự thật")
+        theme_and_tone = sys_requirements.get("theme_and_tone", "U ám, bí ẩn")
+        core_conflict = sys_requirements.get("core_conflict", "Cuộc chiến sinh tồn")
 
         vocabulary = world_bible.get("dynamic_vocabulary", None)
 
@@ -254,6 +245,10 @@ class StoryDirector:
                                                          location_atmosphere=location_atmosphere,
                                                          location_description=location_description
                                                          )
-
-        async for chunk in story_stream:
-            yield chunk
+        try:
+            async for chunk in story_stream:
+                yield chunk
+            game_logger.info("[StoryDirector] Luồng truyện mở đầu (Streaming) đã hoàn tất.")
+        except Exception as e:
+            game_logger.error(f"[StoryDirector] ❌ Lỗi đứt gánh khi đang Streaming prologue: {e}", exc_info=True)
+            raise e

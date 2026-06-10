@@ -191,7 +191,7 @@ class WorldGenerateAgent(BaseCloudAgent):
 class NPCAgent(BaseCloudAgent):
     """Agent phụ trách thiết kế, khởi tạo và cập nhật trạng thái/tiểu sử của các NPC (Non-Player Characters)."""
 
-    async def generate_npcs(self, npc_names: list, context: str) -> List[dict]:
+    async def generate_npcs(self, npc_names: list, context: str) -> List[NPC]:
         """
         Sinh thông tin cho các NPC xuất hiện trong lượt hiện tại dựa trên tên được Router gửi xuống.
 
