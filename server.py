@@ -296,13 +296,17 @@ async def shutdown():
 # ==========================================
 
 @app.post("/api/new_game")
-async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = BackgroundTasks()):
+async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = None):
     """
     Khởi tạo Game Loop mới siêu gọn nhẹ từ một ý tưởng của người chơi.
     Điều phối việc sinh cốt truyện mở đầu, các lựa chọn, và tạo tác vụ nền.
     """
+    if bg_tasks is None:
+        bg_tasks = BackgroundTasks()
+    orc = app.state.orchestrator
     try:
-        orc = app.state.orchestrator
+        if orc.is_processing_bg:
+            return JSONResponse(status_code=409, content={"error": "Hệ thống đang bận, vui lòng thử lại."})
         orc.is_processing_bg = True
 
         # 1. Giao toàn bộ việc nặng (Dọn dẹp, tạo thế giới, sinh truyện) cho Orchestrator
@@ -335,15 +339,18 @@ async def new_game(idea: str = Form(...), bg_tasks: BackgroundTasks = Background
         })
     except Exception as e:
         game_logger.error("❌ LỖI CRASH KHI TẠO NEW GAME:", exc_info=True)
+        orc.is_processing_bg = False
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.post("/api/play")
-async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = BackgroundTasks()):
+async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = None):
     """
     Xử lý lượt đi (Chuẩn Clean Code). Phân tích hành động của người chơi,
     kết hợp RAG Memory để sinh phản hồi cốt truyện tiếp theo.
     """
+    if bg_tasks is None:
+        bg_tasks = BackgroundTasks()
     try:
         orc = app.state.orchestrator
         orc.is_processing_bg = True
@@ -394,6 +401,7 @@ async def play_turn(action: str = Form(...), bg_tasks: BackgroundTasks = Backgro
         })
     except Exception as e:
         game_logger.error("❌ LỖI CRASH TẠI LƯỢT ĐI (PLAY TURN):", exc_info=True)
+        app.state.orchestrator.is_processing_bg = False  # ← Thêm dòng này
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -669,6 +677,8 @@ async def update_settings(
             )
 
         orc = app.state.orchestrator
+        await orc.db.connect()  # ← Thêm dòng này
+        await orc.db.create_tables()
         orc.image_manager.api.enable_image = old_enable_image
         orc.image_manager.api.quality = old_quality
 

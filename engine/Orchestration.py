@@ -76,6 +76,9 @@ class GameOrchestrator:
 
     async def setup_new_game_api(self, player_idea: str) -> str:
         """Hàm chuyên dụng để khởi tạo New Game từ API"""
+        if self.is_processing_bg:
+            raise RuntimeError("Hệ thống đang xử lý, không thể khởi tạo game mới lúc này.")
+
         self.player_state.clear()
 
         await self.db.connect()
