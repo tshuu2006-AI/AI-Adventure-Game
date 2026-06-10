@@ -444,7 +444,7 @@ class ItemAgent(BaseLocalAgent):
         )
 
 
-    async def use(self, action_details: str, items_str: str) -> dict:
+    async def use(self, action_details: str, items_str: str, context: str) -> dict:
         """
         Đánh giá tính logic và khả thi khi người chơi kết hợp nhiều vật phẩm với nhau
 
@@ -457,6 +457,7 @@ class ItemAgent(BaseLocalAgent):
         """
         sys_prompt = self.pm.get_prompt('ItemAgent', 'systemUse')
         user_prompt = self.pm.get_prompt('ItemAgent', 'userUse',
+                                         context = context,
                                          action_details=action_details,
                                          items_list=items_str)
 

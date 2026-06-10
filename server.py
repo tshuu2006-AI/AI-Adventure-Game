@@ -719,6 +719,7 @@ async def load_game(slot: str = Form(...)):
 async def use_item(items_str: str = Form(...), action_detail: str = Form("")):
     """API để Unity ra lệnh dùng vật phẩm (Hỗ trợ cả Use thường và Use bằng AI)"""
     try:
+        app.state.poll_cache["dirty"] = True
         orc = app.state.orchestrator
         target_items = []
         target_items_name = []
@@ -760,19 +761,19 @@ async def use_item(items_str: str = Form(...), action_detail: str = Form("")):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/api/inventory/equip")
-async def equip_item(item_name: str = Form(...)):
+async def equip_item(items_str: str = Form(...)):
     """API để Unity ra lệnh trang bị vũ khí"""
     try:
         orc = app.state.orchestrator
-        item_obj = orc.get_item_by_name(item_name)
+        item_obj = orc.get_item_by_name(items_str)
         if not item_obj or item_obj.item_type != "weapon":
             return JSONResponse(content={"success": False, "message": "Không thể trang bị vật phẩm này."})
 
         orc.equip_weapon(item_obj)
 
         # --- ĐÃ BỔ SUNG LOG ---
-        game_logger.info(f"[Inventory] ⚔️ Người chơi đã trang bị vũ khí mới: {item_name}")
-        return JSONResponse(content={"success": True, "message": f"Đã trang bị {item_name}!"})
+        game_logger.info(f"[Inventory] ⚔️ Người chơi đã trang bị vũ khí mới: {items_str}")
+        return JSONResponse(content={"success": True, "message": f"Đã trang bị {items_str}!"})
     except Exception as e:
         game_logger.error(f"Lỗi trang bị: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -802,6 +803,7 @@ async def craft_item(items_str: str = Form(...), action_detail: str = Form(...))
     - action_detail: mô tả ý định ghép
     """
     try:
+        app.state.poll_cache["dirty"] = True
         orc = app.state.orchestrator
         target_items = []
 

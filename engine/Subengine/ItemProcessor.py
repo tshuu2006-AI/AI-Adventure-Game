@@ -251,9 +251,12 @@ class ItemProcessor:
             return False, items_to_use # items_to_use lúc này chứa chuỗi báo lỗi
 
         items_str = self._convert_to_string(item_list=items_to_use)
+        loc_name = self.player_state.currentLocation.name if self.player_state.currentLocation else "Không rõ"
+        env_context = f"Địa điểm hiện tại: {loc_name}"
 
         evaluation_json = await self.item_agent.use(action_details=action_details,
-                                                    items_str=items_str)
+                                                    items_str=items_str,
+                                                    context=env_context)
 
         success = evaluation_json.get('success', False)
         reasoning = evaluation_json.get("reasoning", "Không có chuyện gì xảy ra.")
