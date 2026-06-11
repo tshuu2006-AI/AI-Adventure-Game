@@ -238,7 +238,8 @@ class InventoryManager:
                      self.interactive_item_inventory)
 
         if not all_items: return []
-        return all_items
+        names = [item.name for item in all_items]
+        return names
 
 
     def get_all_items(self) -> List[BaseItem]:
