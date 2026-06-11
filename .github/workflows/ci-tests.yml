@@ -1,0 +1,41 @@
+name: AI Story Adventure Tests
+
+# 1. KHI NÀO THÌ CHẠY TEST?
+on:
+  push:
+    branches: [ "main", "master" ] # Chạy khi có code đẩy lên nhánh main/master
+  pull_request:
+    branches: [ "main", "master" ] # Chạy khi có người tạo Pull Request
+
+# 2. CHẠY NHỮNG VIỆC GÌ?
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest # Chạy trên máy ảo Linux Ubuntu mới nhất của GitHub
+
+    steps:
+    - name: 📥 Kéo mã nguồn về máy ảo
+      uses: actions/checkout@v4
+
+    - name: 🐍 Cài đặt môi trường Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11" # Thay bằng phiên bản Python bạn đang dùng (VD: 3.11, 3.12)
+        cache: 'pip' # Giúp tải thư viện nhanh hơn ở các lần sau
+
+    - name: 📦 Cài đặt thư viện cần thiết
+      run: |
+        python -m pip install --upgrade pip
+        # Cài đặt các thư viện phục vụ test (nếu requirements.txt của bạn chưa có)
+        pip install pytest pytest-asyncio httpx 
+        
+        # Nếu dự án của bạn có file requirements.txt, hãy xóa dấu # ở dòng dưới:
+        # pip install -r requirements.txt
+
+    - name: 🧪 Chạy toàn bộ thư mục tests/
+      env:
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        # Bật cờ online để các file test như test_online_agents.py chịu chạy
+        TEST_MODE: "online"
+      run: |
+        pytest tests/ -v
