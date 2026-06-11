@@ -19,7 +19,7 @@ class VectorMemory:
         # Tải mô hình nhúng (embedding model) từ Local
         game_logger.info(f"[VectorDB] Đang khởi tạo Embedding Model từ: {model_path}...")
         self.encoder: SentenceTransformer = SentenceTransformer(model_path)
-        self.dimension: int|None = self.encoder.get_sentence_embedding_dimension()
+        self.dimension: int|None = self.encoder.get_embedding_dimension()
         self.num_memory: int = 0
         self.game_turn: int = 0
 
