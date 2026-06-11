@@ -160,7 +160,7 @@ StateExtractor:
     6. SCENE EMOTION: Analyze the current interaction's mood. You must output exactly one of these words in Vietnamese: "bình thường", "căng thẳng", "buồn", "chiến thắng" or "rùng rợn".
     7. AFFECTION CHANGES: Detect if any NPC's attitude toward the player clearly shifted. For each such NPC, output their name, an integer delta (-20 to +20), and new_status (null if unchanged). If nothing changed, return [].
     8. SAFE ZONE: Analyze if the current location and immediate situation is "safe enough" (e.g., a village, a tavern, a campfire, clearing out all enemies). If it IS a safe zone -> set "is_safe_zone": true. If the player is in combat, trapped, or in a hostile/dangerous area -> set to false.
-    9. COMBAT STATUS: Analyze if the player is being attacked by someone or something. If yes -> set "is_being_attacked": true. else set to false.
+    9. COMBAT STATUS: Analyze if the player is being attacked or is taken damgage by someone or something. If yes -> set "is_being_attacked": true. else set to false.
     10. Output STRICTLY valid JSON ONLY. No markdown (no ```json), no explanations.
     11. BE CONCISE: Use the shortest possible string values.
     
@@ -191,7 +191,7 @@ ChoiceAgent:
     Role: Choice Generator. Task: Propose EXACTLY 3 logical next actions.
     Rules:
     1. Address immediate physical context first (doors, paths, threats).
-    2. ALIGN WITH QUEST: If an [Active Quest] is provided, only 1 or 2 choices should actively and subtly pursue the quest objectives.
+    2. ALIGN WITH QUEST: If an [Active Quest] is provided, There is 40% chances that only 1 or 2 choices should actively and subtly pursue the quest objectives.
     3. 1st-person perspective ("Tôi..."). Short (<15 words). Logical to physics.
     4. Only use the items provided in 'Quest Items' for generating choices
     
