@@ -5,7 +5,7 @@ Module server.py
 Quản lý các kết nối API từ Unity, xử lý luồng trò chơi, cấu hình AI,
 và điều phối các tác vụ nền (background tasks).
 """
-
+import shutil
 import os
 import sys
 
@@ -731,6 +731,41 @@ async def load_game(slot: str = Form(...)):
             return JSONResponse(status_code=400, content={"error": msg})
     except Exception as e:
         game_logger.error(f"Lỗi Load API: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    
+@app.post("/api/delete_save")
+async def delete_save(slot: str = Form(...)):
+    """API xóa triệt để thư mục save, ảnh bên trong và file json cấu hình"""
+    try:
+        orc = app.state.orchestrator
+        save_dir_base = os.path.dirname(orc.db.db_path)
+        
+        # Đường dẫn thư mục (chứa ảnh và db)
+        slot_dir = os.path.join(save_dir_base, slot)
+        
+        # Đường dẫn file json bên ngoài (Giả định quy tắc nối tên: save + slot_i + .json)
+        slot_json = os.path.join(save_dir_base, f"save{slot}.json")
+        
+        deleted = False
+        
+        # 1. Xóa toàn bộ thư mục và ảnh bên trong
+        if os.path.exists(slot_dir):
+            shutil.rmtree(slot_dir)
+            deleted = True
+            
+        # 2. Xóa file json cùng cấp
+        if os.path.exists(slot_json):
+            os.remove(slot_json)
+            deleted = True
+            
+        if deleted:
+            game_logger.info(f"🗑️ Đã xóa triệt để bản lưu và tệp cấu hình của: {slot}")
+            return JSONResponse(content={"success": True, "message": f"Đã xóa {slot}!"})
+        else:
+            return JSONResponse(status_code=400, content={"error": "Bản lưu không tồn tại!"})
+            
+    except Exception as e:
+        game_logger.error(f"Lỗi xóa save: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ==========================================
