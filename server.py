@@ -585,9 +585,6 @@ async def switch_quest(quest_name: str = Form(...)):
         if target == orc.get_active_quest():
             return JSONResponse(content={"success": False, "message": "Bạn đang thực hiện nhiệm vụ này rồi!"})
 
-        if getattr(target, 'status', 'available') == 'available':
-            target.status = 'in_progress'
-
         # Gọi hệ thống QuestProcessor chuyển đổi & Sinh lời dẫn truyện
         transition_msg = await orc.switch_quest(
             target_quest=target,

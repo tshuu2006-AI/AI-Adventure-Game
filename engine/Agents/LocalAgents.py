@@ -58,6 +58,71 @@ class BaseLocalAgent:
         """Ghi log lỗi chi tiết kèm theo Stack Trace."""
         self.logger.error(f"Lỗi tại {context}: {str(error)}", exc_info=True)
 
+    async def _ensure_ollama_model(self):
+        """
+        Kiểm tra xem mô hình Ollama đã có trên máy chưa, nếu chưa thì tự động pull về.
+        Sử dụng cơ chế đánh dấu _model_checked để chỉ kiểm tra 1 lần duy nhất mỗi phiên.
+        """
+        if not self.model_name or self.provider != "ollama":
+            return
+
+        # Nếu đã check rồi thì bỏ qua để không làm chậm các lượt sau
+        if getattr(self, '_model_checked', False):
+            return
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                # 1. Kiểm tra danh sách model hiện có
+                tags_response = await client.get(f"{self.ollama_host}/api/tags")
+                if tags_response.status_code == 200:
+                    models = tags_response.json().get("models", [])
+                    has_model = any(
+                        m.get("name") == self.model_name or m.get("name").startswith(f"{self.model_name}:")
+                        for m in models
+                    )
+
+                    if has_model:
+                        self._model_checked = True
+                        return
+
+                game_logger.info(
+                    f"🚀 [Ollama] Mô hình '{self.model_name}' chưa được tải. Đang tiến hành pull... (Vui lòng đợi vài phút)")
+
+                # 2. Bắt đầu pull model (Cần set timeout = None vì tải model rất lâu)
+                async with httpx.AsyncClient(timeout=None) as pull_client:
+                    async with pull_client.stream("POST", f"{self.ollama_host}/api/pull",
+                                                  json={"name": self.model_name}) as response:
+                        async for line in response.aiter_lines():
+                            if not line:
+                                continue
+                            try:
+                                data = json.loads(line)
+                                status = data.get("status", "")
+
+                                # Tính toán phần trăm (nếu có thông tin dung lượng)
+                                completed = data.get("completed", 0)
+                                total = data.get("total", 0)
+
+                                if total > 0:
+                                    percent = (completed / total) * 100
+                                    # Chuyển đổi bytes sang MB cho dễ đọc
+                                    comp_mb = completed / (1024 * 1024)
+                                    tot_mb = total / (1024 * 1024)
+                                    game_logger.debug(
+                                        f"[Ollama Pull] {status} - {percent:.1f}% ({comp_mb:.1f}/{tot_mb:.1f} MB)")
+                                else:
+                                    # Giữ lại hiển thị mọi dòng trạng thái khác
+                                    game_logger.debug(f"[Ollama Pull] {status}")
+
+                            except json.JSONDecodeError:
+                                pass
+
+                game_logger.info(f"✅ [Ollama] Đã tải xong mô hình '{self.model_name}'. Sẵn sàng sử dụng!")
+                self._model_checked = True
+
+            except Exception as e:
+                self.logger.error(f"[Ollama] Lỗi khi kiểm tra/tải mô hình: {e}")
+
     async def _generate_json(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
         """
         Gọi LLM (Gemini hoặc Ollama) và ép kiểu dữ liệu trả về dưới dạng JSON dictionary.
@@ -100,6 +165,7 @@ class BaseLocalAgent:
             return {}
 
     async def _generate_json_ollama(self, system_prompt: str, user_prompt: str) -> dict:
+        await self._ensure_ollama_model()
         payload = {
             "model": self.model_name,
             "messages": [
