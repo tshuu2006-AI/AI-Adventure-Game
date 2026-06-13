@@ -4,6 +4,7 @@ Bao gồm các class phục vụ cho việc sinh cốt truyện, NPC, địa đi
 """
 
 import json
+import re
 import asyncio
 from groq import AsyncGroq
 from typing import List, Dict, Any, AsyncGenerator
@@ -498,7 +499,36 @@ class StoryAgent(BaseCloudAgent):
 
         except Exception as e:
             self._log_error("generate_stream", e)
-            yield "Có một sự xáo trộn trong không gian... (Lỗi kết nối cốt truyện)"
+            
+            error_details = "\n\n[HỆ THỐNG] Đã xảy ra lỗi quá tải / hết giới hạn API (Rate Limit):\n"
+            err_str = str(e).lower()
+
+            if hasattr(e, 'response') and hasattr(e.response, 'headers'):
+                headers = e.response.headers
+                limit_tokens = int(headers.get('x-ratelimit-limit-tokens', 0))
+                remaining_tokens = int(headers.get('x-ratelimit-remaining-tokens', 0))
+
+                if limit_tokens > 0:
+                    pct_remaining = (remaining_tokens / limit_tokens) * 100
+                    error_details += f"Token còn lại của Key: {remaining_tokens}/{limit_tokens} ({pct_remaining:.1f}%).\n"
+
+                match = re.search(r"requested (\d+)", err_str)
+                if match and limit_tokens > 0:
+                    requested_tokens = int(match.group(1))
+                    pct_requested = (requested_tokens / limit_tokens) * 100
+                    error_details += f"Lượt đi này cần: {requested_tokens} tokens ({pct_requested:.1f}% tổng giới hạn).\n"
+                    
+                    if requested_tokens > limit_tokens:
+                        error_details += "-> Lượt đi của bạn quá dài, vượt sức chứa tối đa của 1 API Key!\n"
+                    else:
+                        error_details += "-> Số token còn lại không đủ cho lượt đi này.\n"
+                error_details += "\nHƯỚNG DẪN: Hãy thử đợi để API reset, hoặc lưu trò chơi rồi đổi key mới!"
+
+            else:
+                error_details += f"Lỗi không xác định: {str(e)[:100]}...\n"
+            
+            # Bắn đoạn text lỗi này lên giao diện cho người chơi đọc
+            yield error_details
 
 
 class QueryAgent(BaseCloudAgent):
