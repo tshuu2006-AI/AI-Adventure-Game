@@ -60,12 +60,53 @@ Create a `.env` file in the `SaveData` directory (or root directory) with the fo
 GROQ_API_KEY=your_groq_key_here
 GEMINI_API_KEY=your_gemini_key_here
 ```
-
 ## 📡 Core API Endpoints
 
+**Core Gameplay & Loop**
 * `POST /api/new_game`: Initializes the context, world bible, and starting state from a text-based idea.
 * `POST /api/play`: Receives player actions, retrieves RAG context, generates story responses, and triggers Background Tasks (State Extraction, Memory Save).
 * `GET /api/poll_updates`: Returns real-time state data (HP, Inventory, Image Base64, Active Quest) to the Client independently of the chat flow.
-* `POST /api/inventory/craft`: Combines physical items based on AI logic evaluation.
-* `POST /api/save_game` | `/api/load_game`: Manages saving/restoring the entire SQLite DB and FAISS memory to/from physical storage.
 
+**System & Settings**
+* `GET /api/ping`: Endpoint called continuously by Unity to verify if the server is fully initialized and ready.
+* `POST /api/shutdown`: Safely terminates the FastAPI server when the Unity application closes.
+* `POST /api/check_config`: Validates Cloud (Groq) and Local (Gemini/Ollama) API Key configurations from the Unity Menu.
+* `POST /api/settings`: Dynamically updates game settings (AI Model switching, Image Quality, and Image Generation toggles).
+* `GET /api/progress`: Allows the frontend to fetch loading progress percentages and messages during heavy background processing.
+
+**Data & Save Management**
+* `POST /api/save_game` | `/api/load_game`: Manages saving/restoring the entire SQLite DB and FAISS memory to/from physical storage.
+* `POST /api/delete_save`: Completely deletes a designated save slot, removing associated image directories and JSON configuration files.
+* `GET /api/diary`: Retrieves the comprehensive database of all encountered NPCs, Locations, and active/completed Quests.
+
+**Quest & Inventory Systems**
+* `POST /api/quest/switch`: Switches the currently tracked Active Quest and dynamically generates a narrative transition text.
+* `POST /api/inventory/use`: Handles item consumption or creative usage relying strictly on AI logic evaluation.
+* `POST /api/inventory/craft`: Combines physical items based on AI logic evaluation.
+* `POST /api/inventory/equip`: Equips a specified weapon from the player's inventory.
+* `POST /api/inventory/unequip`: Unequips the currently active weapon, returning the character to an unarmed state.
+
+## 🚀 MVP Quick Start Guide
+
+Experience the **AI Story Adventure** MVP instantly! The provided build is fully standalone and pre-configured (bundling both the backend engine and the Unity frontend). There is no need to install Python or set up virtual environments—just download, click, and play.
+
+### 1. Download the Game
+Download the complete MVP package from our Google Drive:
+* 📁 **[Download Eldoria MVP here]([INSERT_YOUR_DRIVE_LINK_HERE](https://drive.google.com/drive/folders/1_2t_fb7WJP2B2Loi0hjlqqj57EM_xpYA?usp=sharing))** * *Note: Extract the downloaded `.zip` or `.rar` file to an empty folder on your computer.*
+### 2. Configure Your AI Engine
+Since AI Story Adventure is driven by live AI models, you need to set up your AI providers to bring the world to life. 
+
+**Step A: Get your Cloud API Key (Required for High-Speed Generation)**
+* 🔑 **[Get Groq API Key](https://console.groq.com/keys)** (Requires a free GroqCloud account)
+
+**Step B: Setup your Logic AI Engine (Choose Option 1 OR Option 2)**
+AI Story Adventure uses a secondary AI for complex game logic and physics arbitration. You can either use a cloud-based API or run it completely offline on your own hardware.
+
+**Option 1: Use Gemini API (Cloud - Recommended for ease of use)**
+1. 🔑 **[Get Gemini API Key](https://aistudio.google.com/app/apikey)** (Requires a free Google account).
+**Option 2: Setup Local AI via Ollama (Offline Processing)**
+If you prefer to run the game's logic entirely locally on your machine instead of using cloud keys like Gemini:
+1. **Install the Engine:** Download and install [Ollama](https://ollama.com) for your system.
+2. **Keep it Running:** Ensure the Ollama application is active and running in the background before launching the game.
+
+*(Tip: You can easily toggle between Gemini API models and Local Ollama models directly through the in-game Settings Menu!)*
