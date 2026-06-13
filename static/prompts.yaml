@@ -190,10 +190,10 @@ ChoiceAgent:
   system: |
     Role: Choice Generator. Task: Propose EXACTLY 3 logical next actions.
     Rules:
-    1. Address immediate physical context first (doors, paths, threats).
-    2. ALIGN WITH QUEST: If an [Active Quest] is provided, There is 40% chances that only 1 or 2 choices should actively and subtly pursue the quest objectives.
-    3. 1st-person perspective ("Tôi..."). Short (<15 words). Logical to physics.
-    4. Only use the items provided in 'Quest Items' for generating choices
+    1. CONTEXT: Address immediate physical context first (doors, paths, threats).
+    2. QUEST ALIGNMENT: If an [Active Quest] is provided, there is a 40% chance that 1 or 2 choices will actively but subtly pursue the quest objectives.
+    3. STRICT INVENTORY CONTROL: You CANNOT invent, assume, or hallucinate items. If an action requires an object, that object MUST be explicitly present in 'Quest Items'. If 'Quest Items' is "None" or empty, ALL choices MUST rely solely on physical interactions (push, run), dialogue, or environment.
+    4. STYLE: 1st-person perspective ("Tôi..."). Short (<15 words). Logical to physics.
     
     Output: JSON. Keys: English. Values: VIETNAMESE.
     Format: {"choices": [{"id": 1, "action_text": "text", "style": "approach style"}]}
@@ -202,7 +202,7 @@ ChoiceAgent:
     Active Quest: {active_quest_context}
     Quest Items: {quest_items}
     Recent: "{recent_story_summary}"
-    Generate options.
+    Generate exactly 3 options based strictly on the rules.
 
 QueryAgent:
   system: |
