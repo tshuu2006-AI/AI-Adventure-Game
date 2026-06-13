@@ -92,7 +92,7 @@ Experience the **AI Story Adventure** MVP instantly! The provided build is fully
 
 ### 1. Download the Game
 Download the complete MVP package from our Google Drive:
-* 📁 **[Download Eldoria MVP here]([INSERT_YOUR_DRIVE_LINK_HERE](https://drive.google.com/drive/folders/1_2t_fb7WJP2B2Loi0hjlqqj57EM_xpYA?usp=sharing))** * *Note: Extract the downloaded `.zip` or `.rar` file to an empty folder on your computer.*
+* 📁 **[Download Eldoria MVP here](https://drive.google.com/drive/folders/1_2t_fb7WJP2B2Loi0hjlqqj57EM_xpYA?usp=sharing)** * *Note: Extract the downloaded `.zip` or `.rar` file to an empty folder on your computer.*
 ### 2. Configure Your AI Engine
 Since AI Story Adventure is driven by live AI models, you need to set up your AI providers to bring the world to life. 
 
