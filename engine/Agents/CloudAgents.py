@@ -508,9 +508,12 @@ class StoryAgent(BaseCloudAgent):
                 limit_tokens = int(headers.get('x-ratelimit-limit-tokens', 0))
                 remaining_tokens = int(headers.get('x-ratelimit-remaining-tokens', 0))
 
+                reset_tokens_time = headers.get('x-ratelimit-reset-tokens', 'Không rõ')
+
                 if limit_tokens > 0:
                     pct_remaining = (remaining_tokens / limit_tokens) * 100
                     error_details += f"Token còn lại của Key: {remaining_tokens}/{limit_tokens} ({pct_remaining:.1f}%).\n"
+                    error_details += f"Thời gian cần chờ để đầy lại Token: {reset_tokens_time}.\n"
 
                 match = re.search(r"requested (\d+)", err_str)
                 if match and limit_tokens > 0:
@@ -526,6 +529,7 @@ class StoryAgent(BaseCloudAgent):
 
             else:
                 error_details += f"Lỗi không xác định: {str(e)[:100]}...\n"
+                error_details += "\nHƯỚNG DẪN: Hãy thử gửi lại hành động hoặc kiểm tra kết nối mạng."
             
             # Bắn đoạn text lỗi này lên giao diện cho người chơi đọc
             yield error_details
