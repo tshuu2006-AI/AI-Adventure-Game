@@ -564,6 +564,9 @@ class GameOrchestrator:
 
     def get_active_quest(self):
         return self.player_state.get_active_quest()
+    
+    def get_main_quest(self):
+        return self.player_state.get_main_quest()
 
     def get_all_quests(self):
         return self.player_state.get_all_quests()

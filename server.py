@@ -504,7 +504,8 @@ async def poll_updates():
                 "name": active_quest.name,
                 "objectives": raw_obj,
                 "is_finished": is_fin,
-                "status": active_quest.status
+                "status": active_quest.status,
+                "type": "main" if active_quest == orc.get_main_quest() else ""
             }
 
         return JSONResponse(content={

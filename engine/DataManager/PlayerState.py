@@ -263,6 +263,9 @@ class PlayerState:
 
     def get_active_quest(self):
         return self.active_quest
+    
+    def get_main_quest(self):
+        return self.main_quest
 
     def get_all_quests(self):
         return self.quests
