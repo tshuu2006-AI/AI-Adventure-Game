@@ -108,5 +108,16 @@ AI Story Adventure uses a secondary AI for complex game logic and physics arbitr
 If you prefer to run the game's logic entirely locally on your machine instead of using cloud keys like Gemini:
 1. **Install the Engine:** Download and install [Ollama](https://ollama.com) for your system.
 2. **Keep it Running:** Ensure the Ollama application is active and running in the background before launching the game.
-
 *(Tip: You can easily toggle between Gemini API models and Local Ollama models directly through the in-game Settings Menu!)*
+
+**Step C: Setup Image Generation via Kaggle SDXL (Optional)**
+Eldoria can dynamically generate visual representations of locations, NPCs, and items. You can host your own high-speed image generation server for free using Kaggle.
+
+1. **Import the Notebook:** Log in to Kaggle, create a **New Notebook**, and select **File -> Import Notebook** to upload the provided `imagegenerator.ipynb` file.
+2. **Enable Hardware & Internet:** In the right-hand panel (Session Options) of your Kaggle environment, ensure that **Internet** is turned ON and the **GPU** accelerator (e.g., NVIDIA Tesla T4) is selected.
+3. **Run the Cells in strict order:**
+   * **Run Cell 1:** Execute the first cell to install all required core libraries.
+   * **Restart Session:** Click the three dots menu at the top and select **Restart & Clear Cell Outputs** to refresh the environment.
+   * **Run Cell 1 Again:** Re-run the first cell to ensure all dependencies are properly loaded.
+   * **Run Cell 2:** Execute the second cell (the server code). Wait for the model to load into the GPUs.
+
