@@ -194,6 +194,7 @@ class MemoryProcessor:
 
         return rag_context, npcs
 
+
     async def save_turn(self, player_input: str,
                         story_response: str,
                         episode_data: dict,

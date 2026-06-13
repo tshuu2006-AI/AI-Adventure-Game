@@ -209,7 +209,7 @@ class NPCAgent(BaseCloudAgent):
 
         return await self._generate_npcs(sys_prompt=sys_prompt, user_prompt=user_prompt, fallback_names=npc_names)
 
-    async def initialize_npcs(self, world_state: WorldState) -> dict:
+    async def initialize_npcs(self, world_state: WorldState) -> List[NPC]:
         """
         Sinh thông tin cho (các) NPC đầu tiên khi vừa khởi tạo thế giới mới (Prologue).
 
@@ -234,6 +234,7 @@ class NPCAgent(BaseCloudAgent):
                                        world_mission=world_mission)
 
         return await self._generate_npcs(sys_prompt=sys_init, user_prompt=user_init, fallback_names=["Nhân vật bí ẩn"])
+
 
     async def _generate_npcs(self, sys_prompt: str, user_prompt: str, fallback_names: list, default_location: str = "Không rõ") -> List[NPC]:
         """

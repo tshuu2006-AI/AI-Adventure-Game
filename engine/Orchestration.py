@@ -223,6 +223,7 @@ class GameOrchestrator:
             active_quest=self.player_state.active_quest,
             quest_items = self.player_state.quest_items
         )
+
         self.last_choices = choices
         self._display_choices(choices)
 
@@ -501,7 +502,7 @@ class GameOrchestrator:
                                 story_response:str,
                                 episode_data,
                                 current_location_name: str,
-                                encountered_npc_names: str):
+                                encountered_npc_names: List[str]):
         await self.memory_sys.save_turn(player_input=player_input,
             story_response=story_response,
             episode_data=episode_data,

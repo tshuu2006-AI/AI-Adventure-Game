@@ -117,7 +117,7 @@ class StoryDirector:
             game_logger.error(f"[StoryDirector] ❌ Lỗi đứt gánh khi đang Streaming cốt truyện: {e}", exc_info=True)
             raise e
 
-    async def generate_player_choices(self, current_location_name: str, encountered_npc_name: str,
+    async def generate_player_choices(self, current_location_name: str, encountered_npc_name: List[str],
                                       recent_story_text: str, active_quest: Quest, quest_items: List) -> list:
         """
         Dựa vào đoạn truyện vừa được kể xong để suy luận và tạo ra 3-4 gợi ý hành động
@@ -125,7 +125,7 @@ class StoryDirector:
 
         Args:
             current_location_name (str): Tên địa điểm người chơi đang đứng.
-            encountered_npc_name (str): Tên NPC đang tương tác (nếu có).
+            encountered_npc_name (str): Tên các NPC đang tương tác (nếu có).
             recent_story_text (str): Đoạn truyện Game Master vừa kể xong.
             active_quest (Quest): Nhiệm vụ người chơi đang theo dõi (để tạo lựa chọn bám sát quest).
             quest_items (List): Danh sách các vật phẩm nhiệm vụ người chơi đang sở hữu.
@@ -135,7 +135,7 @@ class StoryDirector:
         """
         game_logger.info("[StoryDirector] Đang tính toán các lựa chọn tiếp theo...")
 
-        npc_name = encountered_npc_name if encountered_npc_name else "Không có"
+        npc_name = ", ".join(encountered_npc_name) if encountered_npc_name else "Không có"
 
         objectives = active_quest.objectives.copy() if active_quest else []
 
@@ -229,7 +229,7 @@ class StoryDirector:
         theme_and_tone = sys_requirements.get("theme_and_tone", "U ám, bí ẩn")
         core_conflict = sys_requirements.get("core_conflict", "Cuộc chiến sinh tồn")
 
-        vocabulary = world_bible.get("dynamic_vocabulary", None)
+        vocabulary = world_bible.get("dynamic_vocabulary", {})
 
         location_name = starting_location.name
         location_atmosphere = starting_location.atmosphere
