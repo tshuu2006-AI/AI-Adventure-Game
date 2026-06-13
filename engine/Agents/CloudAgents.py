@@ -500,34 +500,51 @@ class StoryAgent(BaseCloudAgent):
         except Exception as e:
             self._log_error("generate_stream", e)
             
-            error_details = "\n\n[HỆ THỐNG] Đã xảy ra lỗi quá tải / hết giới hạn API (Rate Limit):\n"
-            err_str = str(e).lower()
+            error_details = "[HỆ THỐNG] Đã xảy ra lỗi quá tải API (Rate Limit):\n"
+            err_str = str(e)
 
-            if hasattr(e, 'response') and hasattr(e.response, 'headers'):
-                headers = e.response.headers
-                limit_tokens = int(headers.get('x-ratelimit-limit-tokens', 0))
-                remaining_tokens = int(headers.get('x-ratelimit-remaining-tokens', 0))
+            # 1. NẾU LÀ LỖI TỪ GROQ (Ưu tiên bóc tách từ thông báo lỗi chính xác nhất)
+            if "Rate limit reached" in err_str:
+                # Dùng Regex để moi móc chính xác các con số Limit, Used, Requested và thời gian
+                match_stats = re.search(r"Limit (\d+), Used (\d+), Requested (\d+)", err_str, re.IGNORECASE)
+                match_time = re.search(r"try again in (.*?)\.", err_str, re.IGNORECASE)
+                match_type = re.search(r"on (.*?): Limit", err_str, re.IGNORECASE)
 
-                if limit_tokens > 0:
-                    pct_remaining = (remaining_tokens / limit_tokens) * 100
-                    error_details += f"Token còn lại của Key: {remaining_tokens}/{limit_tokens} ({pct_remaining:.1f}%).\n"
-
-                match = re.search(r"requested (\d+)", err_str)
-                if match and limit_tokens > 0:
-                    requested_tokens = int(match.group(1))
-                    pct_requested = (requested_tokens / limit_tokens) * 100
-                    error_details += f"Lượt đi này cần: {requested_tokens} tokens ({pct_requested:.1f}% tổng giới hạn).\n"
+                if match_stats:
+                    limit_tokens = int(match_stats.group(1))
+                    used_tokens = int(match_stats.group(2))
+                    requested_tokens = int(match_stats.group(3))
+                    remaining_tokens = limit_tokens - used_tokens
                     
+                    wait_time = match_time.group(1) if match_time else "một lát"
+                    limit_type = match_type.group(1) if match_type else "giới hạn Token"
+                    
+                    wait_time = re.sub(r"\.\d+s", "s", wait_time)
+
+                    pct_remaining = (remaining_tokens / limit_tokens) * 100
+                    pct_requested = (requested_tokens / limit_tokens) * 100
+
+                    error_details += f"Bạn đã chạm ngưỡng: {limit_type.upper()}.\n"
+                    error_details += f"Token còn lại: {remaining_tokens}/{limit_tokens} ({pct_remaining:.1f}%).\n"
+                    error_details += f"Lượt đi này cần: {requested_tokens} tokens ({pct_requested:.1f}%).\n"
+
                     if requested_tokens > limit_tokens:
                         error_details += "-> Lượt đi của bạn quá dài, vượt sức chứa tối đa của 1 API Key!\n"
-                    else:
-                        error_details += "-> Số token còn lại không đủ cho lượt đi này.\n"
-                error_details += "\nHƯỚNG DẪN: Hãy thử đợi để API reset, hoặc lưu trò chơi rồi đổi key mới!"
+                        error_details += "\nHƯỚNG DẪN: Lỗi này không thể chờ. Bạn BẮT BUỘC phải ra Menu Settings đổi API Key khác!"
+                    elif requested_tokens > remaining_tokens:
+                        error_details += f"-> Số token không đủ. Xin hãy chờ {wait_time} để hệ thống hồi Token!\n"
+                        error_details += f"\nHƯỚNG DẪN: Chờ {wait_time} rồi gửi lại, hoặc lưu game và đổi API Key mới!"
+                
+                elif hasattr(e, 'response') and hasattr(e.response, 'headers'):
+                    limit = e.response.headers.get('x-ratelimit-limit-tokens', 'Unknown')
+                    remain = e.response.headers.get('x-ratelimit-remaining-tokens', 'Unknown')
+                    error_details += f"Lỗi Rate Limit. Token còn lại theo phút: {remain}/{limit}.\n"
+                    error_details += "\nHƯỚNG DẪN: Hãy chờ 1 phút hoặc đổi API Key khác."
 
             else:
-                error_details += f"Lỗi không xác định: {str(e)[:100]}...\n"
+                error_details += f" Lỗi không xác định: {str(e)[:100]}...\n"
+                error_details += "\nHƯỚNG DẪN: Hãy thử gửi lại hành động hoặc kiểm tra kết nối mạng."
             
-            # Bắn đoạn text lỗi này lên giao diện cho người chơi đọc
             yield error_details
 
 
