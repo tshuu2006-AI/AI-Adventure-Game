@@ -26,11 +26,11 @@ RNG_WEIGHTS = {
 #================================================#
 STORY_AGENT_MODEL = "llama-3.3-70b-versatile"
 QUERY_AGENT_MODEL = "llama-3.3-70b-versatile"
-LOCATION_AGENT_MODEL = "qwen/qwen3-32b"
-NPC_AGENT_MODEL = "qwen/qwen3-32b"
-CHOICE_AGENT_MODEL = "qwen/qwen3-32b"
-WORLD_GENERATE_AGENT_MODEL = "qwen/qwen3-32b"
-COMBAT_AGENT_MODEL = "qwen/qwen3-32b"
+LOCATION_AGENT_MODEL = "openai/gpt-oss-120b"
+NPC_AGENT_MODEL = "openai/gpt-oss-120b"
+CHOICE_AGENT_MODEL = "openai/gpt-oss-120b"
+WORLD_GENERATE_AGENT_MODEL = "openai/gpt-oss-120b"
+COMBAT_AGENT_MODEL = "openai/gpt-oss-120b"
 
 
 
